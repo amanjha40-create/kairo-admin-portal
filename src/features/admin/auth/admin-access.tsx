@@ -3,9 +3,6 @@
  * provider (`useAdminAuth`). The dev role switcher is DEV-only and only
  * lets you preview restricted-role UI while remaining logged in as the
  * real mock account.
- *
- * When the FastAPI backend lands, only `admin-auth.tsx` needs to change;
- * this file continues to work.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Loader2, ShieldOff, TimerOff } from "lucide-react";
@@ -75,17 +72,22 @@ export function useAdminAccess(): AdminAccess {
   if (auth.status === "expired") return { state: "expired" };
   if (auth.status !== "authenticated" || !auth.account) return { state: "denied" };
 
+  const usingDevRoleOverride = import.meta.env.DEV && appEnv.adminDemoMode && Boolean(devRole);
   const effectiveRole: AdminRoleKey =
-    import.meta.env.DEV && appEnv.adminDemoMode && devRole ? devRole : auth.account.roleKey;
+    usingDevRoleOverride && devRole ? devRole : auth.account.roleKey;
+  const effectivePermissions = usingDevRoleOverride
+    ? permissionsForRole(effectiveRole)
+    : auth.account.permissions;
+
   return {
     state: "granted",
     admin: {
       name: auth.account.name,
       email: auth.account.email,
       roleKey: effectiveRole,
-      role: ROLE_LABEL[effectiveRole],
+      role: usingDevRoleOverride ? ROLE_LABEL[effectiveRole] : auth.account.role,
       initials: auth.account.initials,
-      permissions: permissionsForRole(effectiveRole),
+      permissions: effectivePermissions,
     },
   };
 }

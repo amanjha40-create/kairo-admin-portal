@@ -25,9 +25,19 @@ export interface StoredSession {
   remember: boolean;
 }
 
+export interface StoredAuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresAt: string;
+  signedInAt: string;
+  remember: boolean;
+}
+
 export type SessionSource = "local" | "session";
 
-export type AdminAuthStatus = "checking" | "authenticated" | "unauthenticated" | "expired";
+export type AdminAuthStatus =
+  "checking" | "authenticated" | "unauthenticated" | "expired" | "forbidden";
 
 export interface AdminAuthRestoreResult {
   status: Exclude<AdminAuthStatus, "checking">;

@@ -65,9 +65,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       const result = await adapter.login(email, password, remember);
       if (!result.ok) return result;
 
-      setAccount(result.account ?? null);
-      setSignedInAt(result.signedInAt ?? null);
-      setStatus("authenticated");
+      if (result.account && result.signedInAt) {
+        setAccount(result.account);
+        setSignedInAt(result.signedInAt);
+        setStatus("authenticated");
+      }
       return { ok: true };
     },
     [adapter],

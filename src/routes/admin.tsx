@@ -47,7 +47,7 @@ function AdminRouter() {
       navigate({ to: "/admin", replace: true });
       return;
     }
-    if (auth.status !== "authenticated" && !isPublic) {
+    if (auth.status === "unauthenticated" && !isPublic) {
       const redirect =
         pathname && pathname !== "/admin/login"
           ? normalizeAdminRedirect(pathname, "/admin")
@@ -65,10 +65,13 @@ function AdminRouter() {
   // Public admin routes (login / forgot password) render standalone.
   if (isPublic) {
     if (auth.status === "authenticated") return <AdminAccessChecking />;
+    if (auth.status === "forbidden") return <AdminAccessDenied />;
     return <Outlet />;
   }
 
   if (auth.status === "expired") return <AdminAccessExpired />;
+  if (auth.status === "forbidden") return <AdminAccessDenied />;
+  if (auth.status === "unauthenticated") return <AdminAccessChecking />;
   if (auth.status !== "authenticated") return <AdminAccessDenied />;
 
   return (

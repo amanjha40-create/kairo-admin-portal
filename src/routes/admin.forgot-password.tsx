@@ -22,6 +22,9 @@ function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(
+    "If an authorised Admin account exists for this email, password reset instructions will be sent.",
+  );
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -38,6 +41,7 @@ function ForgotPasswordPage() {
       setError(result.error);
       return;
     }
+    setSuccessMessage(result.message ?? successMessage);
     setSubmitted(true);
   }
 
@@ -69,15 +73,13 @@ function ForgotPasswordPage() {
             <div className="mt-7 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
               <div className="flex items-start gap-2">
                 <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0" />
-                <p>
-                  If an authorised Admin account exists for this email, password reset instructions
-                  will be sent.
-                </p>
+                <p>{successMessage}</p>
               </div>
-              <p className="mt-3 text-xs text-emerald-700/80">
-                This is a simulated frontend flow — no email is actually delivered in this
-                environment.
-              </p>
+              {auth.mode === "demo" ? (
+                <p className="mt-3 text-xs text-emerald-700/80">
+                  This is a simulated frontend flow. No email is delivered in Demo Mode.
+                </p>
+              ) : null}
             </div>
           ) : (
             <form onSubmit={onSubmit} noValidate className="mt-7 space-y-4">
