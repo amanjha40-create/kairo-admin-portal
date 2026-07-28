@@ -99,6 +99,7 @@ export interface RegistryOrganization {
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
+  contactCount?: number;
   contacts: RegistryContact[];
   activity: RegistryActivityEvent[];
   activeCaseCount: number;
@@ -446,6 +447,7 @@ function mapDemoOrganization(
       org.state === "deprecated" ? "archived" : org.state === "verified" ? "active" : "draft",
     trustStatus: org.state === "verified" ? "trusted" : "unreviewed",
     headquartersState: org.headquartersCity,
+    contactCount: org.contacts.length,
     possibleDuplicateLinks: org.possibleDuplicateIds.map((id) => ({
       id,
       label: mod.getRegistryOrganization(id)?.canonicalName ?? id,
@@ -457,6 +459,7 @@ function mapBackendDetail(detail: BackendRegistryDetail): RegistryOrganization {
   const summary = mapBackendRecord(detail);
   return {
     ...summary,
+    contactCount: detail.contacts.length,
     contacts: detail.contacts.map(mapBackendContact),
     activity: detail.activity.map(mapBackendActivity),
   };
@@ -483,6 +486,7 @@ function mapBackendRecord(record: BackendRegistryRecord): RegistryOrganization {
     headquartersState: record.state_province ?? undefined,
     createdAt: record.created_at,
     updatedAt: record.updated_at,
+    contactCount: undefined,
     contacts: [],
     activity: [],
     activeCaseCount: record.active_case_count,

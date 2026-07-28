@@ -208,7 +208,9 @@ function RegistryPage() {
                         <StateChip state={organization.state} />
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {organization.contacts.length}
+                        {typeof organization.contactCount === "number"
+                          ? organization.contactCount
+                          : "Unavailable"}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {organization.activeCaseCount}
