@@ -46,7 +46,7 @@ import {
 } from "@/features/admin/data/risk";
 import { mockUsers } from "@/features/admin/data/users";
 import { mockVerificationCases } from "@/features/admin/data/verifications";
-import { mockRegistryOrganizations } from "@/features/admin/data/registry";
+import { mockRegistryOrganizations } from "@/features/admin/mock-data/registry";
 import {
   DUPLICATE_DECISION_LABEL,
   useInvestigationSession,

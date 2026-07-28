@@ -1,16 +1,19 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Search, AlertTriangle } from "lucide-react";
+import { Building2, AlertTriangle } from "lucide-react";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { AdminSearchField } from "@/features/admin/components/search-field";
-import { EmptyState } from "@/features/admin/components/states";
+import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
+import { TablePagination } from "@/features/admin/components/table-pagination";
 import {
   REGISTRY_ORG_STATE_LABEL,
-  REGISTRY_ORG_TYPE_LABEL,
-  getRegistryMetrics,
-  mockRegistryOrganizations,
+  getRegistryOrgTypeLabel,
+  registryListQueryOptions,
+  registryMetricsQueryOptions,
   type RegistryOrgState,
 } from "@/features/admin/data/registry";
+import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/registry/")({
   head: () => ({
@@ -28,31 +31,84 @@ const STATE_FILTERS: Array<{ key: "all" | RegistryOrgState; label: string }> = [
 ];
 
 function RegistryPage() {
-  const metrics = useMemo(getRegistryMetrics, []);
-  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<"all" | RegistryOrgState>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const rows = useMemo(() => {
-    const ql = q.trim().toLowerCase();
-    return mockRegistryOrganizations.filter((o) => {
-      if (stateFilter !== "all" && o.state !== stateFilter) return false;
-      if (!ql) return true;
-      return (
-        o.canonicalName.toLowerCase().includes(ql) ||
-        o.domain.toLowerCase().includes(ql) ||
-        o.country.toLowerCase().includes(ql) ||
-        o.aliases.some((a) => a.toLowerCase().includes(ql))
-      );
-    });
-  }, [q, stateFilter]);
+  const metricsQuery = useQuery(registryMetricsQueryOptions());
+  const listQuery = useQuery(
+    registryListQueryOptions({
+      query,
+      state: stateFilter,
+      page,
+      pageSize,
+    }),
+  );
+
+  const onQueryChange = (next: string) => {
+    setQuery(next);
+    setPage(1);
+  };
+
+  const onStateFilterChange = (next: "all" | RegistryOrgState) => {
+    setStateFilter(next);
+    setPage(1);
+  };
+
+  const onPageSizeChange = (next: number) => {
+    setPageSize(next);
+    setPage(1);
+  };
+
+  if (metricsQuery.isPending || listQuery.isPending) {
+    return (
+      <div className="mx-auto max-w-[1400px]">
+        <LoadingSkeleton rows={8} />
+      </div>
+    );
+  }
+
+  const error = metricsQuery.error ?? listQuery.error ?? null;
+  if (error) {
+    const copy = getRegistryListErrorCopy(error);
+    return (
+      <div className="mx-auto max-w-2xl">
+        <ErrorState
+          title={copy.title}
+          description={copy.description}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                void metricsQuery.refetch();
+                void listQuery.refetch();
+              }}
+              className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+            >
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const metrics = metricsQuery.data;
+  const result = listQuery.data;
+  if (!metrics || !result) {
+    return null;
+  }
+
+  const hasFilters = query.trim().length > 0 || stateFilter !== "all";
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
       <header>
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Registry</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Canonical organizations used across Kairo verifications. Contacts, activity and duplicate
-          reviews live on the org detail page.
+          Canonical organizations used across Kairo verifications. Contacts, activity, duplicate
+          review signals and lifecycle state live on the org detail page.
         </p>
       </header>
 
@@ -74,87 +130,104 @@ function RegistryPage() {
 
       <WorkspaceSection
         title="Organizations"
-        description={`${rows.length} of ${mockRegistryOrganizations.length} shown.`}
+        description={`${result.total} total record${result.total === 1 ? "" : "s"}${hasFilters ? `, ${result.items.length} on this page.` : "."}`}
         action={
-          <div className="flex items-center gap-1.5">
-            <div className="w-64">
-              <AdminSearchField
-                value={q}
-                onChange={setQ}
-                placeholder="Search name, domain, country"
-              />
-            </div>
+          <div className="w-64">
+            <AdminSearchField
+              value={query}
+              onChange={onQueryChange}
+              placeholder="Search name, domain, country"
+            />
           </div>
         }
       >
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {STATE_FILTERS.map((f) => (
+          {STATE_FILTERS.map((filter) => (
             <button
-              key={f.key}
+              key={filter.key}
               type="button"
-              onClick={() => setStateFilter(f.key)}
+              onClick={() => onStateFilterChange(filter.key)}
               className={
                 "h-7 rounded-md border px-2 text-[11px] font-medium " +
-                (stateFilter === f.key
+                (stateFilter === filter.key
                   ? "border-foreground bg-foreground text-background"
                   : "border-border bg-background text-foreground hover:bg-accent")
               }
             >
-              {f.label}
+              {filter.label}
             </button>
           ))}
         </div>
-        {rows.length === 0 ? (
+        {result.total === 0 ? (
           <EmptyState
-            title="No organizations match"
-            description="Try clearing filters or the search box."
+            title={hasFilters ? "No organizations match" : "No registry organizations yet"}
+            description={
+              hasFilters
+                ? "Try clearing filters or the search box."
+                : "Registry records will appear here once the backend returns admin projections."
+            }
           />
         ) : (
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="min-w-full divide-y divide-border text-xs">
-              <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Organization</th>
-                  <th className="px-3 py-2 font-medium">Type</th>
-                  <th className="px-3 py-2 font-medium">Country</th>
-                  <th className="px-3 py-2 font-medium">State</th>
-                  <th className="px-3 py-2 font-medium">Contacts</th>
-                  <th className="px-3 py-2 font-medium">Active cases</th>
-                  <th className="px-3 py-2 font-medium">Verifications</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-background">
-                {rows.map((o) => (
-                  <tr key={o.id} className="hover:bg-accent/40">
-                    <td className="px-3 py-2">
-                      <Link
-                        to="/admin/registry/$organizationId"
-                        params={{ organizationId: o.id }}
-                        className="flex min-w-0 items-center gap-2 text-foreground hover:underline"
-                      >
-                        <Building2 aria-hidden className="size-3.5 text-muted-foreground" />
-                        <span className="min-w-0">
-                          <span className="block font-medium">{o.canonicalName}</span>
-                          <span className="block text-[11px] font-mono text-muted-foreground">
-                            {o.domain}
-                          </span>
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {REGISTRY_ORG_TYPE_LABEL[o.orgType]}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">{o.country}</td>
-                    <td className="px-3 py-2">
-                      <StateChip state={o.state} />
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">{o.contacts.length}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{o.activeCaseCount}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{o.totalVerifications}</td>
+          <div className="overflow-hidden rounded-md border border-border">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-border text-xs">
+                <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Organization</th>
+                    <th className="px-3 py-2 font-medium">Type</th>
+                    <th className="px-3 py-2 font-medium">Country</th>
+                    <th className="px-3 py-2 font-medium">State</th>
+                    <th className="px-3 py-2 font-medium">Contacts</th>
+                    <th className="px-3 py-2 font-medium">Active cases</th>
+                    <th className="px-3 py-2 font-medium">Verifications</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border bg-background">
+                  {result.items.map((organization) => (
+                    <tr key={organization.id} className="hover:bg-accent/40">
+                      <td className="px-3 py-2">
+                        <Link
+                          to="/admin/registry/$organizationId"
+                          params={{ organizationId: organization.id }}
+                          className="flex min-w-0 items-center gap-2 text-foreground hover:underline"
+                        >
+                          <Building2 aria-hidden className="size-3.5 text-muted-foreground" />
+                          <span className="min-w-0">
+                            <span className="block font-medium">{organization.canonicalName}</span>
+                            <span className="block text-[11px] font-mono text-muted-foreground">
+                              {organization.domain ?? "Domain unavailable"}
+                            </span>
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {getRegistryOrgTypeLabel(organization.orgType)}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{organization.country}</td>
+                      <td className="px-3 py-2">
+                        <StateChip state={organization.state} />
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {organization.contacts.length}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {organization.activeCaseCount}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {organization.totalVerifications}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <TablePagination
+              page={result.page}
+              pageSize={result.pageSize}
+              total={result.total}
+              onPageChange={setPage}
+              onPageSizeChange={onPageSizeChange}
+            />
           </div>
         )}
       </WorkspaceSection>
@@ -211,5 +284,23 @@ function StateChip({ state }: { state: RegistryOrgState }) {
   );
 }
 
-// Reference `Search` icon to satisfy unused-import checks in edge configs.
-void Search;
+function getRegistryListErrorCopy(error: Error) {
+  if (error instanceof ApiError && error.code === "unauthorized") {
+    return {
+      title: "Sign in required",
+      description: error.message,
+    };
+  }
+
+  if (error instanceof ApiError && error.code === "forbidden") {
+    return {
+      title: "Registry access denied",
+      description: error.message,
+    };
+  }
+
+  return {
+    title: "Registry failed to load",
+    description: error.message,
+  };
+}

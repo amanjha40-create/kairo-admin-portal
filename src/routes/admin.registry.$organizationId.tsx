@@ -1,16 +1,20 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Building2, ChevronRight, ExternalLink } from "lucide-react";
+import { appEnv } from "@/config/env";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
-import { EmptyState } from "@/features/admin/components/states";
+import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { formatRelativeTime } from "@/features/admin/lib/format";
 import {
-  REGISTRY_CONTACT_ROLE_LABEL,
-  REGISTRY_CONTACT_STATE_LABEL,
   REGISTRY_ORG_STATE_LABEL,
-  REGISTRY_ORG_TYPE_LABEL,
-  getRegistryOrganization,
+  createRegistryDataAdapter,
+  getRegistryContactRoleLabel,
+  getRegistryContactStateLabel,
+  getRegistryLifecycleStatusLabel,
+  getRegistryOrgTypeLabel,
+  getRegistryTrustStatusLabel,
   type RegistryOrganization,
 } from "@/features/admin/data/registry";
+import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/registry/$organizationId")({
   head: () => ({
@@ -19,17 +23,26 @@ export const Route = createFileRoute("/admin/registry/$organizationId")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  loader: ({ params }) => {
-    const org = getRegistryOrganization(params.organizationId);
-    if (!org) throw notFound();
+  loader: async ({ params }) => {
+    const org = await createRegistryDataAdapter(appEnv).getOrganization(params.organizationId);
+    if (!org) {
+      throw notFound();
+    }
+
     return { org };
   },
   component: RegistryOrgDetail,
+  pendingComponent: () => (
+    <div className="mx-auto max-w-5xl">
+      <LoadingSkeleton rows={8} />
+    </div>
+  ),
+  errorComponent: RegistryDetailErrorBoundary,
   notFoundComponent: () => (
     <div className="mx-auto max-w-2xl">
       <EmptyState
         title="Organization not found"
-        description="The registry record may have been merged or removed."
+        description="The registry record may have been merged, archived, or the identifier is incorrect."
         action={
           <Link
             to="/admin/registry"
@@ -42,6 +55,32 @@ export const Route = createFileRoute("/admin/registry/$organizationId")({
     </div>
   ),
 });
+
+function RegistryDetailErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
+  const router = useRouter();
+  const copy = getRegistryDetailErrorCopy(error);
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      <ErrorState
+        title={copy.title}
+        description={copy.description}
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
+            className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+          >
+            Try again
+          </button>
+        }
+      />
+    </div>
+  );
+}
 
 function RegistryOrgDetail() {
   const { org } = Route.useLoaderData() as { org: RegistryOrganization };
@@ -73,10 +112,12 @@ function RegistryOrgDetail() {
               </span>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {REGISTRY_ORG_TYPE_LABEL[org.orgType]} · {org.country}
-              {org.headquartersCity ? ` · ${org.headquartersCity}` : ""}
-              {org.yearFounded ? ` · Founded ${org.yearFounded}` : ""}
-              {org.employeesRange ? ` · ${org.employeesRange} employees` : ""}
+              {getRegistryOrgTypeLabel(org.orgType)} · {org.country}
+              {org.headquartersState ? ` · ${org.headquartersState}` : ""}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Lifecycle: {getRegistryLifecycleStatusLabel(org.lifecycleStatus)} · Trust:{" "}
+              {getRegistryTrustStatusLabel(org.trustStatus)}
             </p>
             {org.aliases.length > 0 ? (
               <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -85,15 +126,21 @@ function RegistryOrgDetail() {
             ) : null}
           </div>
           <div className="text-right text-[11px] text-muted-foreground">
-            <a
-              href={org.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-foreground hover:underline"
-            >
-              {org.domain}
-              <ExternalLink aria-hidden className="size-3" />
-            </a>
+            {org.website ? (
+              <a
+                href={org.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-foreground hover:underline"
+              >
+                {org.domain ?? org.website}
+                <ExternalLink aria-hidden className="size-3" />
+              </a>
+            ) : org.domain ? (
+              <div className="font-mono text-foreground">{org.domain}</div>
+            ) : (
+              <div>Domain unavailable</div>
+            )}
             <div className="mt-1">
               Active cases: <span className="text-foreground">{org.activeCaseCount}</span>
             </div>
@@ -105,28 +152,21 @@ function RegistryOrgDetail() {
         {org.description ? <p className="mt-2 text-xs text-foreground">{org.description}</p> : null}
       </header>
 
-      {org.possibleDuplicateIds.length > 0 ? (
+      {org.possibleDuplicateLinks.length > 0 ? (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
           <div className="font-semibold">Possible duplicate detected</div>
           <ul className="ml-4 mt-1 list-disc">
-            {org.possibleDuplicateIds.map((id) => {
-              const other = getRegistryOrganization(id);
-              return (
-                <li key={id}>
-                  {other ? (
-                    <Link
-                      to="/admin/registry/$organizationId"
-                      params={{ organizationId: id }}
-                      className="hover:underline"
-                    >
-                      {other.canonicalName}
-                    </Link>
-                  ) : (
-                    id
-                  )}
-                </li>
-              );
-            })}
+            {org.possibleDuplicateLinks.map((duplicate) => (
+              <li key={duplicate.id}>
+                <Link
+                  to="/admin/registry/$organizationId"
+                  params={{ organizationId: duplicate.id }}
+                  className="hover:underline"
+                >
+                  {duplicate.label}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       ) : null}
@@ -134,38 +174,38 @@ function RegistryOrgDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <WorkspaceSection
           title="Verification contacts"
-          description={`${org.contacts.length} contact${org.contacts.length === 1 ? "" : "s"} on file. Session-only edits happen on a case workspace.`}
+          description={`${org.contacts.length} contact${org.contacts.length === 1 ? "" : "s"} on file. Registry contacts are read-only in this workspace.`}
         >
           {org.contacts.length === 0 ? (
             <EmptyState
               title="No contacts on file"
-              description="Add contacts from a case workspace when preparing outreach."
+              description="No masked verification contacts are currently projected from the backend for this registry record."
             />
           ) : (
             <ul className="divide-y divide-border">
-              {org.contacts.map((c) => (
-                <li key={c.id} className="py-2 text-xs">
+              {org.contacts.map((contact) => (
+                <li key={contact.id} className="py-2 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-foreground">{c.name}</span>
+                        <span className="font-medium text-foreground">{contact.name}</span>
                         <span className="text-muted-foreground">
-                          · {REGISTRY_CONTACT_ROLE_LABEL[c.role]}
+                          · {getRegistryContactRoleLabel(contact.role)}
                         </span>
                       </div>
                       <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                        {c.emailMasked}
-                        {c.phoneMasked ? ` · ${c.phoneMasked}` : ""}
+                        {contact.emailMasked}
+                        {contact.phoneMasked ? ` · ${contact.phoneMasked}` : ""}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Added by {c.addedBy} · {formatRelativeTime(c.addedAt)}
-                        {c.lastSuccessfulUse
-                          ? ` · Last used ${formatRelativeTime(c.lastSuccessfulUse)}`
+                        Added by {contact.addedBy} · {formatRelativeTime(contact.addedAt)}
+                        {contact.lastSuccessfulUse
+                          ? ` · Last used ${formatRelativeTime(contact.lastSuccessfulUse)}`
                           : ""}
                       </div>
                     </div>
                     <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground">
-                      {REGISTRY_CONTACT_STATE_LABEL[c.state]}
+                      {getRegistryContactStateLabel(contact.state)}
                     </span>
                   </div>
                 </li>
@@ -185,11 +225,11 @@ function RegistryOrgDetail() {
               {org.activity
                 .slice()
                 .reverse()
-                .map((e) => (
-                  <li key={e.id}>
-                    <div className="text-foreground">{e.description}</div>
+                .map((event) => (
+                  <li key={event.id}>
+                    <div className="text-foreground">{event.description}</div>
                     <div className="text-muted-foreground">
-                      {e.actor} · {formatRelativeTime(e.at)}
+                      {event.actor} · {formatRelativeTime(event.at)}
                     </div>
                   </li>
                 ))}
@@ -199,4 +239,25 @@ function RegistryOrgDetail() {
       </div>
     </div>
   );
+}
+
+function getRegistryDetailErrorCopy(error: Error) {
+  if (error instanceof ApiError && error.code === "unauthorized") {
+    return {
+      title: "Sign in required",
+      description: error.message,
+    };
+  }
+
+  if (error instanceof ApiError && error.code === "forbidden") {
+    return {
+      title: "Registry access denied",
+      description: error.message,
+    };
+  }
+
+  return {
+    title: "Registry organization failed to load",
+    description: error.message,
+  };
 }
