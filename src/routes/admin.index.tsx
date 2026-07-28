@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
@@ -17,21 +18,17 @@ import { VerificationStatusGrid } from "@/features/admin/components/verification
 import { ActivityItem } from "@/features/admin/components/activity-item";
 import { PlatformSummary } from "@/features/admin/components/platform-summary";
 import { DateRangeSelector } from "@/features/admin/components/date-range-selector";
-import {
-  getActivity,
-  getAttention,
-  getFunnel,
-  getMetrics,
-  getServices,
-  getStatuses,
-} from "@/features/admin/data/overview";
+import { LoadingSkeleton, EmptyState, RetryState } from "@/features/admin/components/states";
+import { overviewDashboardQueryOptions } from "@/features/admin/data/overview";
 import { getCommunicationMetrics } from "@/features/admin/data/communications";
 import {
   SERVICE_HEALTH_LABEL,
+  listServices,
   getSystemOverviewMetrics,
   mockDeployments,
   type ServiceHealthState,
 } from "@/features/admin/data/system";
+import type { PlatformServiceStatus } from "@/features/admin/data/types";
 import { formatRelativeTime } from "@/features/admin/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -50,13 +47,19 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
-  const metrics = getMetrics();
-  const attention = getAttention();
-  const funnel = getFunnel();
-  const statuses = getStatuses();
-  const activity = getActivity();
-  const services = getServices();
+  const overviewQuery = useQuery(overviewDashboardQueryOptions());
   const comms = getCommunicationMetrics();
+  const services = listServices().map<PlatformServiceStatus>((service) => ({
+    id: service.id,
+    name: service.name,
+    note: service.note,
+    state:
+      service.state === "operational"
+        ? "operational"
+        : service.state === "degraded"
+          ? "degraded"
+          : "action_required",
+  }));
   const sys = getSystemOverviewMetrics();
   const recentDeployment = mockDeployments[0];
 
@@ -73,95 +76,120 @@ function OverviewPage() {
         <DateRangeSelector />
       </header>
 
-      {/* Primary metrics */}
-      <section aria-labelledby="metrics-heading">
-        <SectionHeader
-          title="Business metrics"
-          description="How Kairo is growing and converting."
+      {overviewQuery.isPending ? (
+        <OverviewLoadingState />
+      ) : overviewQuery.isError ? (
+        <RetryState
+          title="Overview unavailable"
+          description={overviewQuery.error.message}
+          onRetry={() => {
+            void overviewQuery.refetch();
+          }}
         />
-        <h2 id="metrics-heading" className="sr-only">
-          Primary metrics
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {metrics.map((m) => (
-            <MetricCard key={m.id} metric={m} />
-          ))}
-        </div>
-      </section>
-
-      {/* Urgent attention */}
-      <section aria-labelledby="attention-heading">
-        <SectionHeader
-          title="Urgent attention"
-          description="Operational work that needs an admin decision now."
+      ) : overviewQuery.data.isEmpty ? (
+        <EmptyState
+          title="No overview data yet"
+          description="Overview metrics will appear here once verification activity begins."
         />
-        <h2 id="attention-heading" className="sr-only">
-          Urgent attention
-        </h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {attention.map((a) => (
-            <AttentionCard key={a.id} item={a} />
-          ))}
-        </div>
-      </section>
-
-      {/* Funnel + Verification operations */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <section aria-labelledby="funnel-heading" className="lg:col-span-2">
-          <SectionHeader
-            title="Onboarding & verification funnel"
-            description="Where users progress and where they drop off."
-          />
-          <h2 id="funnel-heading" className="sr-only">
-            Funnel
-          </h2>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <Funnel stages={funnel} />
-          </div>
-        </section>
-
-        <section aria-labelledby="ops-heading" className="lg:col-span-3">
-          <SectionHeader
-            title="Verification operations"
-            description="Live status across the verification pipeline. Select a status to open its queue."
-          />
-          <h2 id="ops-heading" className="sr-only">
-            Verification operations
-          </h2>
-          <VerificationStatusGrid items={statuses} />
-        </section>
-      </div>
-
-      {/* Activity + Platform */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <section aria-labelledby="activity-heading" className="lg:col-span-3">
-          <SectionHeader
-            title="Recent activity"
-            description="Latest admin, candidate, employer and system events."
-          />
-          <h2 id="activity-heading" className="sr-only">
-            Recent activity
-          </h2>
-          <div className="rounded-lg border border-border bg-card px-3">
-            <ul className="divide-y divide-border">
-              {activity.map((a) => (
-                <ActivityItem key={a.id} item={a} />
+      ) : (
+        <>
+          {/* Primary metrics */}
+          <section aria-labelledby="metrics-heading">
+            <SectionHeader
+              title="Business metrics"
+              description="How verification operations are moving today."
+            />
+            <h2 id="metrics-heading" className="sr-only">
+              Primary metrics
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              {overviewQuery.data.metrics.map((m) => (
+                <MetricCard key={m.id} metric={m} />
               ))}
-            </ul>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section aria-labelledby="platform-heading" className="lg:col-span-2">
-          <SectionHeader
-            title="Platform summary"
-            description="Application-level status. Mock operational data until service telemetry is wired in."
-          />
-          <h2 id="platform-heading" className="sr-only">
-            Platform
-          </h2>
-          <PlatformSummary services={services} />
-        </section>
-      </div>
+          {/* Urgent attention */}
+          <section aria-labelledby="attention-heading">
+            <SectionHeader
+              title="Urgent attention"
+              description="Operational work that needs an admin decision now."
+            />
+            <h2 id="attention-heading" className="sr-only">
+              Urgent attention
+            </h2>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {overviewQuery.data.attention.map((a) => (
+                <AttentionCard key={a.id} item={a} />
+              ))}
+            </div>
+          </section>
+
+          {/* Funnel + Verification operations */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            <section aria-labelledby="funnel-heading" className="lg:col-span-2">
+              <SectionHeader
+                title="Onboarding & verification funnel"
+                description="Where requests progress and where they drop off."
+              />
+              <h2 id="funnel-heading" className="sr-only">
+                Funnel
+              </h2>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <Funnel stages={overviewQuery.data.funnel} />
+              </div>
+            </section>
+
+            <section aria-labelledby="ops-heading" className="lg:col-span-3">
+              <SectionHeader
+                title="Verification operations"
+                description="Live status across the verification pipeline. Select a status to open its queue."
+              />
+              <h2 id="ops-heading" className="sr-only">
+                Verification operations
+              </h2>
+              <VerificationStatusGrid items={overviewQuery.data.statuses} />
+            </section>
+          </div>
+
+          {/* Activity + Platform */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            <section aria-labelledby="activity-heading" className="lg:col-span-3">
+              <SectionHeader
+                title="Recent activity"
+                description="Latest admin events recorded by the shared backend."
+              />
+              <h2 id="activity-heading" className="sr-only">
+                Recent activity
+              </h2>
+              <div className="rounded-lg border border-border bg-card px-3">
+                {overviewQuery.data.activity.length > 0 ? (
+                  <ul className="divide-y divide-border">
+                    {overviewQuery.data.activity.map((a) => (
+                      <ActivityItem key={a.id} item={a} />
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="py-6">
+                    <EmptyState title="No recent activity yet" />
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section aria-labelledby="platform-heading" className="lg:col-span-2">
+              <SectionHeader
+                title="Platform summary"
+                description="Application-level status. Mock operational data until service telemetry is wired in."
+              />
+              <h2 id="platform-heading" className="sr-only">
+                Platform
+              </h2>
+              <PlatformSummary services={services} />
+            </section>
+          </div>
+        </>
+      )}
 
       {/* Communications */}
       <section aria-labelledby="comms-heading">
@@ -285,6 +313,55 @@ function OverviewPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function OverviewLoadingState() {
+  return (
+    <>
+      <section aria-labelledby="metrics-heading">
+        <SectionHeader
+          title="Business metrics"
+          description="Loading current verification operations."
+        />
+        <h2 id="metrics-heading" className="sr-only">
+          Primary metrics
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="rounded-lg border border-border bg-card p-4">
+              <LoadingSkeleton rows={3} />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <section className="lg:col-span-2">
+          <SectionHeader
+            title="Onboarding & verification funnel"
+            description="Loading verification flow."
+          />
+          <div className="rounded-lg border border-border bg-card p-4">
+            <LoadingSkeleton rows={6} />
+          </div>
+        </section>
+
+        <section className="lg:col-span-3">
+          <SectionHeader
+            title="Verification operations"
+            description="Loading status distribution."
+          />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div key={index} className="rounded-lg border border-border bg-card p-3">
+                <LoadingSkeleton rows={2} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 
