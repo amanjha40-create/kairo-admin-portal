@@ -20,8 +20,14 @@ import {
 import { cn } from "@/lib/utils";
 import { WorkspaceSection } from "./workspace-section";
 import { EmptyState } from "./states";
-import type { VerificationCaseDetail, VerificationContact } from "@/features/admin/data/cases";
-import { CONTACT_SOURCE_LABEL, CONTACT_STATE_LABEL } from "@/features/admin/data/cases";
+import type {
+  VerificationCaseDetail,
+  VerificationContact,
+} from "@/features/admin/data/verification-review";
+import {
+  CONTACT_SOURCE_LABEL,
+  CONTACT_STATE_LABEL,
+} from "@/features/admin/data/verification-review";
 import {
   DELIVERY_STATE_LABEL,
   EMPLOYER_RESPONSE_LABEL,

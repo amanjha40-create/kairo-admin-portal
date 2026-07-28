@@ -17,6 +17,7 @@ const DEV_ROLE_STORAGE_KEY = "kairo.admin.devRole";
 export type AdminAccessState = "checking" | "granted" | "denied" | "expired";
 
 export interface AdminIdentity {
+  id?: string;
   name: string;
   email: string;
   /** Human-friendly label derived from `roleKey`. */
@@ -82,6 +83,7 @@ export function useAdminAccess(): AdminAccess {
   return {
     state: "granted",
     admin: {
+      id: auth.account.id,
       name: auth.account.name,
       email: auth.account.email,
       roleKey: effectiveRole,

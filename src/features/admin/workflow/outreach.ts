@@ -15,7 +15,7 @@
  * Nothing here performs I/O. No emails are sent. Templates are mock copy.
  */
 
-import type { VerificationContact, VerificationCaseDetail } from "../data/cases";
+import type { VerificationContact, VerificationCaseDetail } from "../data/verification-review";
 import type { WorkflowActor, WorkflowPermission } from "./types";
 import { hasPermission } from "./permissions";
 

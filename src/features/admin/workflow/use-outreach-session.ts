@@ -16,8 +16,11 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import type { VerificationCaseDetail, VerificationContact } from "../data/cases";
-import type { CaseTimelineEvent } from "../data/cases";
+import type {
+  VerificationCaseDetail,
+  VerificationContact,
+  CaseTimelineEvent,
+} from "../data/verification-review";
 import type { WorkflowActor } from "./types";
 import {
   DELIVERY_STATE_LABEL,

@@ -9,7 +9,7 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { WorkflowActionDialog, Field } from "./workflow-action-dialog";
-import type { VerificationCaseDetail } from "../data/cases";
+import type { VerificationCaseDetail } from "../data/verification-review";
 import {
   CORRECTION_REASONS,
   CORRECTION_REASON_LABEL,
@@ -37,7 +37,7 @@ import {
   unableSchema,
   verifySchema,
 } from "../workflow/schemas";
-import { CONTACT_STATE_LABEL } from "../data/cases";
+import { CONTACT_STATE_LABEL } from "../data/verification-review";
 
 const inputCls =
   "block w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -116,7 +116,7 @@ export function CorrectionDialog({
       eligibility={eligibility}
       submitLabel="Request correction (session-only)"
       candidateImpactNote="A candidate-facing message is prepared but not sent in this build."
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = correctionSchema.safeParse({
           reasons,
           affectedFieldKeys: fields,
@@ -128,7 +128,7 @@ export function CorrectionDialog({
           setErrors(issuesFrom(parsed.error));
           return;
         }
-        workflow.submitCorrection({
+        await workflow.submitCorrection({
           reasons: parsed.data.reasons,
           affectedFieldKeys: parsed.data.affectedFieldKeys,
           requestedItems: parsed.data.requestedItems,
@@ -276,7 +276,7 @@ export function OutreachDialog({
       eligibility={eligibility}
       submitLabel="Approve outreach (session-only)"
       candidateImpactNote="Outreach approved in this session. No email has been sent."
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = outreachSchema.safeParse({
           contactId,
           channel: "email",
@@ -287,7 +287,7 @@ export function OutreachDialog({
           return;
         }
         if (!contact) return;
-        workflow.submitOutreach(
+        await workflow.submitOutreach(
           {
             contactId: parsed.data.contactId,
             channel: "email",
@@ -440,7 +440,7 @@ export function VerifyDialog({
       eligibility={eligibility}
       submitLabel="Confirm verification (session-only)"
       candidateImpactNote="Session-only decision. Candidate Trust Passport and Trust Score are not updated in this mock workflow."
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = verifySchema.safeParse({
           basis,
           fieldConfirmations: confirmations,
@@ -453,7 +453,7 @@ export function VerifyDialog({
           setErrors(issuesFrom(parsed.error));
           return;
         }
-        workflow.submitVerify({
+        await workflow.submitVerify({
           basis: parsed.data.basis,
           fieldConfirmations: parsed.data.fieldConfirmations,
           decisionSummary: parsed.data.decisionSummary,
@@ -638,7 +638,7 @@ export function RejectDialog({
       destructive
       submitLabel="Reject case (session-only)"
       candidateImpactNote="A candidate-facing explanation is prepared but not sent. The candidate account is not disabled."
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = rejectSchema.safeParse({
           reason,
           decisionSummary: summary,
@@ -651,7 +651,7 @@ export function RejectDialog({
           setErrors(issuesFrom(parsed.error));
           return;
         }
-        workflow.submitReject({
+        await workflow.submitReject({
           reason: parsed.data.reason,
           decisionSummary: parsed.data.decisionSummary,
           supportingEvidenceIds: parsed.data.supportingEvidenceIds,
@@ -824,7 +824,7 @@ export function UnableDialog({
       eligibility={eligibility}
       submitLabel="Mark unable to verify (session-only)"
       candidateImpactNote="Unable to Verify does not mean the claim is false. It means Kairo could not reach a reliable verification conclusion."
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = unableSchema.safeParse({
           reason,
           attemptsSummary: attempts,
@@ -836,7 +836,7 @@ export function UnableDialog({
           setErrors(issuesFrom(parsed.error));
           return;
         }
-        workflow.submitUnable({
+        await workflow.submitUnable({
           reason: parsed.data.reason,
           attemptsSummary: parsed.data.attemptsSummary,
           outstandingUncertainty: parsed.data.outstandingUncertainty,
@@ -952,7 +952,7 @@ export function ClarificationRequestDialog({
       consequenceSummary="Moves the case into Clarification Requested. No message is sent."
       eligibility={eligibility}
       submitLabel="Record (session-only)"
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = clarificationRequestSchema.safeParse({
           question,
           affectedFieldKeys: fields,
@@ -962,7 +962,7 @@ export function ClarificationRequestDialog({
           setErrors(issuesFrom(parsed.error));
           return;
         }
-        workflow.submitClarificationRequest({
+        await workflow.submitClarificationRequest({
           question: parsed.data.question,
           affectedFieldKeys: parsed.data.affectedFieldKeys,
           internalNote: parsed.data.internalNote || undefined,
@@ -1037,7 +1037,7 @@ export function ClarificationResponseDialog({
       consequenceSummary="Moves the case back to Awaiting Employer."
       eligibility={eligibility}
       submitLabel="Record (session-only)"
-      onSubmit={() => {
+      onSubmit={async () => {
         const parsed = clarificationResponseSchema.safeParse({
           response,
           updatedFieldKeys: updated,
@@ -1048,7 +1048,7 @@ export function ClarificationResponseDialog({
           setErrors(issuesFrom(parsed.error));
           return;
         }
-        workflow.submitClarificationResponse({
+        await workflow.submitClarificationResponse({
           response: parsed.data.response,
           updatedFieldKeys: parsed.data.updatedFieldKeys,
           evidenceAdded: parsed.data.evidenceAdded,

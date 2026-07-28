@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowUpRight, Bookmark, Download, SlidersHorizontal } from "lucide-react";
+import { appEnv } from "@/config/env";
 import { cn } from "@/lib/utils";
 
 import { StatusBadge } from "@/features/admin/components/status-badge";
@@ -15,7 +17,7 @@ import {
 import { TablePagination } from "@/features/admin/components/table-pagination";
 import { FilterBar, FilterMultiSelect } from "@/features/admin/components/filter-bar";
 import { CasePreviewDrawer } from "@/features/admin/components/case-preview-drawer";
-import { EmptyState } from "@/features/admin/components/states";
+import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { formatAge, formatRelativeTime } from "@/features/admin/lib/format";
 import {
   ALL_ASSIGNEES,
@@ -24,14 +26,15 @@ import {
   ORGANIZATION_STATUS_LABEL,
   SLA_LABEL,
   VERIFICATION_TYPE_LABEL,
-  mockVerificationCases,
+  createVerificationReviewAdapter,
+  verificationQueueQueryOptions,
   type Assignee,
   type AttentionFlag,
   type OrganizationStatus,
   type SlaState,
   type VerificationCase,
   type VerificationType,
-} from "@/features/admin/data/verifications";
+} from "@/features/admin/data/verification-review";
 import type { Priority, VerificationStatus } from "@/features/admin/data/types";
 
 // ---------- View definitions ----------
@@ -179,6 +182,9 @@ function VerificationsPage() {
     ? (rawView as ViewId)
     : "all-active";
   const navigate = useNavigate({ from: Route.fullPath });
+  const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
+  const queueQuery = useQuery(verificationQueueQueryOptions());
+  const isDemoMode = adapter.mode === "demo";
 
   // Local mock state: assignment overrides + activity trail. In-memory only.
   const [assignmentOverrides, setAssignmentOverrides] = useState<Record<string, Assignee>>({});
@@ -205,15 +211,18 @@ function VerificationsPage() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Apply overrides to base data.
-  const cases = useMemo<VerificationCase[]>(
-    () =>
-      mockVerificationCases.map((c) => ({
-        ...c,
-        assignedReviewer: assignmentOverrides[c.id] ?? c.assignedReviewer,
-        priority: priorityOverrides[c.id] ?? c.priority,
-      })),
-    [assignmentOverrides, priorityOverrides],
-  );
+  const cases = useMemo<VerificationCase[]>(() => {
+    const baseCases = queueQuery.data ?? [];
+    if (!isDemoMode) {
+      return baseCases;
+    }
+
+    return baseCases.map((c) => ({
+      ...c,
+      assignedReviewer: assignmentOverrides[c.id] ?? c.assignedReviewer,
+      priority: priorityOverrides[c.id] ?? c.priority,
+    }));
+  }, [assignmentOverrides, isDemoMode, priorityOverrides, queueQuery.data]);
 
   // Counts per view (respect assignment/priority overrides).
   const viewCounts = useMemo(() => {
@@ -300,6 +309,33 @@ function VerificationsPage() {
     [previewId, cases],
   );
 
+  if (queueQuery.isLoading) {
+    return (
+      <div className="mx-auto max-w-[1400px]">
+        <LoadingSkeleton rows={10} />
+      </div>
+    );
+  }
+
+  if (queueQuery.error) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <ErrorState
+          title="Verification queue failed to load"
+          description={queueQuery.error.message}
+          action={
+            <button
+              onClick={() => void queueQuery.refetch()}
+              className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+            >
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
   function setView(next: ViewId) {
     setPage(1);
     setSelectedIds(new Set());
@@ -317,7 +353,14 @@ function VerificationsPage() {
     setPage(1);
   }
 
-  function bulkAssign(assignee: Assignee) {
+  async function bulkAssign(assignee: Assignee) {
+    if (!isDemoMode) {
+      toast("Bulk reviewer assignment is not available here yet.", {
+        description:
+          "Open the full case workspace to change reviewer assignment in production mode.",
+      });
+      return;
+    }
     const next = { ...assignmentOverrides };
     const entries: typeof localActivity = [];
     for (const id of selectedIds) {
@@ -333,7 +376,17 @@ function VerificationsPage() {
     setSelectedIds(new Set());
   }
 
-  function bulkPriority(p: Priority) {
+  async function bulkPriority(p: Priority) {
+    if (!isDemoMode) {
+      await Promise.all([...selectedIds].map((id) => adapter.changePriority(id, p)));
+      await queueQuery.refetch();
+      setSelectedIds(new Set());
+      toast(`Priority set to ${p}`, {
+        description: "Production queue refreshed from the backend.",
+      });
+      return;
+    }
+
     const next = { ...priorityOverrides };
     const entries: typeof localActivity = [];
     for (const id of selectedIds) {
@@ -744,22 +797,33 @@ function VerificationsPage() {
             {selectedIds.size === 1 ? "case" : "cases"} selected
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <BulkMenu label="Assign reviewer">
-              {ALL_ASSIGNEES.map((a) => (
-                <button
-                  key={a}
-                  onClick={() => bulkAssign(a)}
-                  className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-accent"
-                >
-                  {a}
-                </button>
-              ))}
-            </BulkMenu>
+            {isDemoMode ? (
+              <BulkMenu label="Assign reviewer">
+                {ALL_ASSIGNEES.map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => void bulkAssign(a)}
+                    className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-accent"
+                  >
+                    {a}
+                  </button>
+                ))}
+              </BulkMenu>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Open the case workspace to assign a reviewer in production mode."
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-muted-foreground opacity-60"
+              >
+                Assign reviewer
+              </button>
+            )}
             <BulkMenu label="Change priority">
               {(["urgent", "high", "normal", "low"] as Priority[]).map((p) => (
                 <button
                   key={p}
-                  onClick={() => bulkPriority(p)}
+                  onClick={() => void bulkPriority(p)}
                   className="block w-full rounded px-2 py-1.5 text-left text-xs capitalize hover:bg-accent"
                 >
                   {p}
@@ -908,7 +972,7 @@ function VerificationsPage() {
       </div>
 
       {/* Local activity log (mock only) */}
-      {localActivity.length > 0 ? (
+      {isDemoMode && localActivity.length > 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
           <div className="mb-1 font-semibold text-foreground">
             Local mock activity (session-only)

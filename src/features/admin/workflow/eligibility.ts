@@ -5,7 +5,7 @@
  * lives here so eligibility is testable and does not drift between the
  * button that opens a dialog and the confirm button inside it.
  */
-import type { VerificationCaseDetail } from "../data/cases";
+import type { VerificationCaseDetail } from "../data/verification-review";
 import type { VerificationStatus } from "../data/types";
 import type {
   WorkflowAction,

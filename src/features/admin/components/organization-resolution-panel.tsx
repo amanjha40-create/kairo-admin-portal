@@ -9,8 +9,11 @@ import { toast } from "sonner";
 import { AlertTriangle, Building2, CheckCircle2, HelpCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceSection } from "./workspace-section";
-import type { VerificationCaseDetail, OrganizationSuggestion } from "@/features/admin/data/cases";
-import { ORGANIZATION_STATUS_LABEL } from "@/features/admin/data/verifications";
+import type {
+  VerificationCaseDetail,
+  OrganizationSuggestion,
+} from "@/features/admin/data/verification-review";
+import { ORGANIZATION_STATUS_LABEL } from "@/features/admin/data/verification-review";
 import type { UseOutreachSessionResult } from "@/features/admin/workflow/use-outreach-session";
 
 interface Props {

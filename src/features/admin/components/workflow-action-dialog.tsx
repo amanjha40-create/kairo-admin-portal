@@ -155,7 +155,7 @@ export function WorkflowActionDialog({
 
           <DialogFooter className="gap-2 border-t border-border bg-background px-5 py-3 sm:justify-between">
             <p className="hidden text-[11px] text-muted-foreground sm:block">
-              Session-only change. Not persisted to the backend.
+              Submission follows the active Admin mode and available backend workflow capability.
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <button

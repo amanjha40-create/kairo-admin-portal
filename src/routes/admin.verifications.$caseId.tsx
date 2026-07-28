@@ -38,6 +38,7 @@ import {
   setDevAdminRole,
   getDevAdminRole,
 } from "@/features/admin/auth/admin-access";
+import { appEnv } from "@/config/env";
 import { formatAge, formatRelativeTime } from "@/features/admin/lib/format";
 import {
   ALL_ASSIGNEES,
@@ -45,28 +46,34 @@ import {
   ORGANIZATION_STATUS_LABEL,
   SLA_LABEL,
   VERIFICATION_TYPE_LABEL,
+  createVerificationReviewAdapter,
   type Assignee,
-} from "@/features/admin/data/verifications";
+  type VerificationCaseDetail,
+  type AttentionFlagRecord,
+  type OrganizationSuggestion,
+  PRIORITY_LABEL,
+} from "@/features/admin/data/verification-review";
 import {
   COMMUNICATION_STATE_LABEL,
   CORRECTION_STATE_LABEL,
   CONTACT_SOURCE_LABEL,
   CONTACT_STATE_LABEL,
-  PRIORITY_LABEL,
-  getVerificationCaseDetail,
-  type AttentionFlagRecord,
-  type OrganizationSuggestion,
-  type VerificationCaseDetail,
-} from "@/features/admin/data/cases";
+} from "@/features/admin/data/verification-review";
 import type { Priority } from "@/features/admin/data/types";
 import {
   useVerificationWorkflow,
   type UseVerificationWorkflowResult,
 } from "@/features/admin/workflow/use-verification-workflow";
 import {
+  buildWorkflowCaseState,
+  evaluateWorkflowEligibility,
+  isTerminalStatus,
+} from "@/features/admin/workflow/eligibility";
+import {
   FIELD_CONFIRMATION_LABEL,
   type WorkflowAction,
   type AdminRoleKey,
+  type WorkflowActor,
 } from "@/features/admin/workflow/types";
 import { ROLE_LABEL } from "@/features/admin/workflow/permissions";
 import {
@@ -87,8 +94,8 @@ export const Route = createFileRoute("/admin/verifications/$caseId")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  loader: ({ params }) => {
-    const detail = getVerificationCaseDetail(params.caseId);
+  loader: async ({ params }) => {
+    const detail = await createVerificationReviewAdapter(appEnv).getCaseDetail(params.caseId);
     if (!detail) throw notFound();
     return { detail };
   },
@@ -148,7 +155,138 @@ function CaseWorkspaceNotFound() {
   );
 }
 
+function useProductionVerificationWorkflow(
+  detail: VerificationCaseDetail,
+  actor: WorkflowActor,
+  caseId: string,
+): UseVerificationWorkflowResult {
+  const router = useRouter();
+  const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
+  const [acknowledgedFlagIds, setAcknowledgedFlagIds] = useState<Set<string>>(new Set());
+  const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
+
+  const unsupportedActions = new Set<WorkflowAction>([
+    "approve_outreach",
+    "record_clarification_request",
+  ]);
+
+  const getEligibility = (action: WorkflowAction, opts?: { rejectionIsHighRisk?: boolean }) => {
+    const base = evaluateWorkflowEligibility(
+      detail as never,
+      action,
+      actor,
+      buildWorkflowCaseState(detail as never, {
+        currentStatus: detail.summary.status,
+        acknowledgedFlagIds,
+      }),
+      opts,
+    );
+
+    if (unsupportedActions.has(action)) {
+      return {
+        ...base,
+        allowed: false,
+        blockingReasons: [
+          "This action is not available in production yet because the backend does not expose a matching workflow capability.",
+        ],
+        warnings: [],
+      };
+    }
+
+    return base;
+  };
+
+  async function refresh() {
+    await router.invalidate();
+  }
+
+  return {
+    currentStatus: detail.summary.status,
+    isTerminal: isTerminalStatus(detail.summary.status),
+    assignedReviewer: detail.summary.assignedReviewer,
+    priority: detail.summary.priority,
+    notes: detail.notes,
+    extraTimelineEvents: [],
+    sessionCorrections: [],
+    sessionCommunications: [],
+    sessionClarifications: [],
+    sessionDecision: null,
+    acknowledgedFlagIds,
+    selectedSuggestionId,
+    hasSessionChanges: false,
+    nextExpectedAction: detail.statusMeta.nextExpectedAction,
+    getEligibility,
+    async setAssignedReviewer(next) {
+      if (!actor || !("id" in actor) || next !== actor.name) {
+        throw new Error(
+          "Production assignment currently supports assigning the case to the signed-in reviewer only.",
+        );
+      }
+      await adapter.assignCase(caseId, (actor as WorkflowActor & { id?: string }).id ?? "");
+      await refresh();
+    },
+    async setPriority(next) {
+      await adapter.changePriority(caseId, next);
+      await refresh();
+    },
+    async addNote(body) {
+      await adapter.addNote(caseId, body);
+      await refresh();
+    },
+    acknowledgeFlag(flagId) {
+      setAcknowledgedFlagIds((prev) => {
+        const next = new Set(prev);
+        next.add(flagId);
+        return next;
+      });
+    },
+    selectSuggestion(id) {
+      setSelectedSuggestionId(id);
+    },
+    async submitCorrection(payload) {
+      await adapter.requestCorrections(caseId, {
+        corrections: payload.affectedFieldKeys.map((fieldKey) => ({
+          field_key: fieldKey,
+          request_text: payload.candidateMessage,
+          guidance: {
+            reasons: payload.reasons,
+            requested_items: payload.requestedItems,
+            internal_note: payload.internalNote ?? null,
+          },
+        })),
+      });
+      await refresh();
+    },
+    async submitOutreach() {
+      throw new Error("Outreach approval remains unavailable in production.");
+    },
+    async submitVerify(payload) {
+      await adapter.approveCase(caseId, payload.decisionSummary);
+      await refresh();
+    },
+    async submitReject(payload) {
+      await adapter.rejectCase(caseId, payload.decisionSummary);
+      await refresh();
+    },
+    async submitUnable(payload) {
+      await adapter.markUnableToVerify(
+        caseId,
+        `${payload.attemptsSummary}\n\n${payload.outstandingUncertainty}`,
+      );
+      await refresh();
+    },
+    async submitClarificationRequest() {
+      throw new Error("Employer clarification requests remain unavailable in production.");
+    },
+    async submitClarificationResponse(payload) {
+      await adapter.recordClarificationResponse(caseId, payload.response);
+      await refresh();
+    },
+  };
+}
+
 function CaseWorkspace() {
+  const { caseId } = Route.useParams();
   const { detail } = Route.useLoaderData() as { detail: VerificationCaseDetail };
   const { admin } = useAdminAccess();
 
@@ -162,26 +300,40 @@ function CaseWorkspace() {
     [admin],
   );
 
-  const workflow = useVerificationWorkflow(detail, actor);
+  const demoWorkflow = useVerificationWorkflow(detail as never, actor);
+  const productionWorkflow = useProductionVerificationWorkflow(
+    detail,
+    {
+      ...actor,
+      id: admin?.id,
+    } as WorkflowActor & { id?: string },
+    caseId,
+  );
+  const workflow = appEnv.adminDemoMode ? demoWorkflow : productionWorkflow;
   const outreach = useOutreachSession(detail, actor);
 
   const [dialog, setDialog] = useState<WorkflowAction | null>(null);
   const [pendingLeaveHref, setPendingLeaveHref] = useState<null | (() => void)>(null);
 
-  const anySessionChanges = workflow.hasSessionChanges || outreach.hasSessionChanges;
+  const anySessionChanges =
+    appEnv.adminDemoMode && (workflow.hasSessionChanges || outreach.hasSessionChanges);
 
-  function handleAssign(next: Assignee) {
+  async function handleAssign(next: Assignee) {
     if (next === workflow.assignedReviewer) return;
-    workflow.setAssignedReviewer(next);
+    await workflow.setAssignedReviewer(next);
     toast(`Assigned to ${next}`, {
-      description: "Session-only change. Not persisted to the backend.",
+      description: appEnv.adminDemoMode
+        ? "Session-only change. Not persisted to the backend."
+        : "Reviewer assignment saved to the backend.",
     });
   }
-  function handlePriority(next: Priority) {
+  async function handlePriority(next: Priority) {
     if (next === workflow.priority) return;
-    workflow.setPriority(next);
+    await workflow.setPriority(next);
     toast(`Priority set to ${PRIORITY_LABEL[next]}`, {
-      description: "Session-only change. Not persisted to the backend.",
+      description: appEnv.adminDemoMode
+        ? "Session-only change. Not persisted to the backend."
+        : "Priority updated in the backend.",
     });
   }
   function handleAckFlag(f: AttentionFlagRecord) {
@@ -196,6 +348,24 @@ function CaseWorkspace() {
     () => [...detail.timeline, ...workflow.extraTimelineEvents, ...outreach.extraTimelineEvents],
     [detail.timeline, workflow.extraTimelineEvents, outreach.extraTimelineEvents],
   );
+  const assignmentOptions = useMemo(() => {
+    if (appEnv.adminDemoMode) {
+      return ALL_ASSIGNEES.map((assignee) => ({ key: assignee, label: assignee }));
+    }
+
+    const options = new Map<string, { key: string; label: string }>();
+    options.set(workflow.assignedReviewer, {
+      key: workflow.assignedReviewer,
+      label: workflow.assignedReviewer,
+    });
+    if (admin?.name) {
+      options.set(admin.name, {
+        key: admin.name,
+        label: `${admin.name} (me)`,
+      });
+    }
+    return [...options.values()];
+  }, [admin?.name, workflow.assignedReviewer]);
 
   const ageHours = Math.max(
     0,
@@ -231,7 +401,7 @@ function CaseWorkspace() {
         <span className="font-mono text-foreground">{detail.summary.reference}</span>
       </nav>
 
-      {anySessionChanges ? (
+      {appEnv.adminDemoMode && anySessionChanges ? (
         <div
           role="status"
           className="flex items-start gap-2 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-[11px] text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
@@ -275,8 +445,8 @@ function CaseWorkspace() {
               label="Assign"
               icon={UserPlus}
               current={workflow.assignedReviewer}
-              options={ALL_ASSIGNEES}
-              onSelect={(k) => handleAssign(k as Assignee)}
+              options={assignmentOptions}
+              onSelect={(k) => void handleAssign(k as Assignee)}
             />
             <Menu
               label="Priority"
@@ -286,7 +456,7 @@ function CaseWorkspace() {
                 key: p,
                 label: PRIORITY_LABEL[p],
               }))}
-              onSelect={(k) => handlePriority(k as Priority)}
+              onSelect={(k) => void handlePriority(k as Priority)}
             />
             <button
               onClick={() => document.getElementById("internal-note-body")?.focus()}
@@ -328,13 +498,41 @@ function CaseWorkspace() {
             <EvidencePanel items={detail.evidence} />
           </WorkspaceSection>
 
-          <OrganizationResolutionPanel detail={detail} outreach={outreach} />
-          <OutreachWorkspace
-            detail={detail}
-            outreach={outreach}
-            actor={actor}
-            acknowledgedFlagIds={workflow.acknowledgedFlagIds}
-          />
+          {appEnv.adminDemoMode ? (
+            <>
+              <OrganizationResolutionPanel detail={detail} outreach={outreach} />
+              <OutreachWorkspace
+                detail={detail}
+                outreach={outreach}
+                actor={actor}
+                acknowledgedFlagIds={workflow.acknowledgedFlagIds}
+              />
+            </>
+          ) : (
+            <>
+              <WorkspaceSection
+                id="organization"
+                title="Organization resolution"
+                description="Backend-driven organization resolution is not part of this milestone."
+              >
+                <p className="text-xs text-muted-foreground">
+                  Organization resolution remains read-only in production mode for now. This
+                  workspace will stay unavailable until the matching backend resolution endpoints
+                  are integrated.
+                </p>
+              </WorkspaceSection>
+              <WorkspaceSection
+                id="outreach"
+                title="Outreach & communications"
+                description="Employer outreach workflows remain unavailable in production mode."
+              >
+                <p className="text-xs text-muted-foreground">
+                  The backend review workflow does not expose a matching production outreach action
+                  yet, so this section is intentionally unavailable instead of simulating success.
+                </p>
+              </WorkspaceSection>
+            </>
+          )}
 
           <CorrectionsSection
             detail={detail}
@@ -371,10 +569,10 @@ function CaseWorkspace() {
           >
             <InternalNotesPanel
               notes={workflow.notes}
-              onAdd={(body, cat) => {
-                workflow.addNote(body, cat);
+              onAdd={async (body, cat) => {
+                await workflow.addNote(body, cat);
                 toast("Internal note added", {
-                  description: "Session-only.",
+                  description: appEnv.adminDemoMode ? "Session-only." : "Saved to the backend.",
                 });
               }}
               author={admin?.name ?? "Reviewer"}

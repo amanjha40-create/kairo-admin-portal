@@ -11,9 +11,9 @@ import type {
   InternalNote,
   NoteCategory,
   VerificationCaseDetail,
-} from "../data/cases";
+} from "../data/verification-review";
 import type { Priority, VerificationStatus } from "../data/types";
-import type { Assignee } from "../data/verifications";
+import type { Assignee } from "../data/verification-review";
 import {
   buildWorkflowCaseState,
   evaluateWorkflowEligibility,
@@ -68,19 +68,19 @@ export interface UseVerificationWorkflowResult {
     opts?: { rejectionIsHighRisk?: boolean },
   ) => WorkflowEligibilityResult;
   // primitive setters
-  setAssignedReviewer: (v: Assignee) => void;
-  setPriority: (v: Priority) => void;
-  addNote: (body: string, category: NoteCategory) => void;
+  setAssignedReviewer: (v: Assignee) => void | Promise<void>;
+  setPriority: (v: Priority) => void | Promise<void>;
+  addNote: (body: string, category: NoteCategory) => void | Promise<void>;
   acknowledgeFlag: (flagId: string, label: string) => void;
   selectSuggestion: (id: string | null, name?: string) => void;
   // workflow actions
-  submitCorrection: (p: CorrectionActionPayload) => void;
-  submitOutreach: (p: OutreachActionPayload, contactName: string) => void;
-  submitVerify: (p: VerifyActionPayload) => void;
-  submitReject: (p: RejectActionPayload) => void;
-  submitUnable: (p: UnableActionPayload) => void;
-  submitClarificationRequest: (p: ClarificationRequestPayload) => void;
-  submitClarificationResponse: (p: ClarificationResponsePayload) => void;
+  submitCorrection: (p: CorrectionActionPayload) => void | Promise<void>;
+  submitOutreach: (p: OutreachActionPayload, contactName: string) => void | Promise<void>;
+  submitVerify: (p: VerifyActionPayload) => void | Promise<void>;
+  submitReject: (p: RejectActionPayload) => void | Promise<void>;
+  submitUnable: (p: UnableActionPayload) => void | Promise<void>;
+  submitClarificationRequest: (p: ClarificationRequestPayload) => void | Promise<void>;
+  submitClarificationResponse: (p: ClarificationResponsePayload) => void | Promise<void>;
 }
 
 const NEXT_ACTION_BY_STATUS: Partial<Record<VerificationStatus, string>> = {
