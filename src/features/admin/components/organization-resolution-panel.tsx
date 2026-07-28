@@ -12,8 +12,8 @@ import { WorkspaceSection } from "./workspace-section";
 import type {
   VerificationCaseDetail,
   OrganizationSuggestion,
-} from "@/features/admin/data/verification-review";
-import { ORGANIZATION_STATUS_LABEL } from "@/features/admin/data/verification-review";
+} from "@/features/admin/runtime/verification-review";
+import { ORGANIZATION_STATUS_LABEL } from "@/features/admin/runtime/verification-review";
 import type { UseOutreachSessionResult } from "@/features/admin/workflow/use-outreach-session";
 
 interface Props {

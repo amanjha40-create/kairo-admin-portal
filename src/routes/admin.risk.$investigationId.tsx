@@ -14,8 +14,11 @@ import {
   StickyNote,
   Users,
 } from "lucide-react";
+import { appEnv } from "@/config/env";
 import { cn } from "@/lib/utils";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { EmptyState, ErrorState } from "@/features/admin/components/states";
+import { DEMO_MODE_BUILD_ENABLED } from "@/features/admin/controlled-pilot";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { UnsavedChangesDialog } from "@/features/admin/components/unsaved-changes-dialog";
 import { formatRelativeTime } from "@/features/admin/lib/format";
@@ -43,10 +46,9 @@ import {
   type NoteCategory,
   type RecommendedActionKind,
   type RiskSignal,
-} from "@/features/admin/data/risk";
-import { mockUsers } from "@/features/admin/data/users";
-import { mockVerificationCases } from "@/features/admin/data/verifications";
-import { mockRegistryOrganizations } from "@/features/admin/mock-data/registry";
+} from "@/features/admin/runtime/risk";
+import { mockUsers } from "@/features/admin/runtime/users";
+import { mockVerificationCases } from "@/features/admin/runtime/verifications";
 import {
   DUPLICATE_DECISION_LABEL,
   useInvestigationSession,
@@ -54,8 +56,18 @@ import {
 } from "@/features/admin/workflow/use-investigation-session";
 import { toast } from "sonner";
 
+type DemoRegistryModule = typeof import("@/features/admin/mock-data/registry");
+
+const demoRegistryModule: DemoRegistryModule | null = DEMO_MODE_BUILD_ENABLED
+  ? await import("@/features/admin/mock-data/registry")
+  : null;
+const mockRegistryOrganizations = demoRegistryModule?.mockRegistryOrganizations ?? [];
+
 export const Route = createFileRoute("/admin/risk/$investigationId")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    if (!appEnv.adminDemoMode) {
+      return { unavailable: true as const };
+    }
     const inv = getInvestigation(params.investigationId);
     if (!inv) throw notFound();
     return { inv };
@@ -63,9 +75,10 @@ export const Route = createFileRoute("/admin/risk/$investigationId")({
   head: ({ loaderData }) => ({
     meta: [
       {
-        title: loaderData
-          ? `${loaderData.inv.reference} — Trust & Safety`
-          : "Investigation not found — Kairo Admin",
+        title:
+          loaderData && "inv" in loaderData && loaderData.inv
+            ? `${loaderData.inv.reference} — Trust & Safety`
+            : "Trust & Safety — Kairo Admin",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -122,8 +135,7 @@ function InvestigationDetailNotFound() {
 }
 
 function InvestigationDetailPage() {
-  const { investigationId } = Route.useParams();
-  const base = getInvestigation(investigationId) as Investigation;
+  const loaderData = Route.useLoaderData();
   const { admin } = useAdminAccess();
   const permissions = admin?.permissions ?? [];
   const canView = hasPermission(permissions, "risk.view");
@@ -132,15 +144,29 @@ function InvestigationDetailPage() {
   const canEscalate = hasPermission(permissions, "risk.escalate");
   const canResolve = hasPermission(permissions, "risk.resolve");
   const canPrepareActions = hasPermission(permissions, "risk.prepare_actions");
+  const unavailable = "unavailable" in loaderData && loaderData.unavailable;
+  const base = "inv" in loaderData && loaderData.inv ? (loaderData.inv as Investigation) : null;
 
   const session = useInvestigationSession(admin?.name ?? "Kairo Operator", admin?.role ?? "Admin");
-  const inv = useMemo(() => session.overlay(base), [session, base]);
+  const inv = useMemo(() => (base ? session.overlay(base) : null), [session, base]);
 
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   function tryNavigate(href: string) {
     if (session.hasUnsavedChanges) setPendingHref(href);
     else router.navigate({ to: href });
+  }
+
+  if (unavailable) {
+    return (
+      <div className="mx-auto max-w-3xl p-8">
+        <ControlledPilotUnavailableState section="Risk" />
+      </div>
+    );
+  }
+
+  if (!inv) {
+    return null;
   }
 
   if (!canView) {

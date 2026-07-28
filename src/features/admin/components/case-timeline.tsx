@@ -16,7 +16,7 @@ import {
   Reply,
   Plus,
 } from "lucide-react";
-import type { CaseTimelineEvent, TimelineEventKind } from "../data/verification-review";
+import type { CaseTimelineEvent, TimelineEventKind } from "../runtime/verification-review";
 import { formatRelativeTime } from "../lib/format";
 
 const KIND_META: Record<TimelineEventKind, { icon: typeof Plus; label: string }> = {

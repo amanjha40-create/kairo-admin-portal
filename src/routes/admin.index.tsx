@@ -20,14 +20,14 @@ import { PlatformSummary } from "@/features/admin/components/platform-summary";
 import { DateRangeSelector } from "@/features/admin/components/date-range-selector";
 import { LoadingSkeleton, EmptyState, RetryState } from "@/features/admin/components/states";
 import { overviewDashboardQueryOptions } from "@/features/admin/data/overview";
-import { getCommunicationMetrics } from "@/features/admin/data/communications";
+import { getCommunicationMetrics } from "@/features/admin/runtime/communications";
 import {
   SERVICE_HEALTH_LABEL,
   listServices,
   getSystemOverviewMetrics,
   mockDeployments,
   type ServiceHealthState,
-} from "@/features/admin/data/system";
+} from "@/features/admin/runtime/system";
 import type { PlatformServiceStatus } from "@/features/admin/data/types";
 import { formatRelativeTime } from "@/features/admin/lib/format";
 import { cn } from "@/lib/utils";

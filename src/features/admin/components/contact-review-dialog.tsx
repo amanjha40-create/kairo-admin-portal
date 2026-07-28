@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { VerificationContact } from "@/features/admin/data/verification-review";
+import type { VerificationContact } from "@/features/admin/runtime/verification-review";
 import { CONTACT_SOURCE_LABEL, CONTACT_STATE_LABEL } from "@/features/admin/data/cases";
 import type { UseOutreachSessionResult } from "@/features/admin/workflow/use-outreach-session";
 

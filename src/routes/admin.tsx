@@ -6,7 +6,7 @@ import {
   AdminAccessExpired,
 } from "@/features/admin/auth/admin-access";
 import { AdminAuthProvider, useAdminAuth } from "@/features/admin/auth/admin-auth";
-import { normalizeAdminRedirect } from "@/features/admin/auth/redirects";
+import { buildAdminLoginRedirect } from "@/features/admin/auth/redirects";
 import { AdminShell } from "@/features/admin/shell/admin-shell";
 
 const PUBLIC_ADMIN_ROUTES = new Set<string>(["/admin/login", "/admin/forgot-password"]);
@@ -48,10 +48,7 @@ function AdminRouter() {
       return;
     }
     if (auth.status === "unauthenticated" && !isPublic) {
-      const redirect =
-        pathname && pathname !== "/admin/login"
-          ? normalizeAdminRedirect(pathname, "/admin")
-          : undefined;
+      const redirect = buildAdminLoginRedirect(pathname);
       navigate({
         to: "/admin/login",
         replace: true,

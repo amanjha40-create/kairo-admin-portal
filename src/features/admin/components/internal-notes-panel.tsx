@@ -5,7 +5,7 @@ import {
   NOTE_CATEGORY_LABEL,
   type InternalNote,
   type NoteCategory,
-} from "../data/verification-review";
+} from "../runtime/verification-review";
 import { formatRelativeTime } from "../lib/format";
 
 const CATEGORY_ORDER: NoteCategory[] = [

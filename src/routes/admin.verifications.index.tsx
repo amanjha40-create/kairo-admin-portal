@@ -34,7 +34,7 @@ import {
   type SlaState,
   type VerificationCase,
   type VerificationType,
-} from "@/features/admin/data/verification-review";
+} from "@/features/admin/runtime/verification-review";
 import type { Priority, VerificationStatus } from "@/features/admin/data/types";
 
 // ---------- View definitions ----------

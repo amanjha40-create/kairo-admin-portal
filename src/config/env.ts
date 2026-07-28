@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const APP_ENVIRONMENTS = ["development", "test", "staging", "production"] as const;
+export const PRODUCTION_ADMIN_API_BASE_URL = "https://api.kairoid.com";
 
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number];
 
@@ -40,14 +41,38 @@ export function resolveAppEnvConfig(
     : fallbackAppEnv;
 
   const rawApiBaseUrl = parsed.VITE_API_BASE_URL?.trim() ? parsed.VITE_API_BASE_URL.trim() : null;
-  const apiBaseUrl =
+  const parsedApiBaseUrl =
     rawApiBaseUrl && urlSchema.safeParse(rawApiBaseUrl).success ? rawApiBaseUrl : null;
   const defaultDemoMode = appEnv === "production" ? false : true;
-  const adminDemoMode = parseBooleanFlag(parsed.VITE_ADMIN_DEMO_MODE, defaultDemoMode);
+  const requestedDemoMode = parseBooleanFlag(parsed.VITE_ADMIN_DEMO_MODE, defaultDemoMode);
+  const adminDemoMode = appEnv === "production" ? false : requestedDemoMode;
   const issues: string[] = [];
+  let apiBaseUrl = parsedApiBaseUrl;
 
-  if (rawApiBaseUrl && !apiBaseUrl) {
+  if (rawApiBaseUrl && !parsedApiBaseUrl) {
     issues.push("VITE_API_BASE_URL must be a valid absolute URL.");
+  }
+
+  if (appEnv === "production" && requestedDemoMode) {
+    issues.push("VITE_ADMIN_DEMO_MODE must be false when VITE_APP_ENV is production.");
+  }
+
+  if (appEnv === "production") {
+    if (!parsedApiBaseUrl) {
+      apiBaseUrl = null;
+    } else {
+      const url = new URL(parsedApiBaseUrl);
+      if (url.protocol !== "https:") {
+        issues.push("VITE_API_BASE_URL must use HTTPS when VITE_APP_ENV is production.");
+        apiBaseUrl = null;
+      }
+      if (parsedApiBaseUrl !== PRODUCTION_ADMIN_API_BASE_URL) {
+        issues.push(
+          `VITE_API_BASE_URL must be ${PRODUCTION_ADMIN_API_BASE_URL} when VITE_APP_ENV is production.`,
+        );
+        apiBaseUrl = null;
+      }
+    }
   }
 
   if (!adminDemoMode && !apiBaseUrl) {

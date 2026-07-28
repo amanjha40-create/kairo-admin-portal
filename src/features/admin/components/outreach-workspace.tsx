@@ -23,11 +23,11 @@ import { EmptyState } from "./states";
 import type {
   VerificationCaseDetail,
   VerificationContact,
-} from "@/features/admin/data/verification-review";
+} from "@/features/admin/runtime/verification-review";
 import {
   CONTACT_SOURCE_LABEL,
   CONTACT_STATE_LABEL,
-} from "@/features/admin/data/verification-review";
+} from "@/features/admin/runtime/verification-review";
 import {
   DELIVERY_STATE_LABEL,
   EMPLOYER_RESPONSE_LABEL,

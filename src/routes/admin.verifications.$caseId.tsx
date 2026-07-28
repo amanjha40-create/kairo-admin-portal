@@ -52,13 +52,13 @@ import {
   type AttentionFlagRecord,
   type OrganizationSuggestion,
   PRIORITY_LABEL,
-} from "@/features/admin/data/verification-review";
+} from "@/features/admin/runtime/verification-review";
 import {
   COMMUNICATION_STATE_LABEL,
   CORRECTION_STATE_LABEL,
   CONTACT_SOURCE_LABEL,
   CONTACT_STATE_LABEL,
-} from "@/features/admin/data/verification-review";
+} from "@/features/admin/runtime/verification-review";
 import type { Priority } from "@/features/admin/data/types";
 import {
   useVerificationWorkflow,

@@ -10,6 +10,8 @@ import {
   UserRoundSearch,
   Users,
 } from "lucide-react";
+import { appEnv } from "@/config/env";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { FilterBar, FilterMultiSelect } from "@/features/admin/components/filter-bar";
 import { EmptyState } from "@/features/admin/components/states";
@@ -30,7 +32,7 @@ import {
   type RiskLevel,
   type SubjectKind,
   SUBJECT_KIND_LABEL,
-} from "@/features/admin/data/risk";
+} from "@/features/admin/runtime/risk";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/risk/")({
@@ -152,6 +154,14 @@ function RiskCenterPage() {
           title="No access"
           description="Your role does not include the risk.view permission."
         />
+      </div>
+    );
+  }
+
+  if (!appEnv.adminDemoMode) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <ControlledPilotUnavailableState section="Risk" />
       </div>
     );
   }

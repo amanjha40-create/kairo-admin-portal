@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AdminPortalLoading } from "@/features/admin/auth/admin-access";
-import { createAdminAuthAdapter } from "@/features/admin/auth/create-admin-auth-adapter";
+import { createAdminAuthAdapter } from "@/features/admin/runtime/auth";
 import { resolveAdminLandingPath } from "@/features/admin/auth/landing";
 
 export const Route = createFileRoute("/")({

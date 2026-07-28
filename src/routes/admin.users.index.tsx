@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertTriangle, ShieldCheck, Users as UsersIcon } from "lucide-react";
+import { appEnv } from "@/config/env";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { EmptyState } from "@/features/admin/components/states";
@@ -16,7 +18,7 @@ import {
   type ProfileType,
   type UserAccountStatus,
   type UserRecord,
-} from "@/features/admin/data/users";
+} from "@/features/admin/runtime/users";
 
 export const Route = createFileRoute("/admin/users/")({
   head: () => ({
@@ -59,6 +61,14 @@ function UsersDirectoryPage() {
       return hay.includes(ql);
     });
   }, [q, status, profile, passport, onb, attentionOnly]);
+
+  if (!appEnv.adminDemoMode) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <ControlledPilotUnavailableState section="Users" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">

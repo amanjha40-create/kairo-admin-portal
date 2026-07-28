@@ -13,6 +13,8 @@ import {
   ShieldAlert,
   XCircle,
 } from "lucide-react";
+import { appEnv } from "@/config/env";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { FilterBar, FilterMultiSelect } from "@/features/admin/components/filter-bar";
 import { SectionHeader } from "@/features/admin/components/section-header";
@@ -36,14 +38,14 @@ import {
   type CommunicationStatus,
   type CommunicationType,
   type TemplateKey,
-} from "@/features/admin/data/communications";
+} from "@/features/admin/runtime/communications";
 import {
   ALL_ASSIGNEES,
   mockVerificationCases,
   VERIFICATION_TYPE_LABEL,
   type Assignee,
   type VerificationType,
-} from "@/features/admin/data/verifications";
+} from "@/features/admin/runtime/verifications";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/communications/")({
@@ -170,6 +172,14 @@ function CommunicationsCenterPage() {
           title="No access"
           description="Your role does not include the communications.view permission."
         />
+      </div>
+    );
+  }
+
+  if (!appEnv.adminDemoMode) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <ControlledPilotUnavailableState section="Communications" />
       </div>
     );
   }

@@ -14,6 +14,8 @@ import {
   PhoneCall,
   ShieldAlert,
 } from "lucide-react";
+import { appEnv } from "@/config/env";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { SectionHeader } from "@/features/admin/components/section-header";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { EmptyState } from "@/features/admin/components/states";
@@ -32,13 +34,16 @@ import {
   getTemplate,
   type Communication,
   type DeliveryEvent,
-} from "@/features/admin/data/communications";
+} from "@/features/admin/runtime/communications";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CommStatusBadge } from "./admin.communications.index";
 
 export const Route = createFileRoute("/admin/communications/$communicationId")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    if (!appEnv.adminDemoMode) {
+      return { unavailable: true as const };
+    }
     const comm = getCommunication(params.communicationId);
     if (!comm) throw notFound();
     return { comm };
@@ -51,6 +56,14 @@ export const Route = createFileRoute("/admin/communications/$communicationId")({
           { name: "robots", content: "noindex, nofollow" },
         ],
       };
+    if (!("comm" in loaderData) || !loaderData.comm) {
+      return {
+        meta: [
+          { title: "Communications — Kairo Admin" },
+          { name: "robots", content: "noindex, nofollow" },
+        ],
+      };
+    }
     return {
       meta: [
         { title: `${loaderData.comm.reference} — Communications — Kairo Admin` },
@@ -85,7 +98,7 @@ function NotFoundView() {
 }
 
 function CommunicationDetailPage() {
-  const { comm: base } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData();
   const { admin } = useAdminAccess();
   const permissions = admin?.permissions ?? [];
   const canView = hasPermission(permissions, "communications.view");
@@ -94,11 +107,24 @@ function CommunicationDetailPage() {
   const canCancel = hasPermission(permissions, "communications.followup.cancel");
   const canLog = hasPermission(permissions, "communications.manual_contact.log");
   const canReviewFailures = hasPermission(permissions, "communications.failure.review");
-
+  const unavailable = "unavailable" in loaderData && loaderData.unavailable;
+  const base = "comm" in loaderData && loaderData.comm ? loaderData.comm : null;
   const session = useCommunicationsSession(
     admin?.name ?? "Aman Jha",
     admin?.role ?? "Operations Lead",
   );
+
+  if (unavailable) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <ControlledPilotUnavailableState section="Communications" />
+      </div>
+    );
+  }
+
+  if (!base) {
+    return null;
+  }
   const comm = session.overlay(base);
 
   if (!canView)

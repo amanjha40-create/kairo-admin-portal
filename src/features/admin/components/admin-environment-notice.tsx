@@ -1,8 +1,25 @@
 import { AlertTriangle, DatabaseZap, ShieldAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { appEnv, getAdminModeLabel } from "@/config/env";
+import { DEMO_MODE_BUILD_ENABLED } from "@/features/admin/controlled-pilot";
+import { loadDemoCredentials } from "@/features/admin/runtime/demo-credentials";
 import { cn } from "@/lib/utils";
-import { listMockAdminCredentials } from "../auth/mock-accounts";
 import { useAdminAuth } from "../auth/admin-auth";
+
+type DemoCredential = {
+  id: string;
+  email: string;
+  password: string;
+  name: string;
+  roleKey: string;
+};
+
+export function shouldLoadDemoCredentials(
+  showDemoCredentials: boolean,
+  authMode: "demo" | "production",
+): boolean {
+  return showDemoCredentials && authMode === "demo" && DEMO_MODE_BUILD_ENABLED;
+}
 
 export function AdminEnvironmentNotice({
   variant = "card",
@@ -12,6 +29,24 @@ export function AdminEnvironmentNotice({
   showDemoCredentials?: boolean;
 }) {
   const auth = useAdminAuth();
+  const [credentials, setCredentials] = useState<DemoCredential[]>([]);
+
+  useEffect(() => {
+    if (!shouldLoadDemoCredentials(showDemoCredentials, auth.mode)) {
+      setCredentials([]);
+      return;
+    }
+
+    let active = true;
+    void loadDemoCredentials().then((loadedCredentials) => {
+      if (!active) return;
+      setCredentials(loadedCredentials);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [auth.mode, showDemoCredentials]);
 
   return (
     <section
@@ -41,7 +76,7 @@ export function AdminEnvironmentNotice({
         </div>
       </div>
 
-      {showDemoCredentials && auth.mode === "demo" ? (
+      {shouldLoadDemoCredentials(showDemoCredentials, auth.mode) && credentials.length > 0 ? (
         <div className="w-full rounded-lg border border-amber-200/80 bg-white/70 p-3">
           <div className="flex items-start gap-2">
             <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-700" />
@@ -53,7 +88,7 @@ export function AdminEnvironmentNotice({
             </div>
           </div>
           <div className="mt-3 space-y-2 text-xs">
-            {listMockAdminCredentials().map((account) => (
+            {credentials.map((account) => (
               <div
                 key={account.id}
                 className="rounded-md border border-amber-100 bg-white/80 px-3 py-2"

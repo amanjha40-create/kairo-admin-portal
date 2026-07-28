@@ -7,6 +7,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { appEnv } from "@/config/env";
 import {
   Activity,
   AlertTriangle,
@@ -46,6 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { EmptyState } from "@/features/admin/components/states";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { FilterBar, FilterMultiSelect } from "@/features/admin/components/filter-bar";
@@ -92,7 +94,7 @@ import {
   type MessageStatus,
   type PlatformService,
   type ServiceHealthState,
-} from "@/features/admin/data/system";
+} from "@/features/admin/runtime/system";
 
 export const Route = createFileRoute("/admin/system")({
   head: () => ({
@@ -161,6 +163,14 @@ function SystemOperationsPage() {
           title="No access"
           description="Your role does not include the system.view permission."
         />
+      </div>
+    );
+  }
+
+  if (!appEnv.adminDemoMode) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <ControlledPilotUnavailableState section="System" />
       </div>
     );
   }

@@ -9,7 +9,7 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { WorkflowActionDialog, Field } from "./workflow-action-dialog";
-import type { VerificationCaseDetail } from "../data/verification-review";
+import type { VerificationCaseDetail } from "../runtime/verification-review";
 import {
   CORRECTION_REASONS,
   CORRECTION_REASON_LABEL,
@@ -37,7 +37,7 @@ import {
   unableSchema,
   verifySchema,
 } from "../workflow/schemas";
-import { CONTACT_STATE_LABEL } from "../data/verification-review";
+import { CONTACT_STATE_LABEL } from "../runtime/verification-review";
 
 const inputCls =
   "block w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring";

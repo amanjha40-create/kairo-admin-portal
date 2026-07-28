@@ -16,7 +16,7 @@ import {
   SLA_LABEL,
   VERIFICATION_TYPE_LABEL,
   type VerificationCase,
-} from "../data/verification-review";
+} from "../runtime/verification-review";
 
 function slaHours(iso: string) {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000));

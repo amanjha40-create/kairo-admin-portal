@@ -6,10 +6,10 @@ import {
   writeStoredSession,
   type SessionStorageBag,
 } from "./session-storage";
-import { DEMO_ADMIN_ACCOUNTS, toAdminAccount } from "./mock-accounts";
+import { DEMO_ADMIN_ACCOUNTS, toAdminAccount } from "@/features/admin/auth/mock-accounts";
 import type { AdminAuthAdapter, DemoAdminAccountSeed } from "./types";
 
-interface DemoAuthAdapterOptions {
+export interface DemoAuthAdapterOptions {
   accounts?: DemoAdminAccountSeed[];
   storage?: SessionStorageBag | null;
   now?: () => Date;

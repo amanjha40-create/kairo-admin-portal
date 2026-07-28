@@ -7,8 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createAdminAuthAdapter } from "./create-admin-auth-adapter";
-import { listMockAdminEmails } from "./mock-accounts";
+import { createAdminAuthAdapter } from "@/features/admin/runtime/auth";
 import type { AdminAccount, AdminAuthAdapter, AdminAuthStatus } from "./types";
 
 export interface AdminAuthContextValue {
@@ -113,5 +112,3 @@ export function useAdminAuth(): AdminAuthContextValue {
   if (!ctx) throw new Error("useAdminAuth must be used inside <AdminAuthProvider>.");
   return ctx;
 }
-
-export { listMockAdminEmails };

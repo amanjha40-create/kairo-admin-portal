@@ -20,7 +20,7 @@ import type {
   VerificationCaseDetail,
   VerificationContact,
   CaseTimelineEvent,
-} from "../data/verification-review";
+} from "../runtime/verification-review";
 import type { WorkflowActor } from "./types";
 import {
   DELIVERY_STATE_LABEL,

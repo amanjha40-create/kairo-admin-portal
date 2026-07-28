@@ -15,3 +15,8 @@ export function normalizeAdminRedirect(
 ): string {
   return isSafeAdminRedirect(value) ? value : fallback;
 }
+
+export function buildAdminLoginRedirect(pathname: string | null | undefined): string | undefined {
+  if (!pathname || pathname === "/admin/login") return undefined;
+  return normalizeAdminRedirect(pathname);
+}

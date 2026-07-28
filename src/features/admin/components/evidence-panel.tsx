@@ -16,7 +16,7 @@ import {
   type EvidenceProcessingState,
   type EvidenceReviewState,
   type ComparisonResult,
-} from "../data/verification-review";
+} from "../runtime/verification-review";
 import { formatRelativeTime } from "../lib/format";
 
 const PROCESSING_META: Record<

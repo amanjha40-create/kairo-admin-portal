@@ -1,13 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import {
-  ALL_ASSIGNEES,
-  ATTENTION_FLAG_LABEL,
-  COMPLETED_STATUSES,
-  ORGANIZATION_STATUS_LABEL,
-  SLA_LABEL,
-  VERIFICATION_TYPE_LABEL,
-  mockVerificationCases,
-} from "@/features/admin/mock-data/verification-cases";
+import { DEMO_MODE_BUILD_ENABLED } from "@/features/admin/controlled-pilot";
 import type {
   Assignee,
   AttentionFlag,
@@ -17,15 +9,22 @@ import type {
   VerificationType,
 } from "@/features/admin/mock-data/verification-cases";
 
-export {
-  ALL_ASSIGNEES,
-  ATTENTION_FLAG_LABEL,
-  COMPLETED_STATUSES,
-  ORGANIZATION_STATUS_LABEL,
-  SLA_LABEL,
-  VERIFICATION_TYPE_LABEL,
-  mockVerificationCases,
-};
+type DemoVerificationsModule = typeof import("@/features/admin/mock-data/verification-cases");
+
+const demoVerificationsModule: DemoVerificationsModule | null = DEMO_MODE_BUILD_ENABLED
+  ? await import("@/features/admin/mock-data/verification-cases")
+  : null;
+
+export const ALL_ASSIGNEES = demoVerificationsModule?.ALL_ASSIGNEES ?? [];
+export const ATTENTION_FLAG_LABEL =
+  demoVerificationsModule?.ATTENTION_FLAG_LABEL ?? ({} as Record<AttentionFlag, string>);
+export const COMPLETED_STATUSES = demoVerificationsModule?.COMPLETED_STATUSES ?? [];
+export const ORGANIZATION_STATUS_LABEL =
+  demoVerificationsModule?.ORGANIZATION_STATUS_LABEL ?? ({} as Record<OrganizationStatus, string>);
+export const SLA_LABEL = demoVerificationsModule?.SLA_LABEL ?? ({} as Record<SlaState, string>);
+export const VERIFICATION_TYPE_LABEL =
+  demoVerificationsModule?.VERIFICATION_TYPE_LABEL ?? ({} as Record<VerificationType, string>);
+export const mockVerificationCases = demoVerificationsModule?.mockVerificationCases ?? [];
 
 export type {
   Assignee,

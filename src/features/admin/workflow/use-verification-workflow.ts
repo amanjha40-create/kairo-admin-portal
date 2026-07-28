@@ -11,9 +11,9 @@ import type {
   InternalNote,
   NoteCategory,
   VerificationCaseDetail,
-} from "../data/verification-review";
+} from "../runtime/verification-review";
 import type { Priority, VerificationStatus } from "../data/types";
-import type { Assignee } from "../data/verification-review";
+import type { Assignee } from "../runtime/verification-review";
 import {
   buildWorkflowCaseState,
   evaluateWorkflowEligibility,

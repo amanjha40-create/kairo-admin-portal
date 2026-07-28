@@ -15,6 +15,7 @@ import {
   StickyNote,
   Users as UsersIcon,
 } from "lucide-react";
+import { appEnv } from "@/config/env";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { EmptyState, ErrorState } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { formatRelativeTime } from "@/features/admin/lib/format";
@@ -45,7 +47,7 @@ import {
   initialsFor,
   type UserAccountStatus,
   type UserRecord,
-} from "@/features/admin/data/users";
+} from "@/features/admin/runtime/users";
 import {
   USER_ACTION_LABEL,
   USER_NOTE_CATEGORY_LABEL,
@@ -53,12 +55,15 @@ import {
   type UserAdminActionKind,
   type UserNoteCategory,
 } from "@/features/admin/workflow/use-user-admin-session";
-import { mockVerificationCases } from "@/features/admin/data/verifications";
+import { mockVerificationCases } from "@/features/admin/runtime/verifications";
 import { StatusBadge } from "@/features/admin/components/status-badge";
 import { PriorityBadge } from "@/features/admin/components/priority-badge";
 
 export const Route = createFileRoute("/admin/users/$userId")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    if (!appEnv.adminDemoMode) {
+      return { unavailable: true as const };
+    }
     const user = getUser(params.userId);
     if (!user) throw notFound();
     return { user };
@@ -66,9 +71,10 @@ export const Route = createFileRoute("/admin/users/$userId")({
   head: ({ loaderData }) => ({
     meta: [
       {
-        title: loaderData
-          ? `${loaderData.user.fullName} — Kairo Admin`
-          : "User not found — Kairo Admin",
+        title:
+          loaderData && "user" in loaderData && loaderData.user
+            ? `${loaderData.user.fullName} — Kairo Admin`
+            : "Users — Kairo Admin",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -126,17 +132,18 @@ function UserDetailNotFound() {
 }
 
 function UserDetailPage() {
-  const { userId } = Route.useParams();
-  // Loader throws notFound() for unknown IDs, so the record is guaranteed here.
-  const user = getUser(userId) as UserRecord;
+  const loaderData = Route.useLoaderData();
   const { admin } = useAdminAccess();
   const permissions = admin?.permissions ?? [];
-  const session = useUserAdminSession(user.id, {
+  const unavailable = "unavailable" in loaderData && loaderData.unavailable;
+  const user = "user" in loaderData && loaderData.user ? (loaderData.user as UserRecord) : null;
+  const session = useUserAdminSession(user?.id ?? "controlled-pilot", {
     name: admin?.name ?? "Kairo Operator",
     role: admin?.role ?? "Admin",
   });
 
-  const effectiveStatus: UserAccountStatus = session.accountStatusOverride ?? user.accountStatus;
+  const effectiveStatus: UserAccountStatus =
+    session.accountStatusOverride ?? user?.accountStatus ?? "pending";
 
   const timeline = useMemo(() => {
     const noteEvents = session.notes.map((n) => ({
@@ -147,14 +154,14 @@ function UserDetailPage() {
       sessionOnly: true,
       actor: n.author,
     }));
-    return [...session.extraTimeline, ...noteEvents, ...user.activity].sort(
+    return [...session.extraTimeline, ...noteEvents, ...(user?.activity ?? [])].sort(
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
     );
-  }, [session.extraTimeline, session.notes, user.activity]);
+  }, [session.extraTimeline, session.notes, user?.activity]);
 
   const cases = useMemo(
-    () => mockVerificationCases.filter((c) => c.candidateId === user.id),
-    [user.id],
+    () => mockVerificationCases.filter((c) => c.candidateId === user?.id),
+    [user?.id],
   );
   const activeCases = cases.filter(
     (c) => c.status !== "verified" && c.status !== "rejected" && c.status !== "unable_to_verify",
@@ -172,6 +179,18 @@ function UserDetailPage() {
     } else {
       router.navigate({ to: href });
     }
+  }
+
+  if (unavailable) {
+    return (
+      <div className="mx-auto max-w-3xl p-8">
+        <ControlledPilotUnavailableState section="Users" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
