@@ -16,10 +16,12 @@ import { AttentionCard } from "@/features/admin/components/attention-card";
 import { Funnel } from "@/features/admin/components/funnel";
 import { VerificationStatusGrid } from "@/features/admin/components/verification-status-grid";
 import { ActivityItem } from "@/features/admin/components/activity-item";
+import { ControlledPilotUnavailableState } from "@/features/admin/components/controlled-pilot-unavailable-state";
 import { PlatformSummary } from "@/features/admin/components/platform-summary";
 import { DateRangeSelector } from "@/features/admin/components/date-range-selector";
 import { LoadingSkeleton, EmptyState, RetryState } from "@/features/admin/components/states";
 import { overviewDashboardQueryOptions } from "@/features/admin/data/overview";
+import { appEnv } from "@/config/env";
 import { getCommunicationMetrics } from "@/features/admin/runtime/communications";
 import {
   SERVICE_HEALTH_LABEL,
@@ -30,6 +32,10 @@ import {
 } from "@/features/admin/runtime/system";
 import type { PlatformServiceStatus } from "@/features/admin/data/types";
 import { formatRelativeTime } from "@/features/admin/lib/format";
+import {
+  getOverviewRecentDeployment,
+  shouldShowOverviewDemoOperationalSections,
+} from "@/features/admin/lib/overview-operational-sections";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/")({
@@ -48,20 +54,25 @@ export const Route = createFileRoute("/admin/")({
 
 function OverviewPage() {
   const overviewQuery = useQuery(overviewDashboardQueryOptions());
-  const comms = getCommunicationMetrics();
-  const services = listServices().map<PlatformServiceStatus>((service) => ({
-    id: service.id,
-    name: service.name,
-    note: service.note,
-    state:
-      service.state === "operational"
-        ? "operational"
-        : service.state === "degraded"
-          ? "degraded"
-          : "action_required",
-  }));
-  const sys = getSystemOverviewMetrics();
-  const recentDeployment = mockDeployments[0];
+  const showDemoOperationalSections = shouldShowOverviewDemoOperationalSections(appEnv);
+  const comms = showDemoOperationalSections ? getCommunicationMetrics() : null;
+  const services = showDemoOperationalSections
+    ? listServices().map<PlatformServiceStatus>((service) => ({
+        id: service.id,
+        name: service.name,
+        note: service.note,
+        state:
+          service.state === "operational"
+            ? "operational"
+            : service.state === "degraded"
+              ? "degraded"
+              : "action_required",
+      }))
+    : null;
+  const sys = showDemoOperationalSections ? getSystemOverviewMetrics() : null;
+  const recentDeployment = showDemoOperationalSections
+    ? getOverviewRecentDeployment(mockDeployments)
+    : null;
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-8">
@@ -180,12 +191,16 @@ function OverviewPage() {
             <section aria-labelledby="platform-heading" className="lg:col-span-2">
               <SectionHeader
                 title="Platform summary"
-                description="Application-level status. Mock operational data until service telemetry is wired in."
+                description="Application-level status for enabled overview surfaces."
               />
               <h2 id="platform-heading" className="sr-only">
                 Platform
               </h2>
-              <PlatformSummary services={services} />
+              {services ? (
+                <PlatformSummary services={services} />
+              ) : (
+                <ControlledPilotUnavailableState section="System" />
+              )}
             </section>
           </div>
         </>
@@ -197,120 +212,138 @@ function OverviewPage() {
           title="Communications"
           description="Delivery health across every outbound verification message."
           actions={
-            <Link
-              to="/admin/communications"
-              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
-            >
-              Open center <ArrowRight aria-hidden className="size-3" />
-            </Link>
+            showDemoOperationalSections ? (
+              <Link
+                to="/admin/communications"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                Open center <ArrowRight aria-hidden className="size-3" />
+              </Link>
+            ) : undefined
           }
         />
         <h2 id="comms-heading" className="sr-only">
           Communications
         </h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-          <CommTile
-            label="Sent (total)"
-            value={comms.total}
-            tone="neutral"
-            icon={<Send aria-hidden className="size-3.5" />}
-          />
-          <CommTile label="Pending" value={comms.pending} tone="neutral" />
-          <CommTile label="Delivered" value={comms.delivered} tone="good" />
-          <CommTile label="Awaiting response" value={comms.awaitingResponse} tone="warn" />
-          <CommTile
-            label="Failed / bounced"
-            value={comms.failedTotal}
-            tone="bad"
-            icon={<MailWarning aria-hidden className="size-3.5" />}
-          />
-          <CommTile label="Follow-ups due today" value={comms.followUpsDueToday} tone="warn" />
-        </div>
+        {comms ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+            <CommTile
+              label="Sent (total)"
+              value={comms.total}
+              tone="neutral"
+              icon={<Send aria-hidden className="size-3.5" />}
+            />
+            <CommTile label="Pending" value={comms.pending} tone="neutral" />
+            <CommTile label="Delivered" value={comms.delivered} tone="good" />
+            <CommTile label="Awaiting response" value={comms.awaitingResponse} tone="warn" />
+            <CommTile
+              label="Failed / bounced"
+              value={comms.failedTotal}
+              tone="bad"
+              icon={<MailWarning aria-hidden className="size-3.5" />}
+            />
+            <CommTile label="Follow-ups due today" value={comms.followUpsDueToday} tone="warn" />
+          </div>
+        ) : (
+          <ControlledPilotUnavailableState section="Communications" />
+        )}
       </section>
 
       {/* System operations */}
       <section aria-labelledby="sys-heading">
         <SectionHeader
           title="System operations"
-          description="Platform health, background activity and open incidents. Mock operational data."
+          description="Platform health, background activity and open incidents."
           actions={
-            <Link
-              to="/admin/system"
-              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
-            >
-              Open system <ArrowRight aria-hidden className="size-3" />
-            </Link>
+            showDemoOperationalSections ? (
+              <Link
+                to="/admin/system"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                Open system <ArrowRight aria-hidden className="size-3" />
+              </Link>
+            ) : undefined
           }
         />
         <h2 id="sys-heading" className="sr-only">
           System operations
         </h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <SysTile label="Platform status" href="/admin/system">
-            <PlatformSummaryChip
-              states={[
-                sys.api,
-                sys.database,
-                sys.emailDelivery,
-                sys.smsDelivery,
-                sys.backgroundJobs,
-                sys.documentStorage,
-              ]}
-            />
-          </SysTile>
-          <SysTile
-            label="Failed jobs"
-            href="/admin/system"
-            icon={<Zap aria-hidden className="size-3.5" />}
-          >
-            <p
-              className={cn(
-                "text-xl font-semibold tabular-nums",
-                sys.failedJobs > 0 ? "text-rose-700 dark:text-rose-300" : "text-foreground",
-              )}
+        {sys && comms ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <SysTile label="Platform status" href="/admin/system">
+              <PlatformSummaryChip
+                states={[
+                  sys.api,
+                  sys.database,
+                  sys.emailDelivery,
+                  sys.smsDelivery,
+                  sys.backgroundJobs,
+                  sys.documentStorage,
+                ]}
+              />
+            </SysTile>
+            <SysTile
+              label="Failed jobs"
+              href="/admin/system"
+              icon={<Zap aria-hidden className="size-3.5" />}
             >
-              {sys.failedJobs}
-            </p>
-          </SysTile>
-          <SysTile
-            label="Open incidents"
-            href="/admin/system"
-            icon={<Bell aria-hidden className="size-3.5" />}
-          >
-            <p
-              className={cn(
-                "text-xl font-semibold tabular-nums",
-                sys.openAlerts > 0 ? "text-rose-700 dark:text-rose-300" : "text-foreground",
-              )}
+              <p
+                className={cn(
+                  "text-xl font-semibold tabular-nums",
+                  sys.failedJobs > 0 ? "text-rose-700 dark:text-rose-300" : "text-foreground",
+                )}
+              >
+                {sys.failedJobs}
+              </p>
+            </SysTile>
+            <SysTile
+              label="Open incidents"
+              href="/admin/system"
+              icon={<Bell aria-hidden className="size-3.5" />}
             >
-              {sys.openAlerts}
-            </p>
-          </SysTile>
-          <SysTile
-            label="Delivery failures"
-            href="/admin/system"
-            icon={<AlertTriangle aria-hidden className="size-3.5" />}
-          >
-            <p
-              className={cn(
-                "text-xl font-semibold tabular-nums",
-                comms.failedTotal > 0 ? "text-amber-700 dark:text-amber-300" : "text-foreground",
-              )}
+              <p
+                className={cn(
+                  "text-xl font-semibold tabular-nums",
+                  sys.openAlerts > 0 ? "text-rose-700 dark:text-rose-300" : "text-foreground",
+                )}
+              >
+                {sys.openAlerts}
+              </p>
+            </SysTile>
+            <SysTile
+              label="Delivery failures"
+              href="/admin/system"
+              icon={<AlertTriangle aria-hidden className="size-3.5" />}
             >
-              {comms.failedTotal}
-            </p>
-          </SysTile>
-          <SysTile
-            label="Recent deployment"
-            href="/admin/system"
-            icon={<Rocket aria-hidden className="size-3.5" />}
-          >
-            <p className="text-xs font-medium text-foreground">{recentDeployment.version}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {formatRelativeTime(recentDeployment.deployedAt)}
-            </p>
-          </SysTile>
-        </div>
+              <p
+                className={cn(
+                  "text-xl font-semibold tabular-nums",
+                  comms.failedTotal > 0 ? "text-amber-700 dark:text-amber-300" : "text-foreground",
+                )}
+              >
+                {comms.failedTotal}
+              </p>
+            </SysTile>
+            <SysTile
+              label="Recent deployment"
+              href="/admin/system"
+              icon={<Rocket aria-hidden className="size-3.5" />}
+            >
+              {recentDeployment ? (
+                <>
+                  <p className="text-xs font-medium text-foreground">{recentDeployment.version}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatRelativeTime(recentDeployment.deployedAt)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Deployment summary unavailable.</p>
+              )}
+            </SysTile>
+          </div>
+        ) : (
+          <ControlledPilotUnavailableState section="System" />
+        )}
       </section>
     </div>
   );
