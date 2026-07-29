@@ -681,7 +681,7 @@ export function createVerificationReviewAdapter(
     mode: "production",
     async listCases() {
       const data = await api.request<BackendAdminReviewQueueResponse>(
-        "/api/v1/admin/verification-requests/queue?page=1&page_size=250",
+        "/api/v1/admin/verification-requests/queue?page=1&page_size=100",
       );
       return data.items.map(mapQueueItemToCase);
     },
