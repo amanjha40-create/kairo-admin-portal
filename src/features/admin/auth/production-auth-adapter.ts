@@ -87,6 +87,8 @@ const BACKEND_PERMISSION_MAP: Record<string, WorkflowPermission[]> = {
     "verification.verify",
     "verification.reject",
     "verification.mark_unable",
+    "verification.cancel",
+    "verification.return_to_verifier",
   ],
   request_more_info: ["verification.request_correction", "verification.record_clarification"],
   manage_users: [

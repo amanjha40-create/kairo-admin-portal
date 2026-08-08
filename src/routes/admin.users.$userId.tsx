@@ -57,6 +57,7 @@ import {
 } from "@/features/admin/workflow/use-user-admin-session";
 import { mockVerificationCases } from "@/features/admin/runtime/verifications";
 import { StatusBadge } from "@/features/admin/components/status-badge";
+import { mapLegacyMockVerificationStatus } from "@/features/admin/lib/verification-status";
 import { PriorityBadge } from "@/features/admin/components/priority-badge";
 
 export const Route = createFileRoute("/admin/users/$userId")({
@@ -504,7 +505,7 @@ function ActiveRequestsSection({ cases }: { cases: (typeof mockVerificationCases
                   {c.organizationName} — {c.roleOrProgram}
                 </p>
               </div>
-              <StatusBadge status={c.status} />
+              <StatusBadge status={mapLegacyMockVerificationStatus(c.status)} />
               <PriorityBadge priority={c.priority} />
               <span className="text-[11px] tabular-nums text-muted-foreground">
                 {formatRelativeTime(c.updatedAt)}
@@ -554,7 +555,7 @@ function VerificationHistorySection({ user }: { user: UserRecord }) {
                   <td className="px-2 py-1.5 text-muted-foreground">{c.verificationType}</td>
                   <td className="px-2 py-1.5 text-muted-foreground">{c.organizationName}</td>
                   <td className="px-2 py-1.5">
-                    <StatusBadge status={c.status} />
+                    <StatusBadge status={mapLegacyMockVerificationStatus(c.status)} />
                   </td>
                   <td className="px-2 py-1.5 tabular-nums text-muted-foreground">
                     {new Date(c.submittedAt).toLocaleDateString()}

@@ -25,6 +25,7 @@ import type {
   CorrectionActionPayload,
   OutreachActionPayload,
   RejectActionPayload,
+  SimpleDecisionPayload,
   SessionClarificationRecord,
   SessionCommunicationRecord,
   SessionCorrectionRecord,
@@ -79,21 +80,27 @@ export interface UseVerificationWorkflowResult {
   submitVerify: (p: VerifyActionPayload) => void | Promise<void>;
   submitReject: (p: RejectActionPayload) => void | Promise<void>;
   submitUnable: (p: UnableActionPayload) => void | Promise<void>;
+  submitCancel: (p: SimpleDecisionPayload) => void | Promise<void>;
+  submitReturnToVerifier: (p: SimpleDecisionPayload) => void | Promise<void>;
   submitClarificationRequest: (p: ClarificationRequestPayload) => void | Promise<void>;
   submitClarificationResponse: (p: ClarificationResponsePayload) => void | Promise<void>;
 }
 
 const NEXT_ACTION_BY_STATUS: Partial<Record<VerificationStatus, string>> = {
-  pending_review: "Admin must review evidence.",
-  corrections_requested: "Candidate must resubmit information.",
-  resubmitted: "Admin must review the resubmission.",
-  awaiting_organization: "Organization match must be resolved.",
-  awaiting_employer: "Employer response is pending.",
-  clarification_requested: "Clarification response is pending.",
+  pending_admin_review: "Admin must review evidence before dispatch.",
+  awaiting_subject_corrections: "Candidate must resubmit information.",
+  pending_admin_re_review: "Admin must review the corrected submission.",
+  approved_for_organization_verification: "Request is approved for dispatch.",
+  pending_organization_resolution: "Organization match must be resolved.",
+  pending_organization_acceptance: "Verifier has not accepted the request yet.",
+  in_progress: "Verifier response is pending.",
+  awaiting_information: "Clarification response is pending.",
+  pending_admin_quality_review: "Admin must complete final quality review.",
   verified: "Case is complete.",
   rejected: "Case is complete.",
-  failed_outreach: "Contact requires review.",
   unable_to_verify: "Case is complete.",
+  cancelled: "Case is complete.",
+  expired: "Case is complete.",
 };
 
 export function useVerificationWorkflow(
@@ -201,7 +208,7 @@ export function useVerificationWorkflow(
   const submitCorrection = useCallback(
     (p: CorrectionActionPayload) => {
       const previous = currentStatus;
-      setCurrentStatus("corrections_requested");
+      setCurrentStatus("awaiting_subject_corrections");
       setSessionCorrections((prev) => [
         ...prev,
         {
@@ -231,7 +238,7 @@ export function useVerificationWorkflow(
   const submitOutreach = useCallback(
     (p: OutreachActionPayload, contactName: string) => {
       const previous = currentStatus;
-      setCurrentStatus("awaiting_employer");
+      setCurrentStatus("approved_for_organization_verification");
       setSessionCommunications((prev) => [
         ...prev,
         {
@@ -334,7 +341,7 @@ export function useVerificationWorkflow(
 
   const submitClarificationRequest = useCallback(
     (p: ClarificationRequestPayload) => {
-      setCurrentStatus("clarification_requested");
+      setCurrentStatus("awaiting_information");
       setSessionClarifications((prev) => [
         ...prev,
         {
@@ -359,7 +366,7 @@ export function useVerificationWorkflow(
 
   const submitClarificationResponse = useCallback(
     (p: ClarificationResponsePayload) => {
-      setCurrentStatus("awaiting_employer");
+      setCurrentStatus("in_progress");
       setHasResolvedCorrection(true);
       setSessionClarifications((prev) => [
         ...prev,
@@ -381,6 +388,34 @@ export function useVerificationWorkflow(
         description: `Recorded candidate clarification response.`,
       });
       if (p.internalNote) addNote(p.internalNote, "general");
+    },
+    [actor.name, addNote, appendEvent],
+  );
+
+  const submitCancel = useCallback(
+    (p: SimpleDecisionPayload) => {
+      setCurrentStatus("cancelled");
+      appendEvent({
+        kind: "decision_prepared",
+        actor: actor.name,
+        actorSource: "admin",
+        description: "Case cancelled in this session.",
+      });
+      if (p.internalNote) addNote(p.internalNote, "decision_preparation");
+    },
+    [actor.name, addNote, appendEvent],
+  );
+
+  const submitReturnToVerifier = useCallback(
+    (p: SimpleDecisionPayload) => {
+      setCurrentStatus("in_progress");
+      appendEvent({
+        kind: "employer_response",
+        actor: actor.name,
+        actorSource: "admin",
+        description: "Returned to verifier for follow-up.",
+      });
+      if (p.internalNote) addNote(p.internalNote, "decision_preparation");
     },
     [actor.name, addNote, appendEvent],
   );
@@ -446,6 +481,8 @@ export function useVerificationWorkflow(
     submitVerify,
     submitReject,
     submitUnable,
+    submitCancel,
+    submitReturnToVerifier,
     submitClarificationRequest,
     submitClarificationResponse,
   };

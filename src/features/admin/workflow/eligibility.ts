@@ -23,64 +23,69 @@ import { hasPermission } from "./permissions";
 export const TRANSITION_RULES: WorkflowTransitionRule[] = [
   {
     action: "request_correction",
-    fromStatuses: [
-      "pending_review",
-      "resubmitted",
-      "awaiting_organization",
-      "awaiting_employer",
-      "clarification_requested",
-    ],
-    toStatus: "corrections_requested",
+    fromStatuses: ["pending_admin_review", "pending_admin_re_review"],
+    toStatus: "awaiting_subject_corrections",
     requiredPermission: "verification.request_correction",
   },
   {
     action: "approve_outreach",
-    fromStatuses: ["pending_review", "resubmitted", "awaiting_organization", "failed_outreach"],
-    toStatus: "awaiting_employer",
+    fromStatuses: ["pending_admin_review", "pending_admin_re_review"],
+    toStatus: "approved_for_organization_verification",
     requiredPermission: "verification.approve_outreach",
   },
   {
     action: "verify",
-    fromStatuses: ["pending_review", "resubmitted", "awaiting_employer", "clarification_requested"],
+    fromStatuses: ["pending_admin_quality_review"],
     toStatus: "verified",
     requiredPermission: "verification.verify",
   },
   {
     action: "reject",
     fromStatuses: [
-      "pending_review",
-      "resubmitted",
-      "awaiting_organization",
-      "awaiting_employer",
-      "clarification_requested",
-      "failed_outreach",
+      "pending_admin_review",
+      "pending_admin_re_review",
+      "pending_admin_quality_review",
     ],
     toStatus: "rejected",
     requiredPermission: "verification.reject",
   },
   {
     action: "unable_to_verify",
-    fromStatuses: [
-      "pending_review",
-      "resubmitted",
-      "awaiting_organization",
-      "awaiting_employer",
-      "clarification_requested",
-      "failed_outreach",
-    ],
+    fromStatuses: ["pending_admin_quality_review"],
     toStatus: "unable_to_verify",
     requiredPermission: "verification.mark_unable",
   },
   {
+    action: "cancel",
+    fromStatuses: [
+      "pending_admin_review",
+      "pending_admin_re_review",
+      "approved_for_organization_verification",
+      "pending_organization_resolution",
+      "pending_organization_acceptance",
+      "in_progress",
+      "awaiting_information",
+      "pending_admin_quality_review",
+    ],
+    toStatus: "cancelled",
+    requiredPermission: "verification.cancel",
+  },
+  {
+    action: "return_to_verifier",
+    fromStatuses: ["pending_admin_quality_review"],
+    toStatus: "in_progress",
+    requiredPermission: "verification.return_to_verifier",
+  },
+  {
     action: "record_clarification_request",
-    fromStatuses: ["awaiting_employer"],
-    toStatus: "clarification_requested",
+    fromStatuses: ["in_progress"],
+    toStatus: "awaiting_information",
     requiredPermission: "verification.record_clarification",
   },
   {
     action: "record_clarification_response",
-    fromStatuses: ["clarification_requested"],
-    toStatus: "awaiting_employer",
+    fromStatuses: ["awaiting_information"],
+    toStatus: "in_progress",
     requiredPermission: "verification.record_clarification",
   },
 ];
@@ -139,7 +144,13 @@ export function buildWorkflowCaseState(
   };
 }
 
-const TERMINAL_STATUSES: VerificationStatus[] = ["verified", "rejected", "unable_to_verify"];
+const TERMINAL_STATUSES: VerificationStatus[] = [
+  "verified",
+  "rejected",
+  "unable_to_verify",
+  "cancelled",
+  "expired",
+];
 
 export function isTerminalStatus(status: VerificationStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
@@ -199,22 +210,24 @@ export function evaluateWorkflowEligibility(
       }
       break;
     case "approve_outreach":
-      if (!state.organizationResolved) {
-        blockingReasons.push("Organization must be resolved before approving outreach.");
-      }
       if (!state.hasEligibleContact) {
         blockingReasons.push("At least one approved, outreach-eligible contact is required.");
       }
       if (state.hasOpenCriticalFlag) {
-        blockingReasons.push("Open critical risk flag blocks outreach. Resolve it first.");
+        blockingReasons.push("Open critical risk flag blocks dispatch. Resolve it first.");
       }
       if (state.outstandingCorrection) {
         blockingReasons.push(
-          "Cannot approve outreach while a candidate correction is outstanding.",
+          "Cannot approve for dispatch while a candidate correction is outstanding.",
         );
       }
       if (state.evidenceCount === 0) {
         blockingReasons.push("Required evidence has not been uploaded.");
+      }
+      if (!state.organizationResolved) {
+        warnings.push(
+          "Organization is not resolved yet. The backend may move this case into organization resolution after dispatch approval.",
+        );
       }
       if (state.hasOpenPossibleDuplicate) {
         warnings.push("Possible duplicate flag is open. Confirm this is not a duplicate case.");
@@ -239,11 +252,6 @@ export function evaluateWorkflowEligibility(
       if (state.evidenceReviewedCount === 0 && state.evidenceCount > 0) {
         warnings.push("No evidence has been marked as reviewed yet.");
       }
-      if (state.currentStatus === "pending_review" || state.currentStatus === "resubmitted") {
-        warnings.push(
-          "Verifying directly without employer confirmation requires an approved evidence-only basis.",
-        );
-      }
       break;
     case "reject":
       if (state.hasOpenPossibleDuplicate) {
@@ -261,11 +269,13 @@ export function evaluateWorkflowEligibility(
       }
       break;
     case "unable_to_verify":
-      // Distinct from rejection — no fraud-severity checks.
+    case "cancel":
+    case "return_to_verifier":
+      // No additional frontend-only constraints beyond status and permission gating.
       break;
     case "record_clarification_request":
     case "record_clarification_response":
-      // Lightweight session-only recording, no additional constraints.
+      // Clarification recording is secondary to the backend workflow state.
       break;
   }
 
@@ -293,6 +303,8 @@ export function getAvailableWorkflowActions(
     "verify",
     "reject",
     "unable_to_verify",
+    "cancel",
+    "return_to_verifier",
     "record_clarification_request",
     "record_clarification_response",
   ];

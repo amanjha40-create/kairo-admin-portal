@@ -15,15 +15,19 @@ export type WorkflowAction =
   | "verify"
   | "reject"
   | "unable_to_verify"
+  | "cancel"
+  | "return_to_verifier"
   | "record_clarification_request"
   | "record_clarification_response";
 
 export const WORKFLOW_ACTION_LABEL: Record<WorkflowAction, string> = {
   request_correction: "Request Correction",
-  approve_outreach: "Approve for Outreach",
+  approve_outreach: "Approve for Dispatch",
   verify: "Verify",
   reject: "Reject",
   unable_to_verify: "Unable to Verify",
+  cancel: "Cancel",
+  return_to_verifier: "Return to Verifier",
   record_clarification_request: "Record employer clarification",
   record_clarification_response: "Record candidate response",
 };
@@ -38,6 +42,8 @@ export const WORKFLOW_ACTION_TERMINAL: Record<WorkflowAction, boolean> = {
   verify: true,
   reject: true,
   unable_to_verify: true,
+  cancel: true,
+  return_to_verifier: false,
   record_clarification_request: false,
   record_clarification_response: false,
 };
@@ -52,6 +58,8 @@ export type WorkflowPermission =
   | "verification.verify"
   | "verification.reject"
   | "verification.mark_unable"
+  | "verification.cancel"
+  | "verification.return_to_verifier"
   | "verification.assign"
   | "verification.change_priority"
   | "verification.acknowledge_flag"
@@ -299,6 +307,11 @@ export interface ClarificationResponsePayload {
   response: string;
   updatedFieldKeys: string[];
   evidenceAdded: boolean;
+  internalNote?: string;
+}
+
+export interface SimpleDecisionPayload {
+  decisionSummary: string;
   internalNote?: string;
 }
 

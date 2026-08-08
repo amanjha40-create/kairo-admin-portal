@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { appEnv, type AppEnvConfig } from "@/config/env";
+import { mapLegacyMockVerificationStatus } from "@/features/admin/lib/verification-status";
 import {
   clearStoredAuthTokens,
   createBrowserSessionStorage,
@@ -107,49 +108,43 @@ const STATUS_CONFIG: Array<{
   backendStatuses: string[];
 }> = [
   {
-    status: "pending_review",
-    label: "Pending review",
+    status: "pending_admin_review",
+    label: "Pending admin review",
     backendStatuses: ["pending_admin_review"],
   },
   {
-    status: "corrections_requested",
-    label: "Corrections requested",
+    status: "awaiting_subject_corrections",
+    label: "Needs candidate correction",
     backendStatuses: ["awaiting_subject_corrections"],
   },
   {
-    status: "resubmitted",
-    label: "Resubmitted",
+    status: "pending_admin_re_review",
+    label: "Pending admin re-review",
     backendStatuses: ["pending_admin_re_review"],
   },
   {
-    status: "awaiting_organization",
-    label: "Awaiting organization",
+    status: "pending_organization_resolution",
+    label: "Pending organization resolution",
     backendStatuses: ["pending_organization_resolution"],
   },
   {
-    status: "awaiting_employer",
-    label: "Awaiting employer",
-    backendStatuses: [
-      "approved_for_organization_verification",
-      "pending_organization_acceptance",
-      "in_progress",
-    ],
+    status: "approved_for_organization_verification",
+    label: "Approved for dispatch",
+    backendStatuses: ["approved_for_organization_verification"],
   },
   {
-    status: "verified",
-    label: "Verified",
-    backendStatuses: ["verified"],
+    status: "in_progress",
+    label: "Awaiting verifier",
+    backendStatuses: ["pending_organization_acceptance", "in_progress", "awaiting_information"],
   },
   {
-    status: "rejected",
-    label: "Rejected",
-    backendStatuses: ["rejected"],
+    status: "pending_admin_quality_review",
+    label: "Pending admin quality review",
+    backendStatuses: ["pending_admin_quality_review"],
   },
-  {
-    status: "failed_outreach",
-    label: "Failed outreach",
-    backendStatuses: [],
-  },
+  { status: "verified", label: "Verified", backendStatuses: ["verified"] },
+  { status: "rejected", label: "Rejected", backendStatuses: ["rejected"] },
+  { status: "unable_to_verify", label: "Unable to verify", backendStatuses: ["unable_to_verify"] },
 ];
 
 export function createOverviewDataAdapter(
@@ -188,7 +183,10 @@ async function loadDemoOverviewDashboard(): Promise<OverviewDashboardData> {
     metrics: mockAdminMetrics,
     attention: mockAttentionItems,
     funnel: mockFunnel,
-    statuses: mockVerificationStatuses,
+    statuses: mockVerificationStatuses.map((item) => ({
+      ...item,
+      status: mapLegacyMockVerificationStatus(item.status),
+    })),
     activity: mockActivity,
   };
 }
@@ -421,7 +419,7 @@ function buildAttentionItems(response: BackendAdminOverviewResponse): AttentionI
       count: response.pending_review_count,
       reason: "Requests are waiting for an admin review decision.",
       priority: "urgent",
-      destinationHref: "/admin/verifications?view=pending-review",
+      destinationHref: "/admin/verifications?view=pre-dispatch",
       destinationLabel: "Open queue",
     },
     {
@@ -439,7 +437,7 @@ function buildAttentionItems(response: BackendAdminOverviewResponse): AttentionI
       count: response.requests_by_status.pending_admin_re_review ?? 0,
       reason: "Candidates have responded and these requests are back for admin review.",
       priority: "high",
-      destinationHref: "/admin/verifications?view=resubmitted",
+      destinationHref: "/admin/verifications?view=pre-dispatch",
       destinationLabel: "Re-review",
     },
     {
@@ -448,7 +446,7 @@ function buildAttentionItems(response: BackendAdminOverviewResponse): AttentionI
       count: response.requests_by_status.awaiting_information ?? 0,
       reason: "These requests are blocked on additional information before they can move forward.",
       priority: "normal",
-      destinationHref: "/admin/verifications?view=clarification",
+      destinationHref: "/admin/verifications?view=awaiting-verifier",
       destinationLabel: "Track requests",
     },
     {
@@ -457,7 +455,7 @@ function buildAttentionItems(response: BackendAdminOverviewResponse): AttentionI
       count: response.requests_by_status.pending_organization_resolution ?? 0,
       reason: "Organization matching needs manual intervention before verification can continue.",
       priority: "normal",
-      destinationHref: "/admin/verifications?view=awaiting-organization",
+      destinationHref: "/admin/verifications?view=pending-resolution",
       destinationLabel: "Resolve matches",
     },
   ];
@@ -477,12 +475,12 @@ function buildFunnel(response: BackendAdminOverviewResponse): FunnelStage[] {
     },
     {
       id: "resubmitted",
-      label: "Resubmitted",
+      label: "Pending admin re-review",
       count: response.requests_by_status.pending_admin_re_review ?? 0,
     },
     {
       id: "awaiting_organization",
-      label: "Awaiting organization",
+      label: "Pending organization resolution",
       count: response.requests_by_status.pending_organization_resolution ?? 0,
     },
     {

@@ -6,26 +6,33 @@ import type { VerificationStatus, VerificationStatusSummary } from "../data/type
 /** Maps a semantic verification status to the queue's `?view=` filter. */
 type QueueView =
   | "all-active"
-  | "pending-review"
-  | "corrections"
-  | "resubmitted"
-  | "awaiting-organization"
-  | "awaiting-employer"
-  | "clarification"
-  | "failed-outreach"
+  | "pre-dispatch"
+  | "candidate-correction"
+  | "pending-resolution"
+  | "approved-dispatch"
+  | "awaiting-verifier"
+  | "quality-review"
   | "completed";
 
 const STATUS_TO_VIEW: Record<VerificationStatus, QueueView> = {
-  pending_review: "pending-review",
-  corrections_requested: "corrections",
-  resubmitted: "resubmitted",
-  awaiting_organization: "awaiting-organization",
-  awaiting_employer: "awaiting-employer",
-  clarification_requested: "clarification",
-  failed_outreach: "failed-outreach",
+  draft: "all-active",
+  pending_subject_acceptance: "all-active",
+  accepted: "all-active",
+  pending_subject_submission: "all-active",
+  pending_admin_review: "pre-dispatch",
+  awaiting_subject_corrections: "candidate-correction",
+  pending_admin_re_review: "pre-dispatch",
+  approved_for_organization_verification: "approved-dispatch",
+  pending_organization_resolution: "pending-resolution",
+  pending_organization_acceptance: "awaiting-verifier",
+  in_progress: "awaiting-verifier",
+  awaiting_information: "awaiting-verifier",
+  pending_admin_quality_review: "quality-review",
   verified: "completed",
   rejected: "completed",
   unable_to_verify: "completed",
+  cancelled: "completed",
+  expired: "completed",
 };
 
 export function VerificationStatusGrid({ items }: { items: VerificationStatusSummary[] }) {

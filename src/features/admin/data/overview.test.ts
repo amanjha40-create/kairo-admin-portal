@@ -140,7 +140,9 @@ describe("overview data adapter", () => {
       ["registry_records", 6],
       ["registered_users", 18],
     ]);
-    expect(result.statuses.find((item) => item.status === "resubmitted")?.count).toBe(2);
+    expect(result.statuses.find((item) => item.status === "pending_admin_re_review")?.count).toBe(
+      2,
+    );
     expect(result.activity[0]).toMatchObject({
       kind: "verification_approved",
       actor: "Admin",
