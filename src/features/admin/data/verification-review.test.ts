@@ -73,16 +73,20 @@ function queuePayload() {
     items: [
       {
         public_id: "11111111-1111-1111-1111-111111111111",
+        employment_id: "aaaaaaa1-1111-1111-1111-111111111111",
         organization_public_id: "22222222-2222-2222-2222-222222222222",
         subject_name: "Aman Jha",
         subject_email: "aman@example.com",
         target_organization_name: "Kairo",
+        target_organization_email: "hr@kairo.example",
         request_type: "employment",
         status: "pending_admin_review",
         priority: "high",
         created_at: "2026-07-28T08:00:00.000Z",
         updated_at: "2026-07-28T09:00:00.000Z",
         accepted_at: "2026-07-28T08:30:00.000Z",
+        consented_fields: ["role", "employment_dates"],
+        consented_evidence_scope: ["offer_letter", "payslip"],
         employment_claim: {
           employer_name: "Kairo",
           role: "Senior Product Engineer",
@@ -126,7 +130,6 @@ function detailPayload() {
         upload_status: "processed",
       },
     ],
-    reviews: [],
     open_corrections: [],
     internal_notes: [],
     verification_contact: {
@@ -141,10 +144,32 @@ function detailPayload() {
       created_at: "2026-07-28T08:00:00.000Z",
       updated_at: "2026-07-28T08:30:00.000Z",
     },
+    reviews: [
+      {
+        public_id: "77777777-7777-7777-7777-777777777777",
+        review_round: 1,
+        review_status: "approved_for_dispatch",
+        assigned_reviewer_user_id: "33333333-3333-3333-3333-333333333333",
+        assigned_at: "2026-07-28T08:45:00.000Z",
+        decision_at: "2026-07-28T09:15:00.000Z",
+        decision_summary: "Evidence and contact reviewed for dispatch.",
+        created_at: "2026-07-28T08:40:00.000Z",
+        updated_at: "2026-07-28T09:15:00.000Z",
+      },
+    ],
     organization_resolution: {
       status: "resolved",
       organization_public_id: "22222222-2222-2222-2222-222222222222",
       organization_name: "Kairo",
+    },
+    registry_resolution: {
+      status: "resolved",
+      registry_record_public_id: "88888888-8888-8888-8888-888888888888",
+      registry_name: "Kairo Canonical",
+      resolution_confidence: 97,
+      resolution_metadata: {
+        routing_confidence: 97,
+      },
     },
   };
 }
@@ -199,8 +224,11 @@ describe("verification review adapter", () => {
     expect(cases[0]).toMatchObject({
       candidateName: "Aman Jha",
       organizationName: "Kairo",
-      status: "pending_review",
+      status: "pending_admin_review",
       priority: "high",
+      linkedRecordLabel: "Employment · aaaaaaa1",
+      verifierContactLabel: "hr•••@kairo.example",
+      workflowOwner: "Admin review",
     });
   });
 
@@ -269,6 +297,17 @@ describe("verification review adapter", () => {
       filename: "employment-letter.pdf",
       reviewStatus: "reviewed",
     });
+    expect(detail?.linkedRecord).toMatchObject({
+      type: "employment",
+      publicId: "aaaaaaa1-1111-1111-1111-111111111111",
+    });
+    expect(detail?.consent.fields).toEqual(["role", "employment_dates"]);
+    expect(detail?.reviewCycles).toHaveLength(1);
+    expect(detail?.routingContext).toMatchObject({
+      workflowOwner: "Admin review",
+      registryResolutionStatus: "resolved",
+      routingConfidence: 97,
+    });
     expect(detail?.timeline).toHaveLength(1);
   });
 
@@ -302,6 +341,11 @@ describe("verification review adapter", () => {
     await adapter.rejectCase("case-1", "Rejected.");
     await adapter.markUnableToVerify("case-1", "Unable.");
     await adapter.recordClarificationResponse("case-1", "Updated role attached.");
+    await adapter.createRegistryRecord("case-1", {
+      legalName: "Kairo Labs Private Limited",
+      organizationType: "employer",
+      country: "IN",
+    });
 
     expect(requests.map((request) => request.url)).toEqual([
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/priority",
@@ -310,6 +354,7 @@ describe("verification review adapter", () => {
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/reject",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/unable-to-verify",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/record-clarification-response",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/create-registry-record",
     ]);
   });
 
