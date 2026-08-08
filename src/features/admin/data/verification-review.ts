@@ -63,6 +63,7 @@ export interface VerificationCase {
   submittedAt: string;
   updatedAt: string;
   assignedReviewer: Assignee;
+  assignedReviewerId?: string | null;
   linkedRecordLabel: string;
   verifierContactLabel: string;
   evidenceStatusLabel: string;
@@ -153,6 +154,7 @@ export interface ReviewCycleSummary {
   round: number;
   status: string;
   assignedReviewer: string;
+  assignedReviewerId?: string | null;
   assignedAt?: string | null;
   decidedAt?: string | null;
   decisionSummary?: string | null;
@@ -773,7 +775,7 @@ export interface VerificationReviewAdapter {
   listReviewers: (search?: string) => Promise<ReviewerOption[]>;
   searchOrganizations: (search: string) => Promise<OrganizationSearchResult[]>;
   assignCase: (caseId: string, assigneeUserId: string) => Promise<void>;
-  addNote: (caseId: string, body: string) => Promise<void>;
+  addNote: (caseId: string, body: string, category: NoteCategory) => Promise<void>;
   changePriority: (caseId: string, priority: Priority) => Promise<void>;
   requestCorrections: (
     caseId: string,
@@ -942,14 +944,14 @@ export function createVerificationReviewAdapter(
         },
       );
     },
-    async addNote(caseId, body) {
+    async addNote(caseId, body, category) {
       await api.request(`/api/v1/admin/verification-requests/${caseId}/notes`, {
         method: "POST",
         body: {
           body,
           note_type: "review_note",
           visibility: "internal",
-          metadata: {},
+          metadata: { category },
         },
       });
     },
@@ -1176,6 +1178,7 @@ function mapQueueItemToCase(item: BackendVerificationRequestResponse): Verificat
     submittedAt,
     updatedAt: item.updated_at,
     assignedReviewer: formatAssignee(item.assigned_reviewer),
+    assignedReviewerId: item.assigned_reviewer?.user_id ?? null,
     linkedRecordLabel: formatLinkedRecordLabel(
       verificationType,
       item.employment_id ?? item.education_id ?? null,
@@ -1201,6 +1204,9 @@ function mapDetailResponse(
   employerVerification?: BackendAdminEmployerVerificationResponse["employer_verification"] | null,
 ): VerificationCaseDetail {
   const summary = mapQueueItemToCase(detail.request);
+  const latestAssignedReview = getLatestAssignedReview(detail.reviews);
+  const authoritativeOrganizationStatus = mapDetailOrganizationStatus(detail);
+  const resolvedOrganization = getResolvedOrganization(detail);
   const claim = mapClaim(detail);
   const latestContact =
     detail.verification_contact ?? detail.verification_contact_history?.[0] ?? null;
@@ -1213,11 +1219,16 @@ function mapDetailResponse(
     role: "Reviewer",
     at: note.created_at,
     body: note.body,
-    category: "general" as NoteCategory,
+    category: resolveNoteCategory(note),
   }));
 
   return {
-    summary,
+    summary: {
+      ...summary,
+      assignedReviewerId:
+        summary.assignedReviewerId ?? latestAssignedReview?.assigned_reviewer_user_id,
+      organizationStatus: authoritativeOrganizationStatus,
+    },
     claim,
     linkedRecord: mapLinkedRecord(detail),
     consent: {
@@ -1271,21 +1282,8 @@ function mapDetailResponse(
         detail.request.target_organization_name ??
         detail.request.employment_claim?.employer_name ??
         summary.organizationName,
-      matched:
-        detail.organization_resolution?.organization_public_id &&
-        detail.organization_resolution.organization_name
-          ? {
-              id: detail.organization_resolution.organization_public_id,
-              canonicalName: detail.organization_resolution.organization_name,
-              matchConfidence: 1,
-              matchReason: "Resolved by backend review workflow",
-              knownChannels: [],
-            }
-          : undefined,
-      state:
-        detail.organization_resolution?.status === "resolved"
-          ? "resolved"
-          : mapOrganizationStatus(detail.request),
+      matched: resolvedOrganization,
+      state: authoritativeOrganizationStatus,
       suggestions: [],
     },
     contacts: latestContact ? [mapContact(latestContact, summary.organizationName)] : [],
@@ -1573,9 +1571,81 @@ function mapReviewCycle(review: BackendAdminReviewCycleResponse): ReviewCycleSum
     round: review.review_round,
     status: review.review_status,
     assignedReviewer: review.assigned_reviewer_user_id ?? "Unassigned",
+    assignedReviewerId: review.assigned_reviewer_user_id ?? null,
     assignedAt: review.assigned_at,
     decidedAt: review.decision_at,
     decisionSummary: review.decision_summary,
+  };
+}
+
+function resolveNoteCategory(note: BackendAdminReviewInternalNoteResponse): NoteCategory {
+  const value =
+    typeof note.metadata?.category === "string"
+      ? note.metadata.category
+      : note.note_type === "review_note"
+        ? "general"
+        : note.note_type;
+
+  return isNoteCategory(value) ? value : "general";
+}
+
+function isNoteCategory(value: unknown): value is NoteCategory {
+  return (
+    value === "general" ||
+    value === "evidence" ||
+    value === "organization" ||
+    value === "contact" ||
+    value === "risk" ||
+    value === "decision_preparation"
+  );
+}
+
+function getLatestAssignedReview(
+  reviews: BackendAdminReviewCycleResponse[],
+): BackendAdminReviewCycleResponse | undefined {
+  return reviews
+    .filter((review) => Boolean(review.assigned_reviewer_user_id))
+    .sort(
+      (left, right) =>
+        new Date(right.assigned_at ?? right.updated_at ?? right.created_at).getTime() -
+        new Date(left.assigned_at ?? left.updated_at ?? left.created_at).getTime(),
+    )[0];
+}
+
+function mapDetailOrganizationStatus(detail: BackendAdminReviewDetailResponse): OrganizationStatus {
+  const resolutionStatus =
+    detail.organization_resolution?.status ?? detail.request.organization_resolution_status;
+  if (resolutionStatus === "unresolved") return "unresolved";
+  if (resolutionStatus === "suggested_match") return "suggested_match";
+  if (resolutionStatus === "duplicate_review") return "duplicate_review";
+  if (resolutionStatus === "resolved") return "resolved";
+  return mapOrganizationStatus(detail.request);
+}
+
+function getResolvedOrganization(
+  detail: BackendAdminReviewDetailResponse,
+): VerificationCaseDetail["organization"]["matched"] {
+  if (mapDetailOrganizationStatus(detail) !== "resolved") return undefined;
+
+  const organizationId =
+    detail.organization_resolution?.organization_public_id ??
+    detail.request.organization_public_id ??
+    detail.request.organization_summary?.public_id;
+  const canonicalName =
+    detail.organization_resolution?.organization_name ??
+    detail.request.organization_summary?.name ??
+    detail.request.target_organization_name ??
+    detail.request.employment_claim?.employer_name ??
+    null;
+
+  if (!organizationId && !canonicalName) return undefined;
+
+  return {
+    id: organizationId ?? canonicalName ?? detail.request.public_id,
+    canonicalName: canonicalName ?? "Resolved organization",
+    matchConfidence: 1,
+    matchReason: "Resolved by backend review workflow",
+    knownChannels: [],
   };
 }
 

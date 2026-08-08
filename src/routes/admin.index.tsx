@@ -20,6 +20,8 @@ import { ControlledPilotUnavailableState } from "@/features/admin/components/con
 import { PlatformSummary } from "@/features/admin/components/platform-summary";
 import { DateRangeSelector } from "@/features/admin/components/date-range-selector";
 import { LoadingSkeleton, EmptyState, RetryState } from "@/features/admin/components/states";
+import { useAdminAccess } from "@/features/admin/auth/admin-access";
+import { shouldEnableAdminProtectedQuery } from "@/features/admin/auth/protected-query";
 import { overviewDashboardQueryOptions } from "@/features/admin/data/overview";
 import { appEnv } from "@/config/env";
 import { getCommunicationMetrics } from "@/features/admin/runtime/communications";
@@ -53,7 +55,11 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
-  const overviewQuery = useQuery(overviewDashboardQueryOptions());
+  const access = useAdminAccess();
+  const overviewQuery = useQuery({
+    ...overviewDashboardQueryOptions(),
+    enabled: shouldEnableAdminProtectedQuery(access.state),
+  });
   const showDemoOperationalSections = shouldShowOverviewDemoOperationalSections(appEnv);
   const comms = showDemoOperationalSections ? getCommunicationMetrics() : null;
   const services = showDemoOperationalSections
@@ -87,7 +93,7 @@ function OverviewPage() {
         <DateRangeSelector />
       </header>
 
-      {overviewQuery.isPending ? (
+      {!shouldEnableAdminProtectedQuery(access.state) || overviewQuery.isPending ? (
         <OverviewLoadingState />
       ) : overviewQuery.isError ? (
         <RetryState

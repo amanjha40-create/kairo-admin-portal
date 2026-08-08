@@ -322,6 +322,59 @@ describe("verification review adapter", () => {
     expect(requests.some((url) => url.includes("/timeline?page=1&page_size=250"))).toBe(false);
   });
 
+  it("uses authoritative detail state for organization resolution and reviewer assignment", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/timeline")) {
+        return jsonResponse(timelinePayload());
+      }
+      if (
+        url.includes("/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111")
+      ) {
+        const request = {
+          ...queuePayload().items[0],
+          assigned_reviewer: null,
+          organization_public_id: null,
+          organization_summary: null,
+        };
+        return jsonResponse({
+          ...detailPayload(),
+          request,
+          organization_resolution: {
+            status: "unresolved",
+            organization_public_id: null,
+            organization_name: "Kairo",
+          },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+    expect(detail?.summary.assignedReviewer).toBe("Unassigned");
+    expect(detail?.summary.assignedReviewerId).toBe("33333333-3333-3333-3333-333333333333");
+    expect(detail?.reviewCycles[0]).toMatchObject({
+      assignedReviewer: "33333333-3333-3333-3333-333333333333",
+      assignedReviewerId: "33333333-3333-3333-3333-333333333333",
+    });
+    expect(detail?.summary.organizationStatus).toBe("unresolved");
+    expect(detail?.organization.state).toBe("unresolved");
+    expect(detail?.organization.matched).toBeUndefined();
+  });
+
   it("sends backend workflow mutations for supported production actions", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);
@@ -345,6 +398,7 @@ describe("verification review adapter", () => {
     });
 
     await adapter.changePriority("case-1", "urgent");
+    await adapter.addNote("case-1", "Captured for audit.", "organization");
     await adapter.requestCorrections("case-1", {
       corrections: [{ field_key: "role", request_text: "Please clarify the role." }],
     });
@@ -360,6 +414,7 @@ describe("verification review adapter", () => {
 
     expect(requests.map((request) => request.url)).toEqual([
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/priority",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/notes",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/request-corrections",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/approve",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/reject",
@@ -367,6 +422,67 @@ describe("verification review adapter", () => {
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/record-clarification-response",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/create-registry-record",
     ]);
+    expect(requests[1]).toMatchObject({
+      body: {
+        body: "Captured for audit.",
+        note_type: "review_note",
+        visibility: "internal",
+        metadata: { category: "organization" },
+      },
+    });
+  });
+
+  it("maps persisted backend internal notes without falling back to session-only state", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/timeline")) {
+        return jsonResponse(timelinePayload());
+      }
+      if (
+        url.includes("/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111")
+      ) {
+        return jsonResponse({
+          ...detailPayload(),
+          internal_notes: [
+            {
+              public_id: "99999999-9999-9999-9999-999999999999",
+              review_public_id: "77777777-7777-7777-7777-777777777777",
+              author_user_id: "33333333-3333-3333-3333-333333333333",
+              body: "Canonical organization confirmed.",
+              note_type: "review_note",
+              visibility: "internal",
+              metadata: { category: "organization" },
+              created_at: "2026-07-28T09:05:00.000Z",
+              updated_at: "2026-07-28T09:05:00.000Z",
+            },
+          ],
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+    expect(detail?.notes).toEqual([
+      expect.objectContaining({
+        id: "99999999-9999-9999-9999-999999999999",
+        body: "Canonical organization confirmed.",
+        category: "organization",
+      }),
+    ]);
+    expect(detail?.notes[0]?.sessionOnly).toBeUndefined();
   });
 
   it("treats a 401 queue response as unauthorized and clears stored tokens", async () => {

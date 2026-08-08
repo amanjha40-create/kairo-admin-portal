@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -38,7 +38,9 @@ import {
   useAdminAccess,
   setDevAdminRole,
   getDevAdminRole,
+  AdminAccessChecking,
 } from "@/features/admin/auth/admin-access";
+import { shouldEnableAdminProtectedQuery } from "@/features/admin/auth/protected-query";
 import { appEnv } from "@/config/env";
 import { formatAge, formatRelativeTime } from "@/features/admin/lib/format";
 import {
@@ -53,6 +55,8 @@ import {
   type AttentionFlagRecord,
   type OrganizationSearchResult,
   PRIORITY_LABEL,
+  verificationCaseDetailQueryOptions,
+  verificationReviewKeys,
 } from "@/features/admin/runtime/verification-review";
 import {
   COMMUNICATION_STATE_LABEL,
@@ -97,43 +101,59 @@ export const Route = createFileRoute("/admin/verifications/$caseId")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  loader: async ({ params }) => {
-    const detail = await createVerificationReviewAdapter(appEnv).getCaseDetail(params.caseId);
-    if (!detail) throw notFound();
-    return { detail };
-  },
-  component: CaseWorkspace,
-  pendingComponent: () => (
-    <div className="mx-auto max-w-5xl">
-      <LoadingSkeleton rows={8} />
-    </div>
-  ),
-  errorComponent: CaseWorkspaceErrorBoundary,
-  notFoundComponent: CaseWorkspaceNotFound,
+  component: CaseWorkspaceRoute,
 });
 
-function CaseWorkspaceErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
-  const router = useRouter();
+function CaseWorkspaceRoute() {
+  const { caseId } = Route.useParams();
+  const access = useAdminAccess();
+  const detailQuery = useQuery({
+    ...verificationCaseDetailQueryOptions(caseId),
+    enabled: shouldEnableAdminProtectedQuery(access.state),
+  });
 
-  return (
-    <div className="mx-auto max-w-2xl">
-      <ErrorState
-        title="Case failed to load"
-        description={error.message}
-        action={
-          <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
-          >
-            Try again
-          </button>
-        }
-      />
-    </div>
-  );
+  if (!shouldEnableAdminProtectedQuery(access.state)) {
+    return <AdminAccessChecking />;
+  }
+
+  if (detailQuery.isPending) {
+    return (
+      <div className="mx-auto max-w-5xl">
+        <LoadingSkeleton rows={8} />
+      </div>
+    );
+  }
+
+  if (detailQuery.isError) {
+    if (detailQuery.error.message === "The requested resource could not be found.") {
+      return <CaseWorkspaceNotFound />;
+    }
+
+    return (
+      <div className="mx-auto max-w-2xl">
+        <ErrorState
+          title="Case failed to load"
+          description={detailQuery.error.message}
+          action={
+            <button
+              onClick={() => {
+                void detailQuery.refetch();
+              }}
+              className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+            >
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!detailQuery.data) {
+    return <CaseWorkspaceNotFound />;
+  }
+
+  return <CaseWorkspace detail={detailQuery.data} />;
 }
 
 function CaseWorkspaceNotFound() {
@@ -162,8 +182,8 @@ function useProductionVerificationWorkflow(
   detail: VerificationCaseDetail,
   actor: WorkflowActor,
   caseId: string,
+  refresh: () => Promise<void>,
 ): UseVerificationWorkflowResult {
-  const router = useRouter();
   const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
   const [acknowledgedFlagIds, setAcknowledgedFlagIds] = useState<Set<string>>(new Set());
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
@@ -196,10 +216,6 @@ function useProductionVerificationWorkflow(
     return base;
   };
 
-  async function refresh() {
-    await router.invalidate();
-  }
-
   return {
     currentStatus: detail.summary.status,
     isTerminal: isTerminalStatus(detail.summary.status),
@@ -224,8 +240,8 @@ function useProductionVerificationWorkflow(
       await adapter.changePriority(caseId, next);
       await refresh();
     },
-    async addNote(body) {
-      await adapter.addNote(caseId, body);
+    async addNote(body, category) {
+      await adapter.addNote(caseId, body, category);
       await refresh();
     },
     acknowledgeFlag(flagId) {
@@ -304,12 +320,22 @@ function useProductionVerificationWorkflow(
   };
 }
 
-function CaseWorkspace() {
+function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
   const { caseId } = Route.useParams();
-  const { detail } = Route.useLoaderData() as { detail: VerificationCaseDetail };
   const { admin } = useAdminAccess();
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
+
+  async function refreshCase() {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: verificationReviewKeys.detail("production", caseId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: verificationReviewKeys.list("production"),
+      }),
+    ]);
+  }
 
   const actor = useMemo(
     () => ({
@@ -329,6 +355,7 @@ function CaseWorkspace() {
       id: admin?.id,
     } as WorkflowActor & { id?: string },
     caseId,
+    refreshCase,
   );
   const workflow = appEnv.adminDemoMode ? demoWorkflow : productionWorkflow;
   const outreach = useOutreachSession(detail, actor);
@@ -344,10 +371,37 @@ function CaseWorkspace() {
   const anySessionChanges =
     appEnv.adminDemoMode && (workflow.hasSessionChanges || outreach.hasSessionChanges);
 
+  const assignedReviewerDisplay = useMemo(
+    () =>
+      resolveReviewerLabel({
+        assignedReviewer: workflow.assignedReviewer,
+        assignedReviewerId: detail.summary.assignedReviewerId,
+        reviewers: reviewerOptionsQuery.data ?? [],
+        currentAdmin: admin,
+      }),
+    [
+      admin,
+      detail.summary.assignedReviewerId,
+      reviewerOptionsQuery.data,
+      workflow.assignedReviewer,
+    ],
+  );
+  const currentAssignedReviewerKey = appEnv.adminDemoMode
+    ? workflow.assignedReviewer
+    : (detail.summary.assignedReviewerId ?? null);
+
   async function handleAssign(next: Assignee) {
-    if (next === workflow.assignedReviewer) return;
+    if (
+      appEnv.adminDemoMode
+        ? next === workflow.assignedReviewer
+        : next === currentAssignedReviewerKey
+    ) {
+      return;
+    }
     await workflow.setAssignedReviewer(next);
-    toast(`Assigned to ${next}`, {
+    const reviewerLabel =
+      reviewerOptionsQuery.data?.find((reviewer) => reviewer.id === next)?.label ?? next;
+    toast(`Assigned to ${reviewerLabel}`, {
       description: appEnv.adminDemoMode
         ? "Session-only change. Not persisted to the backend."
         : "Reviewer assignment saved to the backend.",
@@ -386,14 +440,20 @@ function CaseWorkspace() {
         label: reviewer.label === admin?.name ? `${reviewer.label} (me)` : reviewer.label,
       });
     }
-    if (workflow.assignedReviewer) {
-      options.set(workflow.assignedReviewer, {
-        key: workflow.assignedReviewer,
-        label: workflow.assignedReviewer,
+    const currentReviewerKey = detail.summary.assignedReviewerId;
+    if (currentReviewerKey) {
+      options.set(currentReviewerKey, {
+        key: currentReviewerKey,
+        label: assignedReviewerDisplay,
       });
     }
     return [...options.values()];
-  }, [admin?.name, reviewerOptionsQuery.data, workflow.assignedReviewer]);
+  }, [
+    admin?.name,
+    assignedReviewerDisplay,
+    detail.summary.assignedReviewerId,
+    reviewerOptionsQuery.data,
+  ]);
 
   const ageHours = Math.max(
     0,
@@ -485,7 +545,7 @@ function CaseWorkspace() {
             <Menu
               label="Assign"
               icon={UserPlus}
-              current={workflow.assignedReviewer}
+              current={assignedReviewerDisplay}
               options={assignmentOptions}
               onSelect={(k) => void handleAssign(k as Assignee)}
             />
@@ -512,7 +572,7 @@ function CaseWorkspace() {
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
           <span>
             <Users aria-hidden className="mr-1 inline size-3" />
-            Assigned to <span className="text-foreground">{workflow.assignedReviewer}</span>
+            Assigned to <span className="text-foreground">{assignedReviewerDisplay}</span>
           </span>
           <span>
             <Clock aria-hidden className="mr-1 inline size-3" />
@@ -556,13 +616,13 @@ function CaseWorkspace() {
                 detail={detail}
                 adapter={adapter}
                 caseId={caseId}
-                onRefresh={() => router.invalidate()}
+                onRefresh={refreshCase}
               />
               <ProductionVerifierSection
                 detail={detail}
                 adapter={adapter}
                 caseId={caseId}
-                onRefresh={() => router.invalidate()}
+                onRefresh={refreshCase}
               />
             </>
           )}
@@ -573,7 +633,11 @@ function CaseWorkspace() {
             onOpenCorrection={() => setDialog("request_correction")}
           />
 
-          <AdminReviewHistorySection detail={detail} />
+          <AdminReviewHistorySection
+            detail={detail}
+            reviewers={reviewerOptionsQuery.data ?? []}
+            currentAdmin={admin}
+          />
 
           <WorkspaceSection
             id="timeline"
@@ -586,7 +650,12 @@ function CaseWorkspace() {
 
         {/* Right sidebar */}
         <aside className="flex min-w-0 flex-col gap-4">
-          <CaseStatusSidebar detail={detail} workflow={workflow} ageHours={ageHours} />
+          <CaseStatusSidebar
+            detail={detail}
+            workflow={workflow}
+            ageHours={ageHours}
+            assignedReviewerDisplay={assignedReviewerDisplay}
+          />
           {workflow.sessionDecision ? (
             <DecisionSummaryPanel workflow={workflow} detail={detail} />
           ) : null}
@@ -612,6 +681,7 @@ function CaseWorkspace() {
               }}
               author={admin?.name ?? "Reviewer"}
               role={admin?.role ?? "Reviewer"}
+              mode={appEnv.adminDemoMode ? "demo" : "production"}
             />
           </WorkspaceSection>
           <DecisionPreparationPanel
@@ -860,7 +930,15 @@ function ContextField({ label, value, helper }: { label: string; value: string; 
   );
 }
 
-function AdminReviewHistorySection({ detail }: { detail: VerificationCaseDetail }) {
+function AdminReviewHistorySection({
+  detail,
+  reviewers,
+  currentAdmin,
+}: {
+  detail: VerificationCaseDetail;
+  reviewers: Array<{ id: string; label: string }>;
+  currentAdmin?: { id?: string; name?: string } | null;
+}) {
   const isFinalReview = detail.summary.status === "pending_admin_quality_review";
 
   return (
@@ -897,7 +975,13 @@ function AdminReviewHistorySection({ detail }: { detail: VerificationCaseDetail 
                   </span>
                 </p>
                 <span className="text-[11px] text-muted-foreground">
-                  Assigned {cycle.assignedReviewer}
+                  Assigned{" "}
+                  {resolveReviewerLabel({
+                    assignedReviewer: cycle.assignedReviewer,
+                    assignedReviewerId: cycle.assignedReviewerId,
+                    reviewers,
+                    currentAdmin,
+                  })}
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
@@ -1364,10 +1448,12 @@ function CaseStatusSidebar({
   detail,
   workflow,
   ageHours,
+  assignedReviewerDisplay,
 }: {
   detail: VerificationCaseDetail;
   workflow: UseVerificationWorkflowResult;
   ageHours: number;
+  assignedReviewerDisplay: string;
 }) {
   const statusChanged = workflow.currentStatus !== detail.summary.status;
   return (
@@ -1390,10 +1476,10 @@ function CaseStatusSidebar({
             <span
               className={cn(
                 "text-foreground",
-                workflow.assignedReviewer === "Unassigned" && "italic text-muted-foreground",
+                assignedReviewerDisplay === "Unassigned" && "italic text-muted-foreground",
               )}
             >
-              {workflow.assignedReviewer}
+              {assignedReviewerDisplay}
             </span>
           }
         />
@@ -1984,6 +2070,35 @@ function DevRoleMenu() {
       }}
     />
   );
+}
+
+function resolveReviewerLabel({
+  assignedReviewer,
+  assignedReviewerId,
+  reviewers,
+  currentAdmin,
+}: {
+  assignedReviewer: string;
+  assignedReviewerId?: string | null;
+  reviewers: Array<{ id: string; label: string }>;
+  currentAdmin?: { id?: string; name?: string } | null;
+}) {
+  if (assignedReviewer !== "Unassigned" && !looksLikeUuid(assignedReviewer)) {
+    return assignedReviewer;
+  }
+
+  const currentId =
+    assignedReviewerId ?? (looksLikeUuid(assignedReviewer) ? assignedReviewer : null);
+  if (!currentId) return "Unassigned";
+
+  const reviewer = reviewers.find((candidate) => candidate.id === currentId);
+  if (reviewer) return reviewer.label;
+  if (currentAdmin?.id === currentId) return currentAdmin.name ?? "Assigned reviewer";
+  return currentId;
+}
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function formatBackendLabel(value: string) {

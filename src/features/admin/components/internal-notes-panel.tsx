@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StickyNote } from "lucide-react";
+import { toast } from "sonner";
 import { EmptyState } from "./states";
 import {
   NOTE_CATEGORY_LABEL,
@@ -22,22 +23,35 @@ export function InternalNotesPanel({
   onAdd,
   author,
   role,
+  mode,
 }: {
   notes: InternalNote[];
-  onAdd: (body: string, category: NoteCategory) => void;
+  onAdd: (body: string, category: NoteCategory) => void | Promise<void>;
   author: string;
   role: string;
+  mode: "demo" | "production";
 }) {
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<NoteCategory>("general");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = body.trim();
-    if (!trimmed) return;
-    onAdd(trimmed, category);
-    setBody("");
-    setCategory("general");
+    if (!trimmed || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await onAdd(trimmed, category);
+      setBody("");
+      setCategory("general");
+    } catch (error) {
+      toast.error("Internal note could not be saved", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -74,11 +88,11 @@ export function InternalNotesPanel({
           </div>
           <button
             type="submit"
-            disabled={!body.trim()}
+            disabled={!body.trim() || isSubmitting}
             className="inline-flex h-7 items-center gap-1 rounded-md bg-foreground px-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
           >
             <StickyNote aria-hidden className="size-3" />
-            Add note (session-only)
+            {isSubmitting ? "Saving..." : mode === "demo" ? "Add note (session-only)" : "Add note"}
           </button>
         </div>
       </form>
@@ -86,7 +100,11 @@ export function InternalNotesPanel({
       {notes.length === 0 ? (
         <EmptyState
           title="No internal notes yet"
-          description="Notes are visible only to Kairo operators. Add one above to start a discussion."
+          description={
+            mode === "demo"
+              ? "Notes are visible only to Kairo operators in this browser session."
+              : "Notes are visible only to Kairo operators and persist in the shared backend."
+          }
         />
       ) : (
         <ul className="space-y-2">
