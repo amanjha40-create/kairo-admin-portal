@@ -886,7 +886,7 @@ export function createVerificationReviewAdapter(
         `/api/v1/admin/verification-requests/${caseId}`,
       );
       const timeline = await api.request<BackendTimelineResponse>(
-        `/api/v1/admin/verification-requests/${caseId}/timeline?page=1&page_size=250`,
+        `/api/v1/admin/verification-requests/${caseId}/timeline?page=1&page_size=100`,
       );
       const employerVerification = detail.employer_verification_public_id
         ? await api.request<BackendAdminEmployerVerificationResponse>(

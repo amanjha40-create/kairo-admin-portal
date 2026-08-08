@@ -267,9 +267,11 @@ describe("verification review adapter", () => {
   it("loads verification detail and timeline successfully", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);
+    const requests: string[] = [];
 
     const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
       const url = String(input);
+      requests.push(url);
       if (url.includes("/timeline")) {
         return jsonResponse(timelinePayload());
       }
@@ -309,6 +311,15 @@ describe("verification review adapter", () => {
       routingConfidence: 97,
     });
     expect(detail?.timeline).toHaveLength(1);
+    expect(detail?.timeline[0]).toMatchObject({
+      id: "66666666-6666-6666-6666-666666666666",
+      kind: "assignment_changed",
+      actorSource: "admin",
+    });
+    expect(requests).toContain(
+      "https://api.kairoid.com/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111/timeline?page=1&page_size=100",
+    );
+    expect(requests.some((url) => url.includes("/timeline?page=1&page_size=250"))).toBe(false);
   });
 
   it("sends backend workflow mutations for supported production actions", async () => {
