@@ -8,6 +8,7 @@
  */
 import { useMemo, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
+import { appEnv } from "@/config/env";
 import { WorkflowActionDialog, Field } from "./workflow-action-dialog";
 import type { VerificationCaseDetail } from "../runtime/verification-review";
 import {
@@ -114,8 +115,14 @@ export function CorrectionDialog({
       title="Request Correction"
       consequenceSummary="Sends the case back to the candidate for clarification. Status moves to Corrections Requested."
       eligibility={eligibility}
-      submitLabel="Request correction (session-only)"
-      candidateImpactNote="A candidate-facing message is prepared but not sent in this build."
+      submitLabel={
+        appEnv.adminDemoMode ? "Request correction (session-only)" : "Request correction"
+      }
+      candidateImpactNote={
+        appEnv.adminDemoMode
+          ? "A candidate-facing message is prepared but not sent in this build."
+          : "The backend will manage the candidate-facing correction request."
+      }
       onSubmit={async () => {
         const parsed = correctionSchema.safeParse({
           reasons,
@@ -136,7 +143,9 @@ export function CorrectionDialog({
           internalNote: parsed.data.internalNote || undefined,
         });
         toast.success("Correction request recorded", {
-          description: "Session-only. No message was sent to the candidate.",
+          description: appEnv.adminDemoMode
+            ? "Session-only. No message was sent to the candidate."
+            : "Saved to the backend review workflow.",
         });
         onOpenChange(false);
         reset();
@@ -243,7 +252,7 @@ export function CorrectionDialog({
 }
 
 // =====================================================================
-// 2. Approve for Outreach
+// 2. Approve for Dispatch
 // =====================================================================
 
 export function OutreachDialog({
@@ -271,11 +280,17 @@ export function OutreachDialog({
     <WorkflowActionDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Approve for Outreach"
-      consequenceSummary="Marks the case ready for employer outreach. No email is sent."
+      title="Approve for Dispatch"
+      consequenceSummary="Approves the request for backend dispatch into verifier outreach or organization resolution."
       eligibility={eligibility}
-      submitLabel="Approve outreach (session-only)"
-      candidateImpactNote="Outreach approved in this session. No email has been sent."
+      submitLabel={
+        appEnv.adminDemoMode ? "Approve for dispatch (session-only)" : "Approve for dispatch"
+      }
+      candidateImpactNote={
+        appEnv.adminDemoMode
+          ? "Dispatch approved in this session. No email has been sent."
+          : "The backend will advance the request using the deployed verification workflow."
+      }
       onSubmit={async () => {
         const parsed = outreachSchema.safeParse({
           contactId,
@@ -295,9 +310,14 @@ export function OutreachDialog({
           },
           contact.name,
         );
-        toast.success("Outreach approved (session-only)", {
-          description: "No email has been sent.",
-        });
+        toast.success(
+          appEnv.adminDemoMode ? "Dispatch approved (session-only)" : "Approved for dispatch",
+          {
+            description: appEnv.adminDemoMode
+              ? "No email has been sent."
+              : "The backend will move the request into the next verification stage.",
+          },
+        );
         onOpenChange(false);
       }}
       aside={
@@ -435,11 +455,17 @@ export function VerifyDialog({
     <WorkflowActionDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Verify"
+      title="Finalize Verified"
       consequenceSummary="Marks the case as verified. This is a terminal decision in this build."
       eligibility={eligibility}
-      submitLabel="Confirm verification (session-only)"
-      candidateImpactNote="Session-only decision. Candidate Trust Passport and Trust Score are not updated in this mock workflow."
+      submitLabel={
+        appEnv.adminDemoMode ? "Confirm verification (session-only)" : "Finalize verified"
+      }
+      candidateImpactNote={
+        appEnv.adminDemoMode
+          ? "Session-only decision. Candidate Trust Passport and Trust Score are not updated in this mock workflow."
+          : "Only the backend final quality-review path can mark the canonical record verified."
+      }
       onSubmit={async () => {
         const parsed = verifySchema.safeParse({
           basis,
@@ -461,9 +487,16 @@ export function VerifyDialog({
           expiryDate: parsed.data.expiryDate || undefined,
           internalNote: parsed.data.internalNote || undefined,
         });
-        toast.success("Case marked Verified (session-only)", {
-          description: "Downstream candidate updates are not performed here.",
-        });
+        toast.success(
+          appEnv.adminDemoMode
+            ? "Case marked Verified (session-only)"
+            : "Case finalized as verified",
+          {
+            description: appEnv.adminDemoMode
+              ? "Downstream candidate updates are not performed here."
+              : "The backend recorded the final quality-review outcome.",
+          },
+        );
         onOpenChange(false);
       }}
       aside={
@@ -636,8 +669,12 @@ export function RejectDialog({
       consequenceSummary="Rejection means the claim is determined false, invalid, or unsupported. Do not use rejection simply because outreach failed."
       eligibility={eligibility}
       destructive
-      submitLabel="Reject case (session-only)"
-      candidateImpactNote="A candidate-facing explanation is prepared but not sent. The candidate account is not disabled."
+      submitLabel={appEnv.adminDemoMode ? "Reject case (session-only)" : "Reject"}
+      candidateImpactNote={
+        appEnv.adminDemoMode
+          ? "A candidate-facing explanation is prepared but not sent. The candidate account is not disabled."
+          : "The backend will record the rejection decision and preserve the audit trail."
+      }
       onSubmit={async () => {
         const parsed = rejectSchema.safeParse({
           reason,
@@ -659,8 +696,10 @@ export function RejectDialog({
           internalNote: parsed.data.internalNote || undefined,
           acknowledgement: true,
         });
-        toast.warning("Case rejected (session-only)", {
-          description: "No candidate notification was sent.",
+        toast.warning(appEnv.adminDemoMode ? "Case rejected (session-only)" : "Case rejected", {
+          description: appEnv.adminDemoMode
+            ? "No candidate notification was sent."
+            : "The backend recorded the rejection decision.",
         });
         onOpenChange(false);
       }}
@@ -822,7 +861,9 @@ export function UnableDialog({
       title="Unable to Verify"
       consequenceSummary="Kairo could not reach a reliable verification conclusion. This is not a rejection."
       eligibility={eligibility}
-      submitLabel="Mark unable to verify (session-only)"
+      submitLabel={
+        appEnv.adminDemoMode ? "Mark unable to verify (session-only)" : "Finalize unable to verify"
+      }
       candidateImpactNote="Unable to Verify does not mean the claim is false. It means Kairo could not reach a reliable verification conclusion."
       onSubmit={async () => {
         const parsed = unableSchema.safeParse({
@@ -843,9 +884,16 @@ export function UnableDialog({
           candidateMessage: parsed.data.candidateMessage,
           internalNote: parsed.data.internalNote || undefined,
         });
-        toast("Case marked Unable to Verify (session-only)", {
-          description: "No fraud determination is implied.",
-        });
+        toast(
+          appEnv.adminDemoMode
+            ? "Case marked Unable to Verify (session-only)"
+            : "Case finalized as unable to verify",
+          {
+            description: appEnv.adminDemoMode
+              ? "No fraud determination is implied."
+              : "The backend recorded the final inability-to-verify outcome.",
+          },
+        );
         onOpenChange(false);
       }}
     >
@@ -951,7 +999,7 @@ export function ClarificationRequestDialog({
       title="Record employer clarification request"
       consequenceSummary="Moves the case into Clarification Requested. No message is sent."
       eligibility={eligibility}
-      submitLabel="Record (session-only)"
+      submitLabel={appEnv.adminDemoMode ? "Record (session-only)" : "Record clarification"}
       onSubmit={async () => {
         const parsed = clarificationRequestSchema.safeParse({
           question,
@@ -967,7 +1015,11 @@ export function ClarificationRequestDialog({
           affectedFieldKeys: parsed.data.affectedFieldKeys,
           internalNote: parsed.data.internalNote || undefined,
         });
-        toast("Clarification request recorded (session-only)");
+        toast(
+          appEnv.adminDemoMode
+            ? "Clarification request recorded (session-only)"
+            : "Clarification request recorded",
+        );
         onOpenChange(false);
       }}
     >
@@ -1034,9 +1086,9 @@ export function ClarificationResponseDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Record candidate clarification response"
-      consequenceSummary="Moves the case back to Awaiting Employer."
+      consequenceSummary="Moves the case back to Awaiting verifier."
       eligibility={eligibility}
-      submitLabel="Record (session-only)"
+      submitLabel={appEnv.adminDemoMode ? "Record (session-only)" : "Record clarification response"}
       onSubmit={async () => {
         const parsed = clarificationResponseSchema.safeParse({
           response,
@@ -1054,7 +1106,11 @@ export function ClarificationResponseDialog({
           evidenceAdded: parsed.data.evidenceAdded,
           internalNote: parsed.data.internalNote || undefined,
         });
-        toast("Clarification response recorded (session-only)");
+        toast(
+          appEnv.adminDemoMode
+            ? "Clarification response recorded (session-only)"
+            : "Clarification response recorded",
+        );
         onOpenChange(false);
       }}
     >
@@ -1100,6 +1156,106 @@ export function ClarificationResponseDialog({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           className={textareaCls}
+        />
+      </Field>
+    </WorkflowActionDialog>
+  );
+}
+
+export function ReturnToVerifierDialog({
+  open,
+  onOpenChange,
+  workflow,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  workflow: UseVerificationWorkflowResult;
+}) {
+  const eligibility = workflow.getEligibility("return_to_verifier");
+  const [decisionSummary, setDecisionSummary] = useState("");
+
+  function reset() {
+    setDecisionSummary("");
+  }
+
+  return (
+    <WorkflowActionDialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) reset();
+      }}
+      title="Return to Verifier"
+      consequenceSummary="Moves the case back to the verifier for follow-up instead of finalizing a career outcome."
+      eligibility={eligibility}
+      submitLabel="Return to verifier"
+      onSubmit={async () => {
+        if (!decisionSummary.trim()) return;
+        await workflow.submitReturnToVerifier({ decisionSummary: decisionSummary.trim() });
+        toast.success("Returned to verifier");
+        onOpenChange(false);
+        reset();
+      }}
+    >
+      <Field label="Reviewer summary" htmlFor="return-summary" required>
+        <textarea
+          id="return-summary"
+          rows={4}
+          value={decisionSummary}
+          onChange={(e) => setDecisionSummary(e.target.value)}
+          className={textareaCls}
+          maxLength={5000}
+          placeholder="Explain what needs follow-up from the verifier."
+        />
+      </Field>
+    </WorkflowActionDialog>
+  );
+}
+
+export function CancelDialog({
+  open,
+  onOpenChange,
+  workflow,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  workflow: UseVerificationWorkflowResult;
+}) {
+  const eligibility = workflow.getEligibility("cancel");
+  const [decisionSummary, setDecisionSummary] = useState("");
+
+  function reset() {
+    setDecisionSummary("");
+  }
+
+  return (
+    <WorkflowActionDialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) reset();
+      }}
+      title="Cancel Verification Request"
+      consequenceSummary="Cancels the verification request without marking the underlying career record as verified."
+      eligibility={eligibility}
+      submitLabel="Cancel request"
+      onSubmit={async () => {
+        if (!decisionSummary.trim()) return;
+        await workflow.submitCancel({ decisionSummary: decisionSummary.trim() });
+        toast.success("Verification request cancelled");
+        onOpenChange(false);
+        reset();
+      }}
+    >
+      <Field label="Cancellation summary" htmlFor="cancel-summary" required>
+        <textarea
+          id="cancel-summary"
+          rows={4}
+          value={decisionSummary}
+          onChange={(e) => setDecisionSummary(e.target.value)}
+          className={textareaCls}
+          maxLength={5000}
+          placeholder="Record why this request is being cancelled."
         />
       </Field>
     </WorkflowActionDialog>

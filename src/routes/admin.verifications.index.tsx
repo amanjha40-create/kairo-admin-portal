@@ -41,48 +41,44 @@ import type { Priority, VerificationStatus } from "@/features/admin/data/types";
 
 type ViewId =
   | "all-active"
-  | "pending-review"
-  | "corrections"
-  | "resubmitted"
-  | "awaiting-organization"
-  | "awaiting-employer"
-  | "clarification"
-  | "failed-outreach"
+  | "pre-dispatch"
+  | "candidate-correction"
+  | "pending-resolution"
+  | "approved-dispatch"
+  | "awaiting-verifier"
+  | "quality-review"
   | "completed";
 
 const VALID_VIEWS: ViewId[] = [
   "all-active",
-  "pending-review",
-  "corrections",
-  "resubmitted",
-  "awaiting-organization",
-  "awaiting-employer",
-  "clarification",
-  "failed-outreach",
+  "pre-dispatch",
+  "candidate-correction",
+  "pending-resolution",
+  "approved-dispatch",
+  "awaiting-verifier",
+  "quality-review",
   "completed",
 ];
 
 const VIEW_LABEL: Record<ViewId, string> = {
   "all-active": "All active",
-  "pending-review": "Pending review",
-  corrections: "Corrections",
-  resubmitted: "Resubmitted",
-  "awaiting-organization": "Awaiting organization",
-  "awaiting-employer": "Awaiting employer",
-  clarification: "Clarification",
-  "failed-outreach": "Failed outreach",
+  "pre-dispatch": "Pre-dispatch review",
+  "candidate-correction": "Needs candidate correction",
+  "pending-resolution": "Pending organization resolution",
+  "approved-dispatch": "Approved for dispatch",
+  "awaiting-verifier": "Awaiting verifier",
+  "quality-review": "Pending quality review",
   completed: "Completed",
 };
 
 const VIEW_STATUSES: Record<ViewId, VerificationStatus[] | null> = {
   "all-active": null, // everything except completed statuses
-  "pending-review": ["pending_review"],
-  corrections: ["corrections_requested"],
-  resubmitted: ["resubmitted"],
-  "awaiting-organization": ["awaiting_organization"],
-  "awaiting-employer": ["awaiting_employer"],
-  clarification: ["clarification_requested"],
-  "failed-outreach": ["failed_outreach"],
+  "pre-dispatch": ["pending_admin_review", "pending_admin_re_review"],
+  "candidate-correction": ["awaiting_subject_corrections"],
+  "pending-resolution": ["pending_organization_resolution"],
+  "approved-dispatch": ["approved_for_organization_verification"],
+  "awaiting-verifier": ["pending_organization_acceptance", "in_progress", "awaiting_information"],
+  "quality-review": ["pending_admin_quality_review"],
   completed: COMPLETED_STATUSES,
 };
 
@@ -452,6 +448,7 @@ function VerificationsPage() {
         <div className="min-w-[140px]">
           <div className="text-foreground">{VERIFICATION_TYPE_LABEL[c.verificationType]}</div>
           <div className="truncate text-xs text-muted-foreground">{c.roleOrProgram}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{c.linkedRecordLabel}</div>
         </div>
       ),
     },
@@ -482,10 +479,25 @@ function VerificationsPage() {
       ),
     },
     {
+      id: "workflow-owner",
+      header: "Workflow owner",
+      cell: (c) => <span className="text-foreground">{c.workflowOwner}</span>,
+    },
+    {
       id: "evidence",
       header: "Evidence",
       align: "right",
-      cell: (c) => <span className="tabular-nums">{c.evidenceCount}</span>,
+      cell: (c) => (
+        <div className="min-w-[140px] text-right">
+          <div className="tabular-nums text-foreground">{c.evidenceCount}</div>
+          <div className="text-[11px] text-muted-foreground">{c.evidenceStatusLabel}</div>
+        </div>
+      ),
+    },
+    {
+      id: "verifier-contact",
+      header: "Verifier contact",
+      cell: (c) => <span className="text-xs text-foreground">{c.verifierContactLabel}</span>,
     },
     {
       id: "submitted",
@@ -555,7 +567,9 @@ function VerificationsPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-foreground">Verifications</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Review, resolve and track verification cases across Kairo.
+            {view === "quality-review"
+              ? "Verifier responses awaiting final admin quality review. Final outcomes are only set from this queue."
+              : "Review, resolve and track verification cases across Kairo."}
           </p>
         </div>
         <div className="flex items-center gap-1.5">

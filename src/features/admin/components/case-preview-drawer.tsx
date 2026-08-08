@@ -66,14 +66,24 @@ export function CasePreviewDrawer({ caseRecord, open, onOpenChange }: Props) {
               </Field>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Verification type">
-                  {VERIFICATION_TYPE_LABEL[caseRecord.verificationType]}
+                  <div>{VERIFICATION_TYPE_LABEL[caseRecord.verificationType]}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {caseRecord.linkedRecordLabel}
+                  </div>
                 </Field>
                 <Field label="Priority">
                   <PriorityBadge priority={caseRecord.priority} />
                 </Field>
                 <Field label="Assigned reviewer">{caseRecord.assignedReviewer}</Field>
+                <Field label="Workflow owner">{caseRecord.workflowOwner}</Field>
                 <Field label="Evidence">
-                  <span className="tabular-nums">{caseRecord.evidenceCount} items</span>
+                  <div className="tabular-nums">{caseRecord.evidenceCount} items</div>
+                  <div className="text-xs text-muted-foreground">
+                    {caseRecord.evidenceStatusLabel}
+                  </div>
+                </Field>
+                <Field label="Verifier contact">
+                  <span className="text-xs text-foreground">{caseRecord.verifierContactLabel}</span>
                 </Field>
                 <Field label="Submitted">
                   <div className="tabular-nums">

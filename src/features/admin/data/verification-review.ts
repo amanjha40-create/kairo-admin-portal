@@ -1,5 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 import { appEnv, type AppEnvConfig } from "@/config/env";
+import {
+  COMPLETED_VERIFICATION_STATUSES,
+  getWorkflowOwnerLabel,
+  isVerificationStatus,
+  mapLegacyMockVerificationStatus,
+} from "@/features/admin/lib/verification-status";
 import type { ProductionAdminApiOptions } from "./admin-api";
 import { createAdminAuthenticatedApi } from "./admin-api";
 import type { Priority, VerificationStatus } from "./types";
@@ -26,6 +32,21 @@ export type Assignee = string;
 
 export const ALL_ASSIGNEES: Assignee[] = ["Unassigned"];
 
+export interface ReviewerOption {
+  id: string;
+  label: string;
+  email: string;
+  role: string;
+}
+
+export interface OrganizationSearchResult {
+  id: string;
+  name: string;
+  organizationType: string;
+  registryRecordId?: string | null;
+  registryResolutionStatus: string;
+}
+
 export interface VerificationCase {
   id: string;
   reference: string;
@@ -42,6 +63,9 @@ export interface VerificationCase {
   submittedAt: string;
   updatedAt: string;
   assignedReviewer: Assignee;
+  linkedRecordLabel: string;
+  verifierContactLabel: string;
+  evidenceStatusLabel: string;
   evidenceCount: number;
   organizationStatus: OrganizationStatus;
   slaState: SlaState;
@@ -49,6 +73,7 @@ export interface VerificationCase {
   outreachStatus: OutreachStatus;
   correctionCount: number;
   lastActivitySummary: string;
+  workflowOwner: string;
 }
 
 export const VERIFICATION_TYPE_LABEL: Record<VerificationType, string> = {
@@ -83,11 +108,7 @@ export const ATTENTION_FLAG_LABEL: Record<AttentionFlag, string> = {
   risk_review_required: "Risk review required",
 };
 
-export const COMPLETED_STATUSES: VerificationStatus[] = [
-  "verified",
-  "rejected",
-  "unable_to_verify",
-];
+export const COMPLETED_STATUSES: VerificationStatus[] = COMPLETED_VERIFICATION_STATUSES;
 
 export type ClaimFieldSource = "candidate" | "kairo_derived" | "verifier_confirmed";
 
@@ -111,6 +132,41 @@ export interface VerificationClaim {
   createdAt: string;
   claimSource: string;
   fields: ClaimField[];
+}
+
+export interface LinkedVerificationRecord {
+  type: "employment" | "education";
+  publicId: string;
+  label: string;
+  canonicalStatus?: string;
+}
+
+export interface CandidateConsentSummary {
+  fields: string[];
+  evidenceScope: string[];
+  candidateResponse?: string | null;
+  submittedAt?: string | null;
+}
+
+export interface ReviewCycleSummary {
+  id: string;
+  round: number;
+  status: string;
+  assignedReviewer: string;
+  assignedAt?: string | null;
+  decidedAt?: string | null;
+  decisionSummary?: string | null;
+}
+
+export interface VerificationRoutingContext {
+  workflowOwner: string;
+  originType?: string | null;
+  targetOrganizationEmail?: string | null;
+  routingConfidence?: number | null;
+  organizationResolutionStatus?: string | null;
+  registryResolutionStatus?: string | null;
+  registryRecordId?: string | null;
+  registryName?: string | null;
 }
 
 export type EvidenceDocType =
@@ -424,6 +480,10 @@ export interface CaseStatusMeta {
 export interface VerificationCaseDetail {
   summary: VerificationCase;
   claim: VerificationClaim;
+  linkedRecord?: LinkedVerificationRecord;
+  consent: CandidateConsentSummary;
+  reviewCycles: ReviewCycleSummary[];
+  routingContext: VerificationRoutingContext;
   candidate: CandidateCaseSummary;
   evidence: EvidenceItem[];
   organization: OrganizationResolution;
@@ -434,6 +494,12 @@ export interface VerificationCaseDetail {
   flags: AttentionFlagRecord[];
   timeline: CaseTimelineEvent[];
   statusMeta: CaseStatusMeta;
+  verifierResponse?: {
+    status: string;
+    maskedRecipient: string;
+    deliveryStatus: string;
+    updatedAt: string;
+  };
 }
 
 interface BackendReviewerSummary {
@@ -446,7 +512,10 @@ interface BackendReviewerSummary {
 interface BackendVerificationRequestResponse {
   public_id: string;
   employment_id?: string | null;
+  education_id?: string | null;
+  origin_type?: string | null;
   organization_public_id?: string | null;
+  trust_invitation_public_id?: string | null;
   subject_name: string;
   subject_email: string;
   target_organization_name?: string | null;
@@ -454,11 +523,16 @@ interface BackendVerificationRequestResponse {
   request_type: string;
   status: string;
   priority: Priority;
+  due_date?: string | null;
+  trust_context?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   candidate_response?: string | null;
   candidate_response_submitted_at?: string | null;
   accepted_at?: string | null;
+  consented_fields?: string[];
+  consented_evidence_scope?: string[];
+  target_organization_metadata?: Record<string, unknown>;
   employment_claim?: {
     employer_name?: string | null;
     role?: string | null;
@@ -467,6 +541,13 @@ interface BackendVerificationRequestResponse {
     employment_type?: string | null;
     work_location_country?: string | null;
     work_location_region?: string | null;
+  } | null;
+  education_claim?: {
+    institution_name?: string | null;
+    degree?: string | null;
+    field_of_study?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
   } | null;
   evidence_summary?: {
     total_items: number;
@@ -479,6 +560,11 @@ interface BackendVerificationRequestResponse {
     verification_state: string;
   } | null;
   review_status?: string | null;
+  is_assigned_to_current_user?: boolean | null;
+  organization_internal_note?: string | null;
+  contact_review_status?: string | null;
+  organization_resolution_status?: string | null;
+  registry_resolution_status?: string | null;
 }
 
 interface BackendAdminReviewQueueResponse {
@@ -630,6 +716,50 @@ interface BackendEvidenceDownloadResponse {
   expires_in_seconds: number;
 }
 
+interface BackendAdminEmployerVerificationResponse {
+  employer_verification: {
+    public_id: string;
+    status: string;
+    masked_recipient: string;
+    delivery_status: string;
+    created_at: string;
+    updated_at: string;
+  };
+}
+
+interface BackendAdminReviewerResponse {
+  user_id: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+}
+
+interface BackendAdminReviewerPage {
+  items: BackendAdminReviewerResponse[];
+}
+
+interface BackendAdminOrganizationSearchItem {
+  public_id: string;
+  name: string;
+  organization_type: string;
+  verification_capabilities: string[];
+  registry_record_public_id?: string | null;
+  registry_resolution_status: string;
+}
+
+interface BackendAdminOrganizationSearchPage {
+  items: BackendAdminOrganizationSearchItem[];
+}
+
+interface BackendTrustRegistryResolutionResponse {
+  verification_request_public_id: string;
+  registry_record_public_id?: string | null;
+  resolution_state: string;
+  resolution_method?: string | null;
+  resolution_confidence?: number | null;
+  resolution_metadata: Record<string, unknown>;
+}
+
 interface BackendWorkflowEnvelope {
   request: BackendVerificationRequestResponse;
   review: BackendAdminReviewCycleResponse;
@@ -640,6 +770,8 @@ export interface VerificationReviewAdapter {
   listCases: () => Promise<VerificationCase[]>;
   getCaseDetail: (caseId: string) => Promise<VerificationCaseDetail | undefined>;
   getEvidenceDownloadUrl: (caseId: string, evidenceId: string) => Promise<string | null>;
+  listReviewers: (search?: string) => Promise<ReviewerOption[]>;
+  searchOrganizations: (search: string) => Promise<OrganizationSearchResult[]>;
   assignCase: (caseId: string, assigneeUserId: string) => Promise<void>;
   addNote: (caseId: string, body: string) => Promise<void>;
   changePriority: (caseId: string, priority: Priority) => Promise<void>;
@@ -657,6 +789,32 @@ export interface VerificationReviewAdapter {
   approveCase: (caseId: string, decisionSummary: string) => Promise<void>;
   rejectCase: (caseId: string, decisionSummary: string) => Promise<void>;
   markUnableToVerify: (caseId: string, decisionSummary: string) => Promise<void>;
+  finalizeCase: (
+    caseId: string,
+    payload: { outcome: "verified" | "rejected" | "unable_to_verify"; decisionSummary: string },
+  ) => Promise<void>;
+  reviewContact: (
+    caseId: string,
+    payload: { reviewStatus: "approved" | "changes_requested"; reviewNotes?: string },
+  ) => Promise<void>;
+  resolveOrganization: (caseId: string, organizationPublicId: string) => Promise<void>;
+  resolveRegistry: (caseId: string, registryRecordPublicId: string) => Promise<void>;
+  createRegistryRecord: (
+    caseId: string,
+    payload: {
+      legalName: string;
+      displayName?: string;
+      organizationType: string;
+      country: string;
+      stateProvince?: string;
+      website?: string;
+      note?: string;
+      resolutionConfidence?: number;
+    },
+  ) => Promise<void>;
+  deferRegistryResolution: (caseId: string, note?: string) => Promise<void>;
+  cancelCase: (caseId: string, decisionSummary: string) => Promise<void>;
+  returnToVerifier: (caseId: string, decisionSummary: string) => Promise<void>;
   recordClarificationResponse: (caseId: string, response: string) => Promise<void>;
 }
 
@@ -681,10 +839,18 @@ export function createVerificationReviewAdapter(
       listCases: loadDemoCases,
       async getCaseDetail(caseId) {
         const mod = await import("@/features/admin/mock-data/case-details");
-        return mod.getVerificationCaseDetail(caseId) as VerificationCaseDetail | undefined;
+        const detail = mod.getVerificationCaseDetail(caseId) as VerificationCaseDetail | undefined;
+        if (!detail) return undefined;
+        return adaptDemoDetail(detail);
       },
       async getEvidenceDownloadUrl() {
         return null;
+      },
+      async listReviewers() {
+        return [];
+      },
+      async searchOrganizations() {
+        return [];
       },
       async assignCase() {},
       async addNote() {},
@@ -693,6 +859,14 @@ export function createVerificationReviewAdapter(
       async approveCase() {},
       async rejectCase() {},
       async markUnableToVerify() {},
+      async finalizeCase() {},
+      async reviewContact() {},
+      async resolveOrganization() {},
+      async resolveRegistry() {},
+      async createRegistryRecord() {},
+      async deferRegistryResolution() {},
+      async cancelCase() {},
+      async returnToVerifier() {},
       async recordClarificationResponse() {},
     };
   }
@@ -714,13 +888,48 @@ export function createVerificationReviewAdapter(
       const timeline = await api.request<BackendTimelineResponse>(
         `/api/v1/admin/verification-requests/${caseId}/timeline?page=1&page_size=250`,
       );
-      return mapDetailResponse(detail, timeline.timeline.items);
+      const employerVerification = detail.employer_verification_public_id
+        ? await api.request<BackendAdminEmployerVerificationResponse>(
+            `/api/v1/admin/employer-verifications/${detail.employer_verification_public_id}`,
+          )
+        : null;
+      return mapDetailResponse(
+        detail,
+        timeline.timeline.items,
+        employerVerification?.employer_verification ?? null,
+      );
     },
     async getEvidenceDownloadUrl(caseId, evidenceId) {
       const data = await api.request<BackendEvidenceDownloadResponse>(
         `/api/v1/admin/verification-requests/${caseId}/evidence/${evidenceId}/download-url`,
       );
       return data.download_url ?? null;
+    },
+    async listReviewers(search) {
+      const query = search
+        ? `?search=${encodeURIComponent(search)}&page_size=100`
+        : "?page_size=100";
+      const data = await api.request<BackendAdminReviewerPage>(
+        `/api/v1/admin/verification-reviewers${query}`,
+      );
+      return data.items.map((item) => ({
+        id: item.user_id,
+        label: item.full_name?.trim() || item.email,
+        email: item.email,
+        role: item.role,
+      }));
+    },
+    async searchOrganizations(search) {
+      const data = await api.request<BackendAdminOrganizationSearchPage>(
+        `/api/v1/admin/organizations/search?search=${encodeURIComponent(search)}&page_size=20`,
+      );
+      return data.items.map((item) => ({
+        id: item.public_id,
+        name: item.name,
+        organizationType: item.organization_type,
+        registryRecordId: item.registry_record_public_id ?? null,
+        registryResolutionStatus: item.registry_resolution_status,
+      }));
     },
     async assignCase(caseId, assigneeUserId) {
       await api.request<BackendWorkflowEnvelope>(
@@ -774,6 +983,87 @@ export function createVerificationReviewAdapter(
         body: { decision_summary: decisionSummary },
       });
     },
+    async finalizeCase(caseId, payload) {
+      await api.request(`/api/v1/admin/verification-requests/${caseId}/finalize`, {
+        method: "POST",
+        body: {
+          outcome: payload.outcome,
+          decision_summary: payload.decisionSummary,
+        },
+      });
+    },
+    async reviewContact(caseId, payload) {
+      await api.request(
+        `/api/v1/admin/verification-requests/${caseId}/verification-contact/review`,
+        {
+          method: "POST",
+          body: {
+            review_status: payload.reviewStatus,
+            review_notes: payload.reviewNotes ?? null,
+          },
+        },
+      );
+    },
+    async resolveOrganization(caseId, organizationPublicId) {
+      await api.request(`/api/v1/admin/verification-requests/${caseId}/resolve-organization`, {
+        method: "POST",
+        body: { organization_public_id: organizationPublicId },
+      });
+    },
+    async resolveRegistry(caseId, registryRecordPublicId) {
+      await api.request<BackendTrustRegistryResolutionResponse>(
+        `/api/v1/admin/verification-requests/${caseId}/resolve-registry`,
+        {
+          method: "POST",
+          body: {
+            registry_record_public_id: registryRecordPublicId,
+          },
+        },
+      );
+    },
+    async createRegistryRecord(caseId, payload) {
+      await api.request<BackendTrustRegistryResolutionResponse>(
+        `/api/v1/admin/verification-requests/${caseId}/create-registry-record`,
+        {
+          method: "POST",
+          body: {
+            record: {
+              legal_name: payload.legalName,
+              display_name: payload.displayName?.trim() || null,
+              organization_type: payload.organizationType,
+              country: payload.country,
+              state_province: payload.stateProvince?.trim() || null,
+              website: payload.website?.trim() || null,
+            },
+            resolution_confidence: payload.resolutionConfidence ?? null,
+            resolution_metadata: payload.note?.trim() ? { note: payload.note.trim() } : {},
+          },
+        },
+      );
+    },
+    async deferRegistryResolution(caseId, note) {
+      await api.request<BackendTrustRegistryResolutionResponse>(
+        `/api/v1/admin/verification-requests/${caseId}/defer-registry-resolution`,
+        {
+          method: "POST",
+          body: {
+            resolution_metadata: note ? { note } : {},
+          },
+        },
+      );
+    },
+    async cancelCase(caseId, decisionSummary) {
+      await api.request(`/api/v1/admin/verification-requests/${caseId}/cancel`, {
+        method: "POST",
+        body: { decision_summary: decisionSummary },
+      });
+    },
+    async returnToVerifier(caseId, decisionSummary) {
+      await api.request(`/api/v1/admin/verification-requests/${caseId}/return-to-verifier`, {
+        method: "POST",
+        body: { decision_summary: decisionSummary },
+      });
+    },
     async recordClarificationResponse(caseId, response) {
       await api.request(
         `/api/v1/admin/verification-requests/${caseId}/record-clarification-response`,
@@ -811,7 +1101,47 @@ export function verificationCaseDetailQueryOptions(
 
 async function loadDemoCases(): Promise<VerificationCase[]> {
   const mod = await import("@/features/admin/mock-data/verification-cases");
-  return mod.mockVerificationCases as VerificationCase[];
+  return mod.mockVerificationCases.map((item) => {
+    const status = mapLegacyMockVerificationStatus(item.status);
+    return {
+      ...item,
+      status,
+      linkedRecordLabel: formatLinkedRecordLabel(item.verificationType, item.id),
+      verifierContactLabel: "Demo contact available",
+      evidenceStatusLabel: formatEvidenceStatusLabel(item.evidenceCount),
+      workflowOwner: getWorkflowOwnerLabel(status),
+    };
+  }) as VerificationCase[];
+}
+
+function adaptDemoDetail(detail: VerificationCaseDetail): VerificationCaseDetail {
+  const status = mapLegacyMockVerificationStatus(detail.summary.status);
+  return {
+    ...detail,
+    summary: {
+      ...detail.summary,
+      status,
+      linkedRecordLabel:
+        detail.summary.linkedRecordLabel ??
+        formatLinkedRecordLabel(detail.summary.verificationType, detail.summary.id),
+      verifierContactLabel: detail.summary.verifierContactLabel ?? "Demo contact available",
+      evidenceStatusLabel:
+        detail.summary.evidenceStatusLabel ??
+        formatEvidenceStatusLabel(detail.summary.evidenceCount),
+      workflowOwner: getWorkflowOwnerLabel(status),
+    },
+    consent: detail.consent ?? {
+      fields: [],
+      evidenceScope: [],
+      candidateResponse: undefined,
+      submittedAt: undefined,
+    },
+    reviewCycles: detail.reviewCycles ?? [],
+    routingContext: detail.routingContext ?? {
+      workflowOwner: getWorkflowOwnerLabel(status),
+    },
+    statusMeta: buildStatusMeta(status),
+  };
 }
 
 function mapQueueItemToCase(item: BackendVerificationRequestResponse): VerificationCase {
@@ -820,8 +1150,14 @@ function mapQueueItemToCase(item: BackendVerificationRequestResponse): Verificat
     item.organization_summary?.name ??
     item.target_organization_name ??
     item.employment_claim?.employer_name ??
+    item.education_claim?.institution_name ??
     "Organization pending";
   const submittedAt = item.accepted_at ?? item.candidate_response_submitted_at ?? item.created_at;
+  const roleOrProgram =
+    item.employment_claim?.role ??
+    item.education_claim?.degree ??
+    VERIFICATION_TYPE_LABEL[verificationType];
+  const status = mapBackendStatus(item.status);
 
   return {
     id: item.public_id,
@@ -833,13 +1169,21 @@ function mapQueueItemToCase(item: BackendVerificationRequestResponse): Verificat
     organizationId:
       item.organization_public_id ?? item.organization_summary?.public_id ?? item.public_id,
     organizationName,
-    roleOrProgram: item.employment_claim?.role ?? VERIFICATION_TYPE_LABEL[verificationType],
+    roleOrProgram,
     verificationType,
-    status: mapBackendStatus(item.status),
+    status,
     priority: item.priority ?? "normal",
     submittedAt,
     updatedAt: item.updated_at,
     assignedReviewer: formatAssignee(item.assigned_reviewer),
+    linkedRecordLabel: formatLinkedRecordLabel(
+      verificationType,
+      item.employment_id ?? item.education_id ?? null,
+    ),
+    verifierContactLabel: item.target_organization_email
+      ? maskEmail(item.target_organization_email)
+      : "Pending contact selection",
+    evidenceStatusLabel: formatEvidenceStatusLabel(item.evidence_summary?.total_items ?? 0),
     evidenceCount: item.evidence_summary?.total_items ?? 0,
     organizationStatus: mapOrganizationStatus(item),
     slaState: deriveSlaState(submittedAt),
@@ -847,12 +1191,14 @@ function mapQueueItemToCase(item: BackendVerificationRequestResponse): Verificat
     outreachStatus: deriveOutreachStatus(item.status),
     correctionCount: item.status === "awaiting_subject_corrections" ? 1 : 0,
     lastActivitySummary: summarizeCaseActivity(item),
+    workflowOwner: getWorkflowOwnerLabel(status),
   };
 }
 
 function mapDetailResponse(
   detail: BackendAdminReviewDetailResponse,
   timelineItems: BackendTimelineEvent[],
+  employerVerification?: BackendAdminEmployerVerificationResponse["employer_verification"] | null,
 ): VerificationCaseDetail {
   const summary = mapQueueItemToCase(detail.request);
   const claim = mapClaim(detail);
@@ -873,6 +1219,35 @@ function mapDetailResponse(
   return {
     summary,
     claim,
+    linkedRecord: mapLinkedRecord(detail),
+    consent: {
+      fields: detail.request.consented_fields ?? [],
+      evidenceScope: detail.request.consented_evidence_scope ?? [],
+      candidateResponse: detail.request.candidate_response,
+      submittedAt: detail.request.candidate_response_submitted_at,
+    },
+    reviewCycles: detail.reviews.map(mapReviewCycle),
+    routingContext: {
+      workflowOwner: summary.workflowOwner,
+      originType: detail.request.origin_type ?? null,
+      targetOrganizationEmail:
+        detail.request.target_organization_email ??
+        detail.request.target_organization_metadata?.organization_email?.toString() ??
+        null,
+      routingConfidence: extractRoutingConfidence(
+        detail.request.target_organization_metadata,
+        detail.request.trust_context,
+        detail.registry_resolution?.resolution_metadata,
+      ),
+      organizationResolutionStatus:
+        detail.organization_resolution?.status ??
+        detail.request.organization_resolution_status ??
+        null,
+      registryResolutionStatus:
+        detail.registry_resolution?.status ?? detail.request.registry_resolution_status ?? null,
+      registryRecordId: detail.registry_resolution?.registry_record_public_id ?? null,
+      registryName: detail.registry_resolution?.registry_name ?? null,
+    },
     candidate: {
       candidateId: summary.candidateId,
       name: summary.candidateName,
@@ -920,6 +1295,14 @@ function mapDetailResponse(
     flags: deriveFlagRecords(summary.attentionFlags, detail.request.created_at),
     timeline,
     statusMeta: buildStatusMeta(summary.status),
+    verifierResponse: employerVerification
+      ? {
+          status: employerVerification.status,
+          maskedRecipient: employerVerification.masked_recipient,
+          deliveryStatus: employerVerification.delivery_status,
+          updatedAt: employerVerification.updated_at,
+        }
+      : undefined,
   };
 }
 
@@ -976,6 +1359,67 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
     return {
       type: "employment",
       headline: `${role} at ${employerName}`,
+      createdAt: detail.request.created_at,
+      claimSource: "Shared backend verification request",
+      fields,
+    };
+  }
+
+  if (requestType === "education") {
+    const institutionName =
+      detail.request.target_organization_name ??
+      detail.request.education_claim?.institution_name ??
+      "Institution pending";
+    const degree = detail.request.education_claim?.degree ?? "Education verification";
+    const fields: ClaimField[] = [
+      {
+        key: "candidate",
+        label: "Candidate name",
+        value: detail.request.subject_name,
+        source: "candidate",
+      },
+      {
+        key: "institution",
+        label: "Institution",
+        value: institutionName,
+        source: "candidate",
+      },
+      {
+        key: "degree",
+        label: "Degree",
+        value: degree,
+        source: "candidate",
+      },
+    ];
+
+    if (detail.request.education_claim?.field_of_study) {
+      fields.push({
+        key: "fieldOfStudy",
+        label: "Field of study",
+        value: String(detail.request.education_claim.field_of_study),
+        source: "candidate",
+      });
+    }
+    if (detail.request.education_claim?.start_date) {
+      fields.push({
+        key: "startDate",
+        label: "Start date",
+        value: String(detail.request.education_claim.start_date),
+        source: "candidate",
+      });
+    }
+    if (detail.request.education_claim?.end_date) {
+      fields.push({
+        key: "endDate",
+        label: "End date",
+        value: String(detail.request.education_claim.end_date),
+        source: "candidate",
+      });
+    }
+
+    return {
+      type: "education",
+      headline: `${degree} at ${institutionName}`,
       createdAt: detail.request.created_at,
       claimSource: "Shared backend verification request",
       fields,
@@ -1087,6 +1531,78 @@ function buildCaseReference(publicId: string): string {
   return `KVR-${publicId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
+function formatLinkedRecordLabel(
+  verificationType: VerificationType,
+  publicId: string | null,
+): string {
+  const prefix = verificationType === "education" ? "Education" : "Employment";
+  return publicId ? `${prefix} · ${publicId.slice(0, 8)}` : `${prefix} · Pending link`;
+}
+
+function formatEvidenceStatusLabel(count: number): string {
+  if (count <= 0) return "Missing evidence";
+  return `${count} item${count === 1 ? "" : "s"} attached`;
+}
+
+function mapLinkedRecord(
+  detail: BackendAdminReviewDetailResponse,
+): LinkedVerificationRecord | undefined {
+  if (detail.request.employment_id) {
+    return {
+      type: "employment",
+      publicId: detail.request.employment_id,
+      label: formatLinkedRecordLabel("employment", detail.request.employment_id),
+      canonicalStatus: detail.employment?.verification_status,
+    };
+  }
+
+  if (detail.request.education_id) {
+    return {
+      type: "education",
+      publicId: detail.request.education_id,
+      label: formatLinkedRecordLabel("education", detail.request.education_id),
+    };
+  }
+
+  return undefined;
+}
+
+function mapReviewCycle(review: BackendAdminReviewCycleResponse): ReviewCycleSummary {
+  return {
+    id: review.public_id,
+    round: review.review_round,
+    status: review.review_status,
+    assignedReviewer: review.assigned_reviewer_user_id ?? "Unassigned",
+    assignedAt: review.assigned_at,
+    decidedAt: review.decision_at,
+    decisionSummary: review.decision_summary,
+  };
+}
+
+function extractRoutingConfidence(
+  ...sources: Array<Record<string, unknown> | undefined | null>
+): number | null {
+  const candidateKeys = [
+    "routing_confidence",
+    "match_confidence",
+    "confidence",
+    "organization_match_confidence",
+  ];
+
+  for (const source of sources) {
+    if (!source) continue;
+    for (const key of candidateKeys) {
+      const value = source[key];
+      const numeric = typeof value === "number" ? value : Number(value);
+      if (Number.isFinite(numeric)) {
+        return numeric <= 1 ? numeric * 100 : numeric;
+      }
+    }
+  }
+
+  return null;
+}
+
 function initialsFor(name: string, email: string): string {
   const source = name.trim() || email.trim();
   const parts = source.split(/\s+/).filter(Boolean);
@@ -1109,29 +1625,7 @@ function mapVerificationType(value: string): VerificationType {
 }
 
 export function mapBackendStatus(status: string): VerificationStatus {
-  switch (status) {
-    case "awaiting_subject_corrections":
-      return "corrections_requested";
-    case "pending_admin_re_review":
-      return "resubmitted";
-    case "pending_organization_resolution":
-      return "awaiting_organization";
-    case "approved_for_organization_verification":
-    case "pending_organization_acceptance":
-    case "in_progress":
-      return "awaiting_employer";
-    case "awaiting_information":
-      return "clarification_requested";
-    case "verified":
-      return "verified";
-    case "rejected":
-      return "rejected";
-    case "cancelled":
-    case "expired":
-      return "unable_to_verify";
-    default:
-      return "pending_review";
-  }
+  return isVerificationStatus(status) ? status : "pending_admin_review";
 }
 
 function deriveSlaState(submittedAt: string): SlaState {
@@ -1142,9 +1636,13 @@ function deriveSlaState(submittedAt: string): SlaState {
 }
 
 function mapOrganizationStatus(item: BackendVerificationRequestResponse): OrganizationStatus {
+  const resolutionStatus = item.organization_resolution_status ?? "";
+  if (resolutionStatus === "unresolved" || item.status === "pending_organization_resolution") {
+    return "unresolved";
+  }
   const state = item.organization_summary?.verification_state ?? "";
   if (state === "verified" || item.organization_public_id) return "resolved";
-  return item.status === "pending_organization_resolution" ? "unresolved" : "resolved";
+  return "resolved";
 }
 
 function deriveAttentionFlags(item: BackendVerificationRequestResponse): AttentionFlag[] {
@@ -1153,13 +1651,23 @@ function deriveAttentionFlags(item: BackendVerificationRequestResponse): Attenti
   if (item.status === "awaiting_subject_corrections" || item.status === "pending_admin_re_review") {
     flags.add("previous_correction");
   }
-  if (item.review_status?.includes("contact")) flags.add("contact_unverified");
+  if ((item.contact_review_status ?? item.review_status ?? "").includes("contact")) {
+    flags.add("contact_unverified");
+  }
   if (item.status === "pending_organization_resolution") flags.add("possible_duplicate");
   return [...flags];
 }
 
 function deriveOutreachStatus(status: string): OutreachStatus {
-  if (status === "in_progress" || status === "pending_organization_acceptance") return "sent";
+  if (status === "pending_admin_quality_review") return "responded";
+  if (
+    status === "approved_for_organization_verification" ||
+    status === "pending_organization_acceptance" ||
+    status === "in_progress" ||
+    status === "awaiting_information"
+  ) {
+    return "sent";
+  }
   return "not_started";
 }
 
@@ -1172,13 +1680,25 @@ function summarizeCaseActivity(item: BackendVerificationRequestResponse): string
     case "pending_organization_resolution":
       return "Organization resolution required";
     case "approved_for_organization_verification":
+      return "Approved for dispatch";
     case "pending_organization_acceptance":
+      return "Waiting for verifier to accept";
     case "in_progress":
-      return "Employer verification is in progress";
+      return "Verifier review is in progress";
+    case "awaiting_information":
+      return "Clarification is pending from verifier or candidate";
+    case "pending_admin_quality_review":
+      return "Verifier responded and awaits final review";
     case "verified":
-      return "Verification completed";
+      return "Verification finalized as verified";
     case "rejected":
-      return "Verification rejected";
+      return "Verification finalized as rejected";
+    case "unable_to_verify":
+      return "Verification finalized as unable to verify";
+    case "cancelled":
+      return "Verification request was cancelled";
+    case "expired":
+      return "Verification request expired";
     default:
       return "Awaiting admin review";
   }
@@ -1186,16 +1706,24 @@ function summarizeCaseActivity(item: BackendVerificationRequestResponse): string
 
 function buildStatusMeta(status: VerificationStatus): CaseStatusMeta {
   const nextByStatus: Record<VerificationStatus, string> = {
-    pending_review: "Admin must review evidence.",
-    corrections_requested: "Candidate must submit corrections.",
-    resubmitted: "Admin must review the resubmission.",
-    awaiting_organization: "Organization resolution is required.",
-    awaiting_employer: "Employer verification is in progress.",
-    clarification_requested: "Clarification response is pending.",
+    draft: "Request is not yet ready for admin review.",
+    pending_subject_acceptance: "Candidate must accept the request.",
+    accepted: "Candidate has accepted the request.",
+    pending_subject_submission: "Candidate must submit their verification evidence.",
+    pending_admin_review: "Admin must review the submitted request before dispatch.",
+    awaiting_subject_corrections: "Candidate must submit corrections.",
+    pending_admin_re_review: "Admin must review the corrected submission.",
+    approved_for_organization_verification: "Request has been approved for dispatch.",
+    pending_organization_resolution: "Admin must resolve the target organization or institution.",
+    pending_organization_acceptance: "Verifier has not accepted the request yet.",
+    in_progress: "Verifier response is pending.",
+    awaiting_information: "Clarification is still outstanding.",
+    pending_admin_quality_review: "Admin must complete final quality review.",
     verified: "Case is complete.",
     rejected: "Case is complete.",
-    failed_outreach: "Outreach requires attention.",
     unable_to_verify: "Case is complete.",
+    cancelled: "Case is complete.",
+    expired: "Case is complete.",
   };
 
   return {

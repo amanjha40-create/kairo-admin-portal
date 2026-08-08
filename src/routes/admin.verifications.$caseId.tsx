@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -50,7 +51,7 @@ import {
   type Assignee,
   type VerificationCaseDetail,
   type AttentionFlagRecord,
-  type OrganizationSuggestion,
+  type OrganizationSearchResult,
   PRIORITY_LABEL,
 } from "@/features/admin/runtime/verification-review";
 import {
@@ -77,10 +78,12 @@ import {
 } from "@/features/admin/workflow/types";
 import { ROLE_LABEL } from "@/features/admin/workflow/permissions";
 import {
+  CancelDialog,
   CorrectionDialog,
   OutreachDialog,
   VerifyDialog,
   RejectDialog,
+  ReturnToVerifierDialog,
   UnableDialog,
   ClarificationRequestDialog,
   ClarificationResponseDialog,
@@ -165,10 +168,7 @@ function useProductionVerificationWorkflow(
   const [acknowledgedFlagIds, setAcknowledgedFlagIds] = useState<Set<string>>(new Set());
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
 
-  const unsupportedActions = new Set<WorkflowAction>([
-    "approve_outreach",
-    "record_clarification_request",
-  ]);
+  const unsupportedActions = new Set<WorkflowAction>(["record_clarification_request"]);
 
   const getEligibility = (action: WorkflowAction, opts?: { rejectionIsHighRisk?: boolean }) => {
     const base = evaluateWorkflowEligibility(
@@ -217,12 +217,7 @@ function useProductionVerificationWorkflow(
     nextExpectedAction: detail.statusMeta.nextExpectedAction,
     getEligibility,
     async setAssignedReviewer(next) {
-      if (!actor || !("id" in actor) || next !== actor.name) {
-        throw new Error(
-          "Production assignment currently supports assigning the case to the signed-in reviewer only.",
-        );
-      }
-      await adapter.assignCase(caseId, (actor as WorkflowActor & { id?: string }).id ?? "");
+      await adapter.assignCase(caseId, next);
       await refresh();
     },
     async setPriority(next) {
@@ -258,21 +253,45 @@ function useProductionVerificationWorkflow(
       await refresh();
     },
     async submitOutreach() {
-      throw new Error("Outreach approval remains unavailable in production.");
+      await adapter.approveCase(caseId, "Approved for dispatch from the Admin Portal.");
+      await refresh();
     },
     async submitVerify(payload) {
-      await adapter.approveCase(caseId, payload.decisionSummary);
+      await adapter.finalizeCase(caseId, {
+        outcome: "verified",
+        decisionSummary: payload.decisionSummary,
+      });
       await refresh();
     },
     async submitReject(payload) {
-      await adapter.rejectCase(caseId, payload.decisionSummary);
+      if (detail.summary.status === "pending_admin_quality_review") {
+        await adapter.finalizeCase(caseId, {
+          outcome: "rejected",
+          decisionSummary: payload.decisionSummary,
+        });
+      } else {
+        await adapter.rejectCase(caseId, payload.decisionSummary);
+      }
       await refresh();
     },
     async submitUnable(payload) {
-      await adapter.markUnableToVerify(
-        caseId,
-        `${payload.attemptsSummary}\n\n${payload.outstandingUncertainty}`,
-      );
+      const decisionSummary = `${payload.attemptsSummary}\n\n${payload.outstandingUncertainty}`;
+      if (detail.summary.status === "pending_admin_quality_review") {
+        await adapter.finalizeCase(caseId, {
+          outcome: "unable_to_verify",
+          decisionSummary,
+        });
+      } else {
+        await adapter.markUnableToVerify(caseId, decisionSummary);
+      }
+      await refresh();
+    },
+    async submitCancel(payload) {
+      await adapter.cancelCase(caseId, payload.decisionSummary);
+      await refresh();
+    },
+    async submitReturnToVerifier(payload) {
+      await adapter.returnToVerifier(caseId, payload.decisionSummary);
       await refresh();
     },
     async submitClarificationRequest() {
@@ -289,6 +308,8 @@ function CaseWorkspace() {
   const { caseId } = Route.useParams();
   const { detail } = Route.useLoaderData() as { detail: VerificationCaseDetail };
   const { admin } = useAdminAccess();
+  const router = useRouter();
+  const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
 
   const actor = useMemo(
     () => ({
@@ -311,6 +332,11 @@ function CaseWorkspace() {
   );
   const workflow = appEnv.adminDemoMode ? demoWorkflow : productionWorkflow;
   const outreach = useOutreachSession(detail, actor);
+  const reviewerOptionsQuery = useQuery({
+    queryKey: ["admin", "verification-reviewers"],
+    queryFn: () => adapter.listReviewers(),
+    enabled: !appEnv.adminDemoMode,
+  });
 
   const [dialog, setDialog] = useState<WorkflowAction | null>(null);
   const [pendingLeaveHref, setPendingLeaveHref] = useState<null | (() => void)>(null);
@@ -354,18 +380,20 @@ function CaseWorkspace() {
     }
 
     const options = new Map<string, { key: string; label: string }>();
-    options.set(workflow.assignedReviewer, {
-      key: workflow.assignedReviewer,
-      label: workflow.assignedReviewer,
-    });
-    if (admin?.name) {
-      options.set(admin.name, {
-        key: admin.name,
-        label: `${admin.name} (me)`,
+    for (const reviewer of reviewerOptionsQuery.data ?? []) {
+      options.set(reviewer.id, {
+        key: reviewer.id,
+        label: reviewer.label === admin?.name ? `${reviewer.label} (me)` : reviewer.label,
+      });
+    }
+    if (workflow.assignedReviewer) {
+      options.set(workflow.assignedReviewer, {
+        key: workflow.assignedReviewer,
+        label: workflow.assignedReviewer,
       });
     }
     return [...options.values()];
-  }, [admin?.name, workflow.assignedReviewer]);
+  }, [admin?.name, reviewerOptionsQuery.data, workflow.assignedReviewer]);
 
   const ageHours = Math.max(
     0,
@@ -415,6 +443,19 @@ function CaseWorkspace() {
         </div>
       ) : null}
 
+      {!appEnv.adminDemoMode && detail.summary.status === "pending_admin_quality_review" ? (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          <Shield aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            <strong>Final quality review.</strong> The verifier has responded. Only the final review
+            actions on this screen can set the canonical verification outcome.
+          </span>
+        </div>
+      ) : null}
+
       {/* Sticky header */}
       <header className="sticky top-14 z-20 -mx-3 border-b border-border bg-background/95 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -426,7 +467,7 @@ function CaseWorkspace() {
               <StatusBadge status={workflow.currentStatus} />
               <PriorityBadge priority={workflow.priority} />
               <SlaBadge state={detail.summary.slaState} />
-              {workflow.currentStatus !== detail.summary.status ? (
+              {appEnv.adminDemoMode && workflow.currentStatus !== detail.summary.status ? (
                 <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 ring-1 ring-inset ring-sky-200 dark:bg-sky-950/40 dark:text-sky-200 dark:ring-sky-900/60">
                   Session status
                 </span>
@@ -490,6 +531,7 @@ function CaseWorkspace() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-4">
           <ClaimSummarySection detail={detail} />
+          <RequestContextSection detail={detail} />
           <WorkspaceSection
             id="evidence"
             title="Evidence"
@@ -510,27 +552,18 @@ function CaseWorkspace() {
             </>
           ) : (
             <>
-              <WorkspaceSection
-                id="organization"
-                title="Organization resolution"
-                description="Backend-driven organization resolution is not part of this milestone."
-              >
-                <p className="text-xs text-muted-foreground">
-                  Organization resolution remains read-only in production mode for now. This
-                  workspace will stay unavailable until the matching backend resolution endpoints
-                  are integrated.
-                </p>
-              </WorkspaceSection>
-              <WorkspaceSection
-                id="outreach"
-                title="Outreach & communications"
-                description="Employer outreach workflows remain unavailable in production mode."
-              >
-                <p className="text-xs text-muted-foreground">
-                  The backend review workflow does not expose a matching production outreach action
-                  yet, so this section is intentionally unavailable instead of simulating success.
-                </p>
-              </WorkspaceSection>
+              <ProductionOrganizationSection
+                detail={detail}
+                adapter={adapter}
+                caseId={caseId}
+                onRefresh={() => router.invalidate()}
+              />
+              <ProductionVerifierSection
+                detail={detail}
+                adapter={adapter}
+                caseId={caseId}
+                onRefresh={() => router.invalidate()}
+              />
             </>
           )}
 
@@ -539,6 +572,8 @@ function CaseWorkspace() {
             workflow={workflow}
             onOpenCorrection={() => setDialog("request_correction")}
           />
+
+          <AdminReviewHistorySection detail={detail} />
 
           <WorkspaceSection
             id="timeline"
@@ -618,6 +653,16 @@ function CaseWorkspace() {
         detail={detail}
         workflow={workflow}
       />
+      <ReturnToVerifierDialog
+        open={dialog === "return_to_verifier"}
+        onOpenChange={(o) => !o && setDialog(null)}
+        workflow={workflow}
+      />
+      <CancelDialog
+        open={dialog === "cancel"}
+        onOpenChange={(o) => !o && setDialog(null)}
+        workflow={workflow}
+      />
       <ClarificationRequestDialog
         open={dialog === "record_clarification_request"}
         onOpenChange={(o) => !o && setDialog(null)}
@@ -680,6 +725,533 @@ function ClaimSummarySection({ detail }: { detail: VerificationCaseDetail }) {
         Fields are labelled by their source. A field is not treated as verified just because it was
         provided.
       </p>
+    </WorkspaceSection>
+  );
+}
+
+function RequestContextSection({ detail }: { detail: VerificationCaseDetail }) {
+  const linkedRecord = detail.linkedRecord;
+  const consent = detail.consent;
+  const context = detail.routingContext;
+
+  return (
+    <WorkspaceSection
+      id="request-context"
+      title="Request context"
+      description="Backend-owned context for the linked record, candidate consent, routing, and current workflow ownership."
+    >
+      <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+        <ContextField
+          label="Workflow owner"
+          value={context.workflowOwner}
+          helper="Who must act next according to the backend workflow state."
+        />
+        <ContextField
+          label="Linked canonical record"
+          value={linkedRecord?.label ?? "No linked record returned"}
+          helper={
+            linkedRecord?.canonicalStatus
+              ? `Canonical status: ${formatBackendLabel(linkedRecord.canonicalStatus)}`
+              : "This request should stay linked to a canonical Career record."
+          }
+        />
+        <ContextField
+          label="Target verifier contact"
+          value={context.targetOrganizationEmail ?? detail.summary.verifierContactLabel}
+        />
+        <ContextField
+          label="Request origin"
+          value={context.originType ? formatBackendLabel(context.originType) : "Not provided"}
+        />
+        <ContextField
+          label="Organization resolution"
+          value={
+            context.organizationResolutionStatus
+              ? formatBackendLabel(context.organizationResolutionStatus)
+              : "Pending"
+          }
+        />
+        <ContextField
+          label="Registry resolution"
+          value={
+            context.registryResolutionStatus
+              ? formatBackendLabel(context.registryResolutionStatus)
+              : "Pending"
+          }
+          helper={context.registryName ?? undefined}
+        />
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+        <div className="rounded-md border border-border bg-background p-3">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Candidate consented fields
+          </p>
+          {consent.fields.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {consent.fields.map((field) => (
+                <span
+                  key={field}
+                  className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground"
+                >
+                  {formatBackendLabel(field)}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              The backend did not return field-level consent metadata for this request.
+            </p>
+          )}
+        </div>
+        <div className="rounded-md border border-border bg-background p-3">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Consented evidence scope
+          </p>
+          {consent.evidenceScope.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {consent.evidenceScope.map((field) => (
+                <span
+                  key={field}
+                  className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground"
+                >
+                  {formatBackendLabel(field)}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              No explicit evidence-scope list was returned for this request.
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+        <ContextField
+          label="Routing confidence"
+          value={
+            context.routingConfidence != null
+              ? `${Math.round(context.routingConfidence)}%`
+              : "Not provided"
+          }
+        />
+        <ContextField
+          label="Candidate submission"
+          value={
+            consent.submittedAt
+              ? formatRelativeTime(consent.submittedAt)
+              : "No resubmission recorded"
+          }
+          helper={consent.candidateResponse ?? undefined}
+        />
+      </div>
+    </WorkspaceSection>
+  );
+}
+
+function ContextField({ label, value, helper }: { label: string; value: string; helper?: string }) {
+  return (
+    <div className="rounded-md border border-border bg-background p-3">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-sm text-foreground">{value}</p>
+      {helper ? <p className="mt-1 text-[11px] text-muted-foreground">{helper}</p> : null}
+    </div>
+  );
+}
+
+function AdminReviewHistorySection({ detail }: { detail: VerificationCaseDetail }) {
+  const isFinalReview = detail.summary.status === "pending_admin_quality_review";
+
+  return (
+    <WorkspaceSection
+      id="review-history"
+      title={isFinalReview ? "Final quality review context" : "Admin review history"}
+      description={
+        isFinalReview
+          ? "Pre-dispatch review history and backend review rounds leading into final quality review."
+          : "Backend review rounds already recorded for this request."
+      }
+    >
+      {isFinalReview ? (
+        <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          Finalization happens only from this stage. Pre-dispatch approval is not a terminal
+          verification outcome.
+        </div>
+      ) : null}
+      {detail.reviewCycles.length === 0 ? (
+        <EmptyState
+          title="No recorded review rounds yet"
+          description="The backend has not returned any explicit admin review rounds for this request."
+        />
+      ) : (
+        <ul className="space-y-2">
+          {detail.reviewCycles.map((cycle) => (
+            <li key={cycle.id} className="rounded-md border border-border bg-background p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-foreground">
+                  Review round {cycle.round}
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    · {formatBackendLabel(cycle.status)}
+                  </span>
+                </p>
+                <span className="text-[11px] text-muted-foreground">
+                  Assigned {cycle.assignedReviewer}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {cycle.assignedAt
+                  ? `Assigned ${formatRelativeTime(cycle.assignedAt)}`
+                  : "Assignment time not returned"}
+                {cycle.decidedAt ? ` · Decided ${formatRelativeTime(cycle.decidedAt)}` : ""}
+              </p>
+              {cycle.decisionSummary ? (
+                <p className="mt-2 whitespace-pre-wrap text-xs text-foreground">
+                  {cycle.decisionSummary}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </WorkspaceSection>
+  );
+}
+
+function ProductionOrganizationSection({
+  detail,
+  adapter,
+  caseId,
+  onRefresh,
+}: {
+  detail: VerificationCaseDetail;
+  adapter: ReturnType<typeof createVerificationReviewAdapter>;
+  caseId: string;
+  onRefresh: () => Promise<void>;
+}) {
+  const [search, setSearch] = useState(detail.organization.candidateEntered);
+  const [results, setResults] = useState<OrganizationSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [registryNote, setRegistryNote] = useState("");
+  const [registryDraft, setRegistryDraft] = useState(() => ({
+    legalName: detail.organization.candidateEntered,
+    displayName: detail.organization.candidateEntered,
+    organizationType: detail.summary.verificationType === "education" ? "institution" : "employer",
+    country: "",
+    stateProvince: "",
+    website: "",
+  }));
+
+  async function runSearch() {
+    if (!search.trim()) return;
+    setIsSearching(true);
+    try {
+      setResults(await adapter.searchOrganizations(search.trim()));
+    } catch (error) {
+      toast.error("Organization search failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
+  async function resolve(result: OrganizationSearchResult) {
+    try {
+      await adapter.resolveOrganization(caseId, result.id);
+      if (result.registryRecordId) {
+        await adapter.resolveRegistry(caseId, result.registryRecordId);
+      } else {
+        await adapter.deferRegistryResolution(
+          caseId,
+          registryNote.trim() || "No registry record was available on the selected organization.",
+        );
+      }
+      toast.success("Organization resolved", {
+        description: result.registryRecordId
+          ? "Organization and registry links were saved to the backend."
+          : "Organization was saved and registry resolution was deferred.",
+      });
+      await onRefresh();
+    } catch (error) {
+      toast.error("Organization resolution failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  async function createRegistryRecord() {
+    if (
+      !registryDraft.legalName.trim() ||
+      !registryDraft.organizationType.trim() ||
+      !registryDraft.country.trim()
+    ) {
+      toast.error("Registry record is incomplete", {
+        description: "Legal name, organization type, and country are required by the backend.",
+      });
+      return;
+    }
+
+    try {
+      await adapter.createRegistryRecord(caseId, {
+        legalName: registryDraft.legalName.trim(),
+        displayName: registryDraft.displayName.trim() || undefined,
+        organizationType: registryDraft.organizationType.trim(),
+        country: registryDraft.country.trim().toUpperCase(),
+        stateProvince: registryDraft.stateProvince.trim() || undefined,
+        website: registryDraft.website.trim() || undefined,
+        note: registryNote.trim() || undefined,
+      });
+      toast.success("Registry record created", {
+        description: "The backend created and linked a registry record for this request.",
+      });
+      await onRefresh();
+    } catch (error) {
+      toast.error("Registry record creation failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return (
+    <WorkspaceSection
+      id="organization"
+      title="Organization resolution"
+      description="Search backend organizations and save the canonical match for this request."
+    >
+      <div className="space-y-3 text-xs">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Candidate entered
+          </p>
+          <p className="text-foreground">{detail.organization.candidateEntered}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Current canonical organization
+          </p>
+          <p className="text-foreground">
+            {detail.organization.matched?.canonicalName ?? "Not resolved yet"}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search organizations"
+            className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+          />
+          <button
+            type="button"
+            onClick={() => void runSearch()}
+            className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent"
+          >
+            {isSearching ? "Searching..." : "Search"}
+          </button>
+        </div>
+        <textarea
+          value={registryNote}
+          onChange={(event) => setRegistryNote(event.target.value)}
+          rows={2}
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+          placeholder="Optional note if registry resolution needs to be deferred."
+        />
+        {results.length === 0 ? (
+          <div className="space-y-3">
+            <p className="text-[11px] text-muted-foreground">
+              Search results will appear here. If no canonical match exists, you can create and
+              resolve a registry record directly against the backend.
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input
+                value={registryDraft.legalName}
+                onChange={(event) =>
+                  setRegistryDraft((current) => ({ ...current, legalName: event.target.value }))
+                }
+                placeholder="Legal name"
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              />
+              <input
+                value={registryDraft.displayName}
+                onChange={(event) =>
+                  setRegistryDraft((current) => ({ ...current, displayName: event.target.value }))
+                }
+                placeholder="Display name"
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              />
+              <input
+                value={registryDraft.organizationType}
+                onChange={(event) =>
+                  setRegistryDraft((current) => ({
+                    ...current,
+                    organizationType: event.target.value,
+                  }))
+                }
+                placeholder="Organization type"
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              />
+              <input
+                value={registryDraft.country}
+                onChange={(event) =>
+                  setRegistryDraft((current) => ({ ...current, country: event.target.value }))
+                }
+                placeholder="Country code"
+                maxLength={2}
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs uppercase text-foreground"
+              />
+              <input
+                value={registryDraft.stateProvince}
+                onChange={(event) =>
+                  setRegistryDraft((current) => ({
+                    ...current,
+                    stateProvince: event.target.value,
+                  }))
+                }
+                placeholder="State / province"
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              />
+              <input
+                value={registryDraft.website}
+                onChange={(event) =>
+                  setRegistryDraft((current) => ({ ...current, website: event.target.value }))
+                }
+                placeholder="Website"
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void createRegistryRecord()}
+              className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent"
+            >
+              Create registry record
+            </button>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {results.map((result) => (
+              <li key={result.id} className="rounded-md border border-border bg-background p-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{result.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {result.organizationType} · Registry {result.registryResolutionStatus}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void resolve(result)}
+                    className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground hover:bg-accent"
+                  >
+                    Resolve
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </WorkspaceSection>
+  );
+}
+
+function ProductionVerifierSection({
+  detail,
+  adapter,
+  caseId,
+  onRefresh,
+}: {
+  detail: VerificationCaseDetail;
+  adapter: ReturnType<typeof createVerificationReviewAdapter>;
+  caseId: string;
+  onRefresh: () => Promise<void>;
+}) {
+  const contact = detail.contacts[0];
+  const [reviewNote, setReviewNote] = useState("");
+
+  async function review(reviewStatus: "approved" | "changes_requested") {
+    try {
+      await adapter.reviewContact(caseId, {
+        reviewStatus,
+        reviewNotes: reviewNote.trim() || undefined,
+      });
+      toast.success(reviewStatus === "approved" ? "Contact approved" : "Contact changes requested");
+      await onRefresh();
+    } catch (error) {
+      toast.error("Contact review failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return (
+    <WorkspaceSection
+      id="outreach"
+      title="Verifier contact & response"
+      description="Backend-backed contact review, verifier delivery state, and quality-review context."
+    >
+      <div className="space-y-3 text-xs">
+        {contact ? (
+          <div className="rounded-md border border-border bg-background p-3">
+            <p className="font-medium text-foreground">{contact.name}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {contact.role} · {contact.organization}
+            </p>
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {contact.emailMasked}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Review state: {CONTACT_STATE_LABEL[contact.state]}
+            </p>
+          </div>
+        ) : (
+          <EmptyState
+            title="No verifier contact on this request"
+            description="A backend contact must exist before the request can be approved for dispatch."
+          />
+        )}
+        <textarea
+          value={reviewNote}
+          onChange={(event) => setReviewNote(event.target.value)}
+          rows={3}
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+          placeholder="Optional review note for the contact decision."
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void review("approved")}
+            disabled={!contact}
+            className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent disabled:opacity-50"
+          >
+            Approve contact
+          </button>
+          <button
+            type="button"
+            onClick={() => void review("changes_requested")}
+            disabled={!contact}
+            className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent disabled:opacity-50"
+          >
+            Request contact changes
+          </button>
+        </div>
+        {detail.verifierResponse ? (
+          <div className="rounded-md border border-border bg-muted/40 p-3">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Verifier response summary
+            </p>
+            <p className="mt-1 text-foreground">
+              Delivery {detail.verifierResponse.deliveryStatus} · Decision{" "}
+              {detail.verifierResponse.status}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Recipient {detail.verifierResponse.maskedRecipient} · Updated{" "}
+              {formatRelativeTime(detail.verifierResponse.updatedAt)}
+            </p>
+          </div>
+        ) : null}
+      </div>
     </WorkspaceSection>
   );
 }
@@ -803,7 +1375,7 @@ function CaseStatusSidebar({
       <div className="space-y-2 text-xs">
         <StatusRow label="Status" value={<StatusBadge status={workflow.currentStatus} />} />
         <p className="text-[11px] text-muted-foreground">
-          {statusChanged
+          {statusChanged && appEnv.adminDemoMode
             ? "Session-only status change on this workspace."
             : detail.statusMeta.description}
         </p>
@@ -824,6 +1396,10 @@ function CaseStatusSidebar({
               {workflow.assignedReviewer}
             </span>
           }
+        />
+        <StatusRow
+          label="Workflow owner"
+          value={<span className="text-foreground">{detail.routingContext.workflowOwner}</span>}
         />
         <StatusRow
           label="Submitted"
@@ -1146,10 +1722,12 @@ function DecisionPreparationPanel({
     destructive?: boolean;
   }[] = [
     { action: "request_correction", label: "Request Correction", icon: Wrench },
-    { action: "approve_outreach", label: "Approve for Outreach", icon: Shield },
-    { action: "verify", label: "Verify", icon: CheckCircle2 },
+    { action: "approve_outreach", label: "Approve for Dispatch", icon: Shield },
+    { action: "verify", label: "Finalize Verified", icon: CheckCircle2 },
     { action: "reject", label: "Reject", icon: X, destructive: true },
-    { action: "unable_to_verify", label: "Unable to Verify", icon: AlertTriangle },
+    { action: "unable_to_verify", label: "Finalize Unable to Verify", icon: AlertTriangle },
+    { action: "return_to_verifier", label: "Return to Verifier", icon: MailWarning },
+    { action: "cancel", label: "Cancel", icon: X, destructive: true },
   ];
 
   const clarActions: {
@@ -1224,10 +1802,12 @@ function DecisionPreparationPanel({
           })}
         </div>
       </div>
-      <p className="mt-3 text-[11px] italic text-muted-foreground">
-        Every action is session-only. Nothing is sent, persisted, or forwarded to candidate-facing
-        surfaces.
-      </p>
+      {appEnv.adminDemoMode ? (
+        <p className="mt-3 text-[11px] italic text-muted-foreground">
+          Every action is session-only. Nothing is sent, persisted, or forwarded to candidate-facing
+          surfaces.
+        </p>
+      ) : null}
     </WorkspaceSection>
   );
 }
@@ -1404,4 +1984,8 @@ function DevRoleMenu() {
       }}
     />
   );
+}
+
+function formatBackendLabel(value: string) {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
