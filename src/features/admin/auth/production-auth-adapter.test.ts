@@ -324,6 +324,76 @@ describe("production auth adapter", () => {
     expect(storage.local.getItem(AUTH_TOKEN_KEY)).toBeNull();
   });
 
+  it("surfaces /admin/session backend failures as a recoverable auth error", async () => {
+    const storage = createMemoryStorage();
+    storage.local.setItem(
+      AUTH_TOKEN_KEY,
+      JSON.stringify({
+        accessToken: "access-4b",
+        refreshToken: "refresh-4b",
+        tokenType: "bearer",
+        expiresAt: "2026-07-27T12:00:00.000Z",
+        signedInAt: "2026-07-27T08:00:00.000Z",
+        remember: true,
+      }),
+    );
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/admin/session")) {
+        return jsonResponse({ detail: "Service unavailable" }, { status: 503 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createProductionAuthAdapter(createConfiguredEnv(), {
+      storage,
+      fetchImpl,
+      now: () => new Date("2026-07-27T10:00:00.000Z"),
+    });
+
+    await expect(adapter.restoreSession()).resolves.toEqual({
+      status: "error",
+      error: "The admin service is temporarily unavailable. Try again shortly.",
+    });
+    expect(storage.local.getItem(AUTH_TOKEN_KEY)).not.toBeNull();
+  });
+
+  it("surfaces /admin/session network failures as a recoverable auth error", async () => {
+    const storage = createMemoryStorage();
+    storage.local.setItem(
+      AUTH_TOKEN_KEY,
+      JSON.stringify({
+        accessToken: "access-4c",
+        refreshToken: "refresh-4c",
+        tokenType: "bearer",
+        expiresAt: "2026-07-27T12:00:00.000Z",
+        signedInAt: "2026-07-27T08:00:00.000Z",
+        remember: true,
+      }),
+    );
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/admin/session")) {
+        throw new TypeError("fetch failed");
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createProductionAuthAdapter(createConfiguredEnv(), {
+      storage,
+      fetchImpl,
+      now: () => new Date("2026-07-27T10:00:00.000Z"),
+    });
+
+    await expect(adapter.restoreSession()).resolves.toEqual({
+      status: "error",
+      error: "The admin service could not be reached. Check your connection and try again.",
+    });
+    expect(storage.local.getItem(AUTH_TOKEN_KEY)).not.toBeNull();
+  });
+
   it("logs out by revoking the refresh token and clearing storage", async () => {
     const storage = createMemoryStorage();
     storage.local.setItem(

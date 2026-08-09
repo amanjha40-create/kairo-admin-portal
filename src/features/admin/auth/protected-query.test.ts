@@ -6,6 +6,7 @@ describe("shouldEnableAdminProtectedQuery", () => {
     expect(shouldEnableAdminProtectedQuery("checking")).toBe(false);
     expect(shouldEnableAdminProtectedQuery("denied")).toBe(false);
     expect(shouldEnableAdminProtectedQuery("expired")).toBe(false);
+    expect(shouldEnableAdminProtectedQuery("error")).toBe(false);
     expect(shouldEnableAdminProtectedQuery("granted")).toBe(true);
   });
 });

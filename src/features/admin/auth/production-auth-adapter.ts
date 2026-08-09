@@ -51,7 +51,7 @@ type SessionLookupResult =
   | { kind: "authenticated"; account: AdminAccount }
   | { kind: "unauthorized" }
   | { kind: "forbidden" }
-  | { kind: "error" };
+  | { kind: "error"; error: string };
 
 const SESSION_ACCESS_PERMISSION = "access_admin_portal";
 
@@ -131,7 +131,11 @@ export function createProductionAuthAdapter(
     if (!result.ok) {
       if (result.status === 401) return { kind: "unauthorized" };
       if (result.status === 403) return { kind: "forbidden" };
-      return { kind: "error" };
+      return {
+        kind: "error",
+        error:
+          result.error?.message ?? "The admin session could not be verified. Try again shortly.",
+      };
     }
 
     const account = result.data?.account;
@@ -230,7 +234,10 @@ export function createProductionAuthAdapter(
         return { status: "expired" };
       }
 
-      return { status: "unauthenticated" };
+      return {
+        status: "error",
+        error: sessionResult.error,
+      };
     },
     async login(email, password, remember) {
       if (!isConfigured) {

@@ -3,10 +3,10 @@ import { Outlet, createFileRoute, useNavigate, useRouterState } from "@tanstack/
 import {
   AdminAccessChecking,
   AdminAccessDenied,
-  AdminAccessExpired,
+  AdminAccessError,
 } from "@/features/admin/auth/admin-access";
 import { AdminAuthProvider, useAdminAuth } from "@/features/admin/auth/admin-auth";
-import { buildAdminLoginRedirect } from "@/features/admin/auth/redirects";
+import { getAdminRouterRedirect, getAdminRouterView } from "@/features/admin/auth/router-state";
 import { AdminShell } from "@/features/admin/shell/admin-shell";
 
 const PUBLIC_ADMIN_ROUTES = new Set<string>(["/admin/login", "/admin/forgot-password"]);
@@ -40,36 +40,31 @@ function AdminRouter() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isPublic = isPublicAdminPath(pathname);
+  const redirect = getAdminRouterRedirect(auth.status, pathname, isPublic);
+  const view = getAdminRouterView(auth.status, isPublic);
 
   useEffect(() => {
-    if (auth.status === "checking") return;
-    if (auth.status === "authenticated" && isPublic) {
-      navigate({ to: "/admin", replace: true });
-      return;
-    }
-    if (auth.status === "unauthenticated" && !isPublic) {
-      const redirect = buildAdminLoginRedirect(pathname);
-      navigate({
-        to: "/admin/login",
-        replace: true,
-        search: { redirect },
-      });
-    }
-  }, [auth.status, isPublic, pathname, navigate]);
+    if (!redirect) return;
+    navigate({
+      to: redirect.to,
+      replace: true,
+      search: redirect.search,
+    });
+  }, [navigate, redirect]);
 
-  if (auth.status === "checking") return <AdminAccessChecking />;
-
-  // Public admin routes (login / forgot password) render standalone.
-  if (isPublic) {
-    if (auth.status === "authenticated") return <AdminAccessChecking />;
-    if (auth.status === "forbidden") return <AdminAccessDenied />;
-    return <Outlet />;
+  if (view === "checking" || view === "redirecting") return <AdminAccessChecking />;
+  if (view === "public") return <Outlet />;
+  if (view === "denied") return <AdminAccessDenied />;
+  if (view === "error") {
+    return (
+      <AdminAccessError
+        description={
+          auth.error ?? "The admin session could not be verified. Try again to continue."
+        }
+        onRetry={auth.retrySession}
+      />
+    );
   }
-
-  if (auth.status === "expired") return <AdminAccessExpired />;
-  if (auth.status === "forbidden") return <AdminAccessDenied />;
-  if (auth.status === "unauthenticated") return <AdminAccessChecking />;
-  if (auth.status !== "authenticated") return <AdminAccessDenied />;
 
   return (
     <AdminShell>

@@ -37,13 +37,21 @@ export interface StoredAuthTokens {
 export type SessionSource = "local" | "session";
 
 export type AdminAuthStatus =
-  "checking" | "authenticated" | "unauthenticated" | "expired" | "forbidden";
+  "checking" | "authenticated" | "unauthenticated" | "expired" | "forbidden" | "error";
 
-export interface AdminAuthRestoreResult {
-  status: Exclude<AdminAuthStatus, "checking">;
-  account?: AdminAccount;
-  signedInAt?: string;
-}
+export type AdminAuthRestoreResult =
+  | {
+      status: "authenticated";
+      account: AdminAccount;
+      signedInAt: string;
+    }
+  | {
+      status: "unauthenticated" | "expired" | "forbidden";
+    }
+  | {
+      status: "error";
+      error: string;
+    };
 
 export type AdminAuthActionResult =
   | {

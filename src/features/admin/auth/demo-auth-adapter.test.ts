@@ -33,7 +33,10 @@ describe("createDemoAuthAdapter", () => {
 
     const restored = await adapter.restoreSession();
     expect(restored.status).toBe("authenticated");
-    expect(restored.account?.email).toBe("aman.jha@kairo.internal");
+    if (restored.status !== "authenticated") {
+      throw new Error("Expected authenticated demo restore result");
+    }
+    expect(restored.account.email).toBe("aman.jha@kairo.internal");
   });
 
   it("rejects invalid demo credentials", async () => {

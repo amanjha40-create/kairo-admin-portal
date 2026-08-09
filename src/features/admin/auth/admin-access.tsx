@@ -14,7 +14,7 @@ import { useAdminAuth } from "./admin-auth";
 /** Dev-only role override key; ignored in production builds. */
 const DEV_ROLE_STORAGE_KEY = "kairo.admin.devRole";
 
-export type AdminAccessState = "checking" | "granted" | "denied" | "expired";
+export type AdminAccessState = "checking" | "granted" | "denied" | "expired" | "error";
 
 export interface AdminIdentity {
   id?: string;
@@ -30,6 +30,7 @@ export interface AdminIdentity {
 export interface AdminAccess {
   state: AdminAccessState;
   admin?: AdminIdentity;
+  error?: string | null;
 }
 
 /** Dev-only helpers for testing restricted roles. No-ops in production. */
@@ -70,6 +71,7 @@ export function useAdminAccess(): AdminAccess {
   }, []);
 
   if (auth.status === "checking") return { state: "checking" };
+  if (auth.status === "error") return { state: "error", error: auth.error };
   if (auth.status === "expired") return { state: "expired" };
   if (auth.status !== "authenticated" || !auth.account) return { state: "denied" };
 
@@ -155,6 +157,35 @@ export function AdminAccessExpired() {
     />
   );
 }
+
+export function AdminAccessError({
+  description,
+  onRetry,
+}: {
+  description: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-sm text-center">
+        <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-muted text-destructive">
+          <ShieldOff aria-hidden className="size-5" />
+        </div>
+        <h1 className="text-base font-semibold tracking-tight text-foreground">
+          Admin session unavailable
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-md bg-[#0B2545] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0B2545]/92 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0FA8A5] focus-visible:ring-offset-2"
+        >
+          Retry session check
+        </button>
+      </div>
+    </div>
+  );
+}
 export function AdminPortalLoading() {
   return (
     <CenteredState
@@ -173,7 +204,16 @@ export function AdminPortalLoading() {
  */
 export function AdminAccessGate({ children }: { children: ReactNode }) {
   const access = useAdminAccess();
+  const auth = useAdminAuth();
   if (access.state === "checking") return <AdminAccessChecking />;
+  if (access.state === "error") {
+    return (
+      <AdminAccessError
+        description={access.error ?? "The admin session could not be verified. Try again."}
+        onRetry={auth.retrySession}
+      />
+    );
+  }
   if (access.state === "denied") return <AdminAccessDenied />;
   if (access.state === "expired") return <AdminAccessExpired />;
   return <>{children}</>;
