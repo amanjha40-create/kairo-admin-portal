@@ -27,6 +27,7 @@ import {
   SLA_LABEL,
   VERIFICATION_TYPE_LABEL,
   createVerificationReviewAdapter,
+  verificationQueuePageQueryOptions,
   verificationQueueQueryOptions,
   type Assignee,
   type AttentionFlag,
@@ -179,15 +180,7 @@ function VerificationsPage() {
     : "all-active";
   const navigate = useNavigate({ from: Route.fullPath });
   const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
-  const queueQuery = useQuery(verificationQueueQueryOptions());
   const isDemoMode = adapter.mode === "demo";
-
-  // Local mock state: assignment overrides + activity trail. In-memory only.
-  const [assignmentOverrides, setAssignmentOverrides] = useState<Record<string, Assignee>>({});
-  const [priorityOverrides, setPriorityOverrides] = useState<Record<string, Priority>>({});
-  const [localActivity, setLocalActivity] = useState<
-    { caseId: string; message: string; at: string }[]
-  >([]);
 
   // Filters
   const [query, setQuery] = useState("");
@@ -205,10 +198,42 @@ function VerificationsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const activeQueueQuery = useQuery(verificationQueueQueryOptions());
+  const usesScopedBackendQueue = !isDemoMode && view !== "all-active";
+  const scopedQueueQuery = useQuery({
+    ...verificationQueuePageQueryOptions(
+      {
+        statuses: VIEW_STATUSES[view] ?? undefined,
+        search: query.trim() || undefined,
+        page,
+        pageSize,
+      },
+      appEnv,
+    ),
+    enabled: usesScopedBackendQueue,
+  });
+  const completedCountQuery = useQuery({
+    ...verificationQueuePageQueryOptions(
+      {
+        statuses: COMPLETED_STATUSES,
+        page: 1,
+        pageSize: 1,
+      },
+      appEnv,
+    ),
+    enabled: !isDemoMode,
+  });
+
+  // Local mock state: assignment overrides + activity trail. In-memory only.
+  const [assignmentOverrides, setAssignmentOverrides] = useState<Record<string, Assignee>>({});
+  const [priorityOverrides, setPriorityOverrides] = useState<Record<string, Priority>>({});
+  const [localActivity, setLocalActivity] = useState<
+    { caseId: string; message: string; at: string }[]
+  >([]);
 
   // Apply overrides to base data.
-  const cases = useMemo<VerificationCase[]>(() => {
-    const baseCases = queueQuery.data ?? [];
+  const activeCases = useMemo<VerificationCase[]>(() => {
+    const baseCases = activeQueueQuery.data ?? [];
     if (!isDemoMode) {
       return baseCases;
     }
@@ -218,18 +243,31 @@ function VerificationsPage() {
       assignedReviewer: assignmentOverrides[c.id] ?? c.assignedReviewer,
       priority: priorityOverrides[c.id] ?? c.priority,
     }));
-  }, [assignmentOverrides, isDemoMode, priorityOverrides, queueQuery.data]);
+  }, [activeQueueQuery.data, assignmentOverrides, isDemoMode, priorityOverrides]);
 
-  // Counts per view (respect assignment/priority overrides).
+  const visibleCases = useMemo<VerificationCase[]>(() => {
+    if (usesScopedBackendQueue) {
+      return scopedQueueQuery.data?.items ?? [];
+    }
+
+    return activeCases;
+  }, [activeCases, scopedQueueQuery.data?.items, usesScopedBackendQueue]);
+
+  // Counts per view (respect assignment/priority overrides for Demo Mode / active views).
   const viewCounts = useMemo(() => {
     const counts: Record<ViewId, number> = {} as Record<ViewId, number>;
-    for (const v of VALID_VIEWS) counts[v] = cases.filter((c) => viewMatches(v, c.status)).length;
+    for (const v of VALID_VIEWS) {
+      counts[v] = activeCases.filter((c) => viewMatches(v, c.status)).length;
+    }
+    if (!isDemoMode) {
+      counts.completed = completedCountQuery.data?.total ?? counts.completed;
+    }
     return counts;
-  }, [cases]);
+  }, [activeCases, completedCountQuery.data?.total, isDemoMode]);
 
   // Header summary uses all active cases (regardless of selected view).
   const headerSummary = useMemo(() => {
-    const active = cases.filter((c) => !COMPLETED_STATUSES.includes(c.status));
+    const active = activeCases.filter((c) => !COMPLETED_STATUSES.includes(c.status));
     const urgent = active.filter((c) => c.priority === "urgent").length;
     const unassigned = active.filter((c) => c.assignedReviewer === "Unassigned").length;
     const oldest = active.reduce<VerificationCase | null>(
@@ -237,12 +275,12 @@ function VerificationsPage() {
       null,
     );
     return { requiringAction: active.length, urgent, unassigned, oldest };
-  }, [cases]);
+  }, [activeCases]);
 
   // Filter pipeline.
   const filtered = useMemo(() => {
-    let list = cases.filter((c) => viewMatches(view, c.status));
-    if (query.trim()) {
+    let list = visibleCases.filter((c) => viewMatches(view, c.status));
+    if (query.trim() && !usesScopedBackendQueue) {
       const q = query.trim().toLowerCase();
       list = list.filter(
         (c) =>
@@ -273,7 +311,7 @@ function VerificationsPage() {
     }
     return sortCases(list, sortKey);
   }, [
-    cases,
+    visibleCases,
     view,
     query,
     fType,
@@ -284,9 +322,10 @@ function VerificationsPage() {
     fFlag,
     fSubmittedWindow,
     sortKey,
+    usesScopedBackendQueue,
   ]);
 
-  const totalActiveFilters =
+  const clientOnlyFilterCount =
     fType.size +
     fPriority.size +
     fReviewer.size +
@@ -295,17 +334,22 @@ function VerificationsPage() {
     fFlag.size +
     fSubmittedWindow.size;
 
-  // Reset page whenever filters/view change and the current page overshoots.
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalItems =
+    usesScopedBackendQueue && clientOnlyFilterCount === 0
+      ? (scopedQueueQuery.data?.total ?? filtered.length)
+      : filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const paginated = usesScopedBackendQueue
+    ? filtered
+    : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const previewCase = useMemo(
-    () => (previewId ? (cases.find((c) => c.id === previewId) ?? null) : null),
-    [previewId, cases],
+    () => (previewId ? (visibleCases.find((c) => c.id === previewId) ?? null) : null),
+    [previewId, visibleCases],
   );
 
-  if (queueQuery.isLoading) {
+  if (activeQueueQuery.isLoading || (usesScopedBackendQueue && scopedQueueQuery.isLoading)) {
     return (
       <div className="mx-auto max-w-[1400px]">
         <LoadingSkeleton rows={10} />
@@ -313,15 +357,25 @@ function VerificationsPage() {
     );
   }
 
-  if (queueQuery.error) {
+  const queueError =
+    scopedQueueQuery.error && usesScopedBackendQueue
+      ? scopedQueueQuery.error
+      : activeQueueQuery.error;
+
+  if (queueError) {
     return (
       <div className="mx-auto max-w-2xl">
         <ErrorState
           title="Verification queue failed to load"
-          description={queueQuery.error.message}
+          description={queueError.message}
           action={
             <button
-              onClick={() => void queueQuery.refetch()}
+              onClick={() => {
+                void activeQueueQuery.refetch();
+                if (usesScopedBackendQueue) {
+                  void scopedQueueQuery.refetch();
+                }
+              }}
               className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
             >
               Try again
@@ -375,7 +429,10 @@ function VerificationsPage() {
   async function bulkPriority(p: Priority) {
     if (!isDemoMode) {
       await Promise.all([...selectedIds].map((id) => adapter.changePriority(id, p)));
-      await queueQuery.refetch();
+      await activeQueueQuery.refetch();
+      if (usesScopedBackendQueue) {
+        await scopedQueueQuery.refetch();
+      }
       setSelectedIds(new Set());
       toast(`Priority set to ${p}`, {
         description: "Production queue refreshed from the backend.",
@@ -679,9 +736,9 @@ function VerificationsPage() {
           >
             <SlidersHorizontal aria-hidden className="size-3.5" />
             Filters
-            {totalActiveFilters > 0 ? (
+            {clientOnlyFilterCount > 0 ? (
               <span className="rounded bg-foreground px-1.5 text-[10px] font-semibold text-background">
-                {totalActiveFilters}
+                {clientOnlyFilterCount}
               </span>
             ) : null}
           </button>
@@ -694,7 +751,7 @@ function VerificationsPage() {
             !mobileFiltersOpen && "hidden md:flex",
           )}
         >
-          <FilterBar activeCount={totalActiveFilters} onClear={clearAllFilters}>
+          <FilterBar activeCount={clientOnlyFilterCount} onClear={clearAllFilters}>
             <FilterMultiSelect
               label="Type"
               options={(Object.keys(VERIFICATION_TYPE_LABEL) as VerificationType[]).map((t) => ({
@@ -897,7 +954,7 @@ function VerificationsPage() {
           empty={
             <EmptyStateFor
               query={query}
-              activeFilters={totalActiveFilters}
+              activeFilters={clientOnlyFilterCount}
               viewLabel={VIEW_LABEL[view]}
               onClearFilters={clearAllFilters}
               onClearSearch={() => setQuery("")}
@@ -907,7 +964,7 @@ function VerificationsPage() {
         <TablePagination
           page={safePage}
           pageSize={pageSize}
-          total={filtered.length}
+          total={totalItems}
           onPageChange={setPage}
           onPageSizeChange={(s) => {
             setPageSize(s);
@@ -921,7 +978,7 @@ function VerificationsPage() {
         {paginated.length === 0 ? (
           <EmptyStateFor
             query={query}
-            activeFilters={totalActiveFilters}
+            activeFilters={clientOnlyFilterCount}
             viewLabel={VIEW_LABEL[view]}
             onClearFilters={clearAllFilters}
             onClearSearch={() => setQuery("")}
@@ -975,7 +1032,7 @@ function VerificationsPage() {
           <TablePagination
             page={safePage}
             pageSize={pageSize}
-            total={filtered.length}
+            total={totalItems}
             onPageChange={setPage}
             onPageSizeChange={(s) => {
               setPageSize(s);

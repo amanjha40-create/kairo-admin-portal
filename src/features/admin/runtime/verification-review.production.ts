@@ -766,6 +766,20 @@ interface BackendWorkflowEnvelope {
   review: BackendAdminReviewCycleResponse;
 }
 
+export interface VerificationQueueFilters {
+  statuses?: VerificationStatus[];
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface VerificationQueuePage {
+  items: VerificationCase[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface VerificationReviewAdapter {
   mode: "demo" | "production";
   listCases: () => Promise<VerificationCase[]>;
@@ -826,9 +840,54 @@ export interface CreateVerificationReviewAdapterOptions {
 export const verificationReviewKeys = {
   all: () => ["admin", "verification-review"] as const,
   list: (mode: "demo" | "production") => [...verificationReviewKeys.all(), "list", mode] as const,
+  page: (mode: "demo" | "production", filters: VerificationQueueFilters) =>
+    [...verificationReviewKeys.all(), "page", mode, filters] as const,
   detail: (mode: "demo" | "production", caseId: string) =>
     [...verificationReviewKeys.all(), "detail", mode, caseId] as const,
 };
+
+function normalizeQueueFilters(filters: VerificationQueueFilters = {}) {
+  return {
+    page: filters.page && filters.page > 0 ? filters.page : 1,
+    pageSize: filters.pageSize && filters.pageSize > 0 ? Math.min(filters.pageSize, 100) : 100,
+    search: filters.search?.trim() || undefined,
+    status:
+      filters.statuses && filters.statuses.length > 0 ? filters.statuses.join(",") : undefined,
+  };
+}
+
+function buildQueuePath(filters: VerificationQueueFilters = {}) {
+  const normalized = normalizeQueueFilters(filters);
+  const params = new URLSearchParams({
+    page: String(normalized.page),
+    page_size: String(normalized.pageSize),
+  });
+
+  if (normalized.search) {
+    params.set("search", normalized.search);
+  }
+
+  if (normalized.status) {
+    params.set("status", normalized.status);
+  }
+
+  return `/api/v1/admin/verification-requests/queue?${params.toString()}`;
+}
+
+async function fetchVerificationQueuePage(
+  api: ReturnType<typeof createAdminAuthenticatedApi>,
+  filters: VerificationQueueFilters = {},
+): Promise<VerificationQueuePage> {
+  const normalized = normalizeQueueFilters(filters);
+  const data = await api.request<BackendAdminReviewQueueResponse>(buildQueuePath(filters));
+
+  return {
+    items: data.items.map(mapQueueItemToCase),
+    total: data.total ?? data.items.length,
+    page: data.page ?? normalized.page,
+    pageSize: data.page_size ?? normalized.pageSize,
+  };
+}
 
 export function createVerificationReviewAdapter(
   config: AppEnvConfig = appEnv,
@@ -839,10 +898,7 @@ export function createVerificationReviewAdapter(
   return {
     mode: "production",
     async listCases() {
-      const data = await api.request<BackendAdminReviewQueueResponse>(
-        "/api/v1/admin/verification-requests/queue?page=1&page_size=100",
-      );
-      return data.items.map(mapQueueItemToCase);
+      return (await fetchVerificationQueuePage(api)).items;
     },
     async getCaseDetail(caseId) {
       const detail = await api.request<BackendAdminReviewDetailResponse>(
@@ -1047,6 +1103,18 @@ export function verificationQueueQueryOptions(
   return queryOptions({
     queryKey: verificationReviewKeys.list(adapter.mode),
     queryFn: () => adapter.listCases(),
+  });
+}
+
+export function verificationQueuePageQueryOptions(
+  filters: VerificationQueueFilters = {},
+  config: AppEnvConfig = appEnv,
+  options: CreateVerificationReviewAdapterOptions = {},
+) {
+  const api = createAdminAuthenticatedApi(config, options.production);
+  return queryOptions({
+    queryKey: verificationReviewKeys.page("production", filters),
+    queryFn: () => fetchVerificationQueuePage(api, filters),
   });
 }
 

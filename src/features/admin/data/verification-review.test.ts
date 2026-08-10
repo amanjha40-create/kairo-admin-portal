@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolveAppEnvConfig } from "@/config/env";
 import { AUTH_TOKEN_KEY, type SessionStorageBag } from "@/features/admin/auth/session-storage";
-import { createVerificationReviewAdapter } from "./verification-review";
+import {
+  createVerificationReviewAdapter,
+  verificationQueuePageQueryOptions,
+} from "./verification-review";
 
 function createMemoryStore() {
   const map = new Map<string, string>();
@@ -111,6 +114,61 @@ function queuePayload() {
   };
 }
 
+function terminalQueuePayload() {
+  return {
+    items: [
+      {
+        ...queuePayload().items[0],
+        public_id: "db950c5b-397a-4415-b1e9-55a7dc8f0dd2",
+        request_type: "employment",
+        status: "verified",
+        employment_id: "aaaaaaa1-1111-1111-1111-111111111111",
+        education_id: null,
+        target_organization_name: "Disposable QA Employer",
+        employment_claim: {
+          employer_name: "Disposable QA Employer",
+          role: "Analyst",
+        },
+        education_claim: null,
+      },
+      {
+        ...queuePayload().items[0],
+        public_id: "792989eb-d291-4f31-bb52-46ec27942158",
+        request_type: "education",
+        status: "verified",
+        employment_id: null,
+        education_id: "0a9a10e2-51fd-4f45-9346-7e90c615eb0d",
+        target_organization_name: "Kairo Durability Test University",
+        employment_claim: null,
+        education_claim: {
+          institution_name: "Kairo Durability Test University",
+          degree: "Bachelor of Business Administration",
+        },
+      },
+      {
+        ...queuePayload().items[0],
+        public_id: "55555555-5555-5555-5555-555555555555",
+        request_type: "employment",
+        status: "rejected",
+        employment_id: "bbbbbbb1-1111-1111-1111-111111111111",
+        education_id: null,
+        target_organization_name: "Rejected Employer",
+        employment_claim: {
+          employer_name: "Rejected Employer",
+          role: "Associate",
+        },
+        education_claim: null,
+      },
+    ],
+    total: 3,
+    page: 1,
+    page_size: 100,
+    total_pages: 1,
+    offset: 0,
+    limit: 100,
+  };
+}
+
 function detailPayload() {
   return {
     request: queuePayload().items[0],
@@ -200,9 +258,11 @@ describe("verification review adapter", () => {
   it("loads the backend verification queue successfully", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);
+    const requests: string[] = [];
 
     const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
       const url = String(input);
+      requests.push(url);
       if (url.includes("/api/v1/admin/verification-requests/queue")) {
         return jsonResponse(queuePayload());
       }
@@ -230,6 +290,128 @@ describe("verification review adapter", () => {
       verifierContactLabel: "hr•••@kairo.example",
       workflowOwner: "Admin review",
     });
+    expect(requests).toContain(
+      "https://api.kairoid.com/api/v1/admin/verification-requests/queue?page=1&page_size=100",
+    );
+    expect(requests.some((url) => url.includes("status="))).toBe(false);
+  });
+
+  it("requests terminal statuses explicitly for the completed queue", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const requests: string[] = [];
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.includes("/api/v1/admin/verification-requests/queue")) {
+        return jsonResponse(terminalQueuePayload());
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const query = verificationQueuePageQueryOptions(
+      {
+        statuses: ["verified", "rejected", "unable_to_verify", "cancelled", "expired"],
+        page: 1,
+        pageSize: 100,
+      },
+      createProductionConfig(),
+      {
+        production: {
+          storage,
+          fetchImpl,
+          now: () => new Date("2026-07-28T12:00:00.000Z"),
+        },
+      },
+    );
+
+    const page = await query.queryFn();
+
+    expect(requests).toContain(
+      "https://api.kairoid.com/api/v1/admin/verification-requests/queue?page=1&page_size=100&status=verified%2Crejected%2Cunable_to_verify%2Ccancelled%2Cexpired",
+    );
+    expect(page.total).toBe(3);
+    expect(page.items).toHaveLength(3);
+    expect(page.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "db950c5b-397a-4415-b1e9-55a7dc8f0dd2",
+          verificationType: "employment",
+          status: "verified",
+        }),
+        expect.objectContaining({
+          id: "792989eb-d291-4f31-bb52-46ec27942158",
+          verificationType: "education",
+          status: "verified",
+        }),
+        expect.objectContaining({
+          id: "55555555-5555-5555-5555-555555555555",
+          verificationType: "employment",
+          status: "rejected",
+        }),
+      ]),
+    );
+    expect(page.items.some((item) => item.status === "pending_admin_review")).toBe(false);
+  });
+
+  it("preserves search and pagination when requesting completed queue pages", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const requests: string[] = [];
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.includes("/api/v1/admin/verification-requests/queue")) {
+        return jsonResponse({
+          ...terminalQueuePayload(),
+          items: [terminalQueuePayload().items[1]],
+          total: 3,
+          page: 2,
+          page_size: 25,
+          total_pages: 1,
+          offset: 25,
+          limit: 25,
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const query = verificationQueuePageQueryOptions(
+      {
+        statuses: ["verified", "rejected", "unable_to_verify", "cancelled", "expired"],
+        search: "792989eb",
+        page: 2,
+        pageSize: 25,
+      },
+      createProductionConfig(),
+      {
+        production: {
+          storage,
+          fetchImpl,
+          now: () => new Date("2026-07-28T12:00:00.000Z"),
+        },
+      },
+    );
+
+    const page = await query.queryFn();
+
+    expect(requests).toContain(
+      "https://api.kairoid.com/api/v1/admin/verification-requests/queue?page=2&page_size=25&search=792989eb&status=verified%2Crejected%2Cunable_to_verify%2Ccancelled%2Cexpired",
+    );
+    expect(page.total).toBe(3);
+    expect(page.page).toBe(2);
+    expect(page.pageSize).toBe(25);
+    expect(page.items).toEqual([
+      expect.objectContaining({
+        id: "792989eb-d291-4f31-bb52-46ec27942158",
+        verificationType: "education",
+        status: "verified",
+      }),
+    ]);
   });
 
   it("maps an empty backend queue without falling back to mock data", async () => {
