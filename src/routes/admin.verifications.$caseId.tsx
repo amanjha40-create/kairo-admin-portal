@@ -55,6 +55,7 @@ import {
   type AttentionFlagRecord,
   type OrganizationSearchResult,
   PRIORITY_LABEL,
+  getCandidateProfileRoute,
   verificationCaseDetailQueryOptions,
   verificationReviewKeys,
 } from "@/features/admin/runtime/verification-review";
@@ -1599,6 +1600,7 @@ function AttentionFlagsPanel({
 
 function CandidateSummaryPanel({ detail }: { detail: VerificationCaseDetail }) {
   const c = detail.candidate;
+  const candidateProfileRoute = getCandidateProfileRoute(c.candidateId);
   return (
     <WorkspaceSection id="candidate" title="Candidate">
       <div className="space-y-2 text-xs">
@@ -1649,13 +1651,16 @@ function CandidateSummaryPanel({ detail }: { detail: VerificationCaseDetail }) {
             </ul>
           </div>
         ) : null}
-        <Link
-          to="/admin/users"
-          className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-        >
-          Open candidate profile
-          <ExternalLink aria-hidden className="size-3" />
-        </Link>
+        {candidateProfileRoute ? (
+          <Link
+            to={candidateProfileRoute.to}
+            params={candidateProfileRoute.params}
+            className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            Open candidate profile
+            <ExternalLink aria-hidden className="size-3" />
+          </Link>
+        ) : null}
       </div>
     </WorkspaceSection>
   );

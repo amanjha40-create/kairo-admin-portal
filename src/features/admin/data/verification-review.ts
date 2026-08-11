@@ -50,7 +50,7 @@ export interface OrganizationSearchResult {
 export interface VerificationCase {
   id: string;
   reference: string;
-  candidateId: string;
+  candidateId: string | null;
   candidateName: string;
   candidateEmail: string;
   candidateAvatarInitials: string;
@@ -423,7 +423,7 @@ export interface AttentionFlagRecord {
 }
 
 export interface CandidateCaseSummary {
-  candidateId: string;
+  candidateId: string | null;
   name: string;
   email: string;
   phoneMasked: string;
@@ -513,6 +513,7 @@ interface BackendReviewerSummary {
 
 interface BackendVerificationRequestResponse {
   public_id: string;
+  candidate_user_public_id?: string | null;
   employment_id?: string | null;
   education_id?: string | null;
   origin_type?: string | null;
@@ -1211,6 +1212,19 @@ export function verificationCaseDetailQueryOptions(
   });
 }
 
+export function getCandidateProfileRoute(candidateUserPublicId: string | null | undefined): {
+  to: "/admin/users/$userId";
+  params: { userId: string };
+} | null {
+  if (!candidateUserPublicId) {
+    return null;
+  }
+  return {
+    to: "/admin/users/$userId",
+    params: { userId: candidateUserPublicId },
+  };
+}
+
 async function loadDemoCases(): Promise<VerificationCase[]> {
   const mod = await import("@/features/admin/mock-data/verification-cases");
   return mod.mockVerificationCases.map((item) => {
@@ -1274,7 +1288,7 @@ function mapQueueItemToCase(item: BackendVerificationRequestResponse): Verificat
   return {
     id: item.public_id,
     reference: buildCaseReference(item.public_id),
-    candidateId: item.subject_email.toLowerCase(),
+    candidateId: item.candidate_user_public_id ?? null,
     candidateName: item.subject_name,
     candidateEmail: item.subject_email,
     candidateAvatarInitials: initialsFor(item.subject_name, item.subject_email),

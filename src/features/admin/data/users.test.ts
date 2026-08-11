@@ -257,9 +257,12 @@ describe("admin users data adapter", () => {
             public_id: "22222222-2222-2222-2222-222222222222",
             request_type: "employment",
             status: "verified",
+            employment_public_id: "44444444-4444-4444-4444-444444444444",
+            education_public_id: null,
             organization_name: "Acme Corp",
             linked_record_label: "Operator at Acme Corp",
             created_at: "2026-08-11T08:30:00.000Z",
+            submitted_at: "2026-08-11T08:35:00.000Z",
             updated_at: "2026-08-11T08:45:00.000Z",
           },
         ],
@@ -301,6 +304,8 @@ describe("admin users data adapter", () => {
       verifications: [
         expect.objectContaining({
           id: "22222222-2222-2222-2222-222222222222",
+          employmentId: "44444444-4444-4444-4444-444444444444",
+          submittedAt: "2026-08-11T08:35:00.000Z",
         }),
       ],
     });

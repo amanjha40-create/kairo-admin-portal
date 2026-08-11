@@ -4,6 +4,7 @@ import { resolveAppEnvConfig } from "@/config/env";
 import { AUTH_TOKEN_KEY, type SessionStorageBag } from "@/features/admin/auth/session-storage";
 import {
   createVerificationReviewAdapter,
+  getCandidateProfileRoute,
   verificationQueuePageQueryOptions,
 } from "./verification-review";
 
@@ -77,10 +78,11 @@ function queuePayload() {
     items: [
       {
         public_id: "11111111-1111-1111-1111-111111111111",
+        candidate_user_public_id: "99999999-9999-9999-9999-999999999999",
         employment_id: "aaaaaaa1-1111-1111-1111-111111111111",
         organization_public_id: "22222222-2222-2222-2222-222222222222",
         subject_name: "Aman Jha",
-        subject_email: "aman@example.com",
+        subject_email: "Aman+Changed@Example.com",
         target_organization_name: "Kairo",
         target_organization_email: "hr@kairo.example",
         request_type: "employment",
@@ -283,6 +285,7 @@ describe("verification review adapter", () => {
 
     expect(cases).toHaveLength(1);
     expect(cases[0]).toMatchObject({
+      candidateId: "99999999-9999-9999-9999-999999999999",
       candidateName: "Aman Jha",
       organizationName: "Kairo",
       status: "pending_admin_review",
@@ -478,6 +481,9 @@ describe("verification review adapter", () => {
     const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
 
     expect(detail?.summary.reference).toContain("KVR-");
+    expect(detail?.summary.candidateId).toBe("99999999-9999-9999-9999-999999999999");
+    expect(detail?.candidate.candidateId).toBe("99999999-9999-9999-9999-999999999999");
+    expect(detail?.candidate.candidateId).not.toBe("aman+changed@example.com");
     expect(detail?.evidence[0]).toMatchObject({
       filename: "employment-letter.pdf",
       reviewStatus: "reviewed",
@@ -503,6 +509,14 @@ describe("verification review adapter", () => {
       "https://api.kairoid.com/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111/timeline?page=1&page_size=100",
     );
     expect(requests.some((url) => url.includes("/timeline?page=1&page_size=250"))).toBe(false);
+  });
+
+  it("builds the exact candidate profile route from the canonical public id", () => {
+    expect(getCandidateProfileRoute("99999999-9999-9999-9999-999999999999")).toEqual({
+      to: "/admin/users/$userId",
+      params: { userId: "99999999-9999-9999-9999-999999999999" },
+    });
+    expect(getCandidateProfileRoute(null)).toBeNull();
   });
 
   it("uses authoritative detail state for organization resolution and reviewer assignment", async () => {

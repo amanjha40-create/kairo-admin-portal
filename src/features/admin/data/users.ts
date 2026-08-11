@@ -102,10 +102,13 @@ export interface AdminUserVerificationItem {
   id: string;
   requestType: string;
   status: string;
+  employmentId?: string | null;
+  educationId?: string | null;
   organizationId?: string | null;
   organizationName?: string | null;
   linkedRecordLabel: string;
   createdAt: string;
+  submittedAt?: string | null;
   updatedAt: string;
 }
 
@@ -231,10 +234,13 @@ interface BackendUserDetailRecord {
     public_id: string;
     request_type: string;
     status: string;
+    employment_public_id?: string | null;
+    education_public_id?: string | null;
     organization_public_id?: string | null;
     organization_name?: string | null;
     linked_record_label: string;
     created_at: string;
+    submitted_at?: string | null;
     updated_at: string;
   }>;
   passport?: {
@@ -461,10 +467,13 @@ function mapBackendDetail(record: BackendUserDetailRecord): AdminUserDetail {
       id: item.public_id,
       requestType: item.request_type,
       status: item.status,
+      employmentId: item.employment_public_id ?? null,
+      educationId: item.education_public_id ?? null,
       organizationId: item.organization_public_id ?? null,
       organizationName: item.organization_name ?? null,
       linkedRecordLabel: item.linked_record_label,
       createdAt: item.created_at,
+      submittedAt: item.submitted_at ?? null,
       updatedAt: item.updated_at,
     })),
     passport: {
