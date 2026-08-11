@@ -1,1 +1,1 @@
-export * from "@/features/admin/data/users";
+export * from "@/features/admin/mock-data/users";
