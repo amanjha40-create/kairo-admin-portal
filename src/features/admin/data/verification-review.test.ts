@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { resolveAppEnvConfig } from "@/config/env";
 import { AUTH_TOKEN_KEY, type SessionStorageBag } from "@/features/admin/auth/session-storage";
@@ -327,7 +328,7 @@ describe("verification review adapter", () => {
       },
     );
 
-    const page = await query.queryFn();
+    const page = await new QueryClient().fetchQuery(query);
 
     expect(requests).toContain(
       "https://api.kairoid.com/api/v1/admin/verification-requests/queue?page=1&page_size=100&status=verified%2Crejected%2Cunable_to_verify%2Ccancelled%2Cexpired",
@@ -397,7 +398,7 @@ describe("verification review adapter", () => {
       },
     );
 
-    const page = await query.queryFn();
+    const page = await new QueryClient().fetchQuery(query);
 
     expect(requests).toContain(
       "https://api.kairoid.com/api/v1/admin/verification-requests/queue?page=2&page_size=25&search=792989eb&status=verified%2Crejected%2Cunable_to_verify%2Ccancelled%2Cexpired",
