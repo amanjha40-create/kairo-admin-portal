@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  Bell,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
@@ -29,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { AdminEnvironmentNotice } from "../components/admin-environment-notice";
+import { AdminNotificationBell } from "../components/admin-notification-bell";
 import { useAdminAccess } from "../auth/admin-access";
 import { useAdminAuth } from "../auth/admin-auth";
 import { KairoLogo } from "@/features/branding/kairo-logo";
@@ -188,16 +188,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             />
           </div>
 
-          <button
-            className="relative rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Notifications"
-          >
-            <Bell aria-hidden className="size-4" />
-            <span
-              className="absolute right-1 top-1 size-1.5 rounded-full bg-rose-500"
-              aria-hidden
-            />
-          </button>
+          <AdminNotificationBell />
 
           <DropdownMenu>
             <DropdownMenuTrigger

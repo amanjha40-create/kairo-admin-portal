@@ -1,90 +1,30 @@
 import { queryOptions } from "@tanstack/react-query";
 import { appEnv, type AppEnvConfig } from "@/config/env";
-import { DEMO_MODE_BUILD_ENABLED } from "@/features/admin/controlled-pilot";
 import type { ProductionAdminApiOptions } from "./admin-api";
 import { createAdminAuthenticatedApi } from "./admin-api";
-import type {
-  Communication,
-  CommunicationChannel,
-  CommunicationStatus,
-  CommunicationType,
-  DeliveryEvent,
-  FollowUpRecord,
-  InternalNoteSeed,
-  TemplateDefinition,
-  TemplateKey,
-} from "@/features/admin/mock-data/communications";
 
-type DemoCommunicationsModule = typeof import("@/features/admin/mock-data/communications");
+export const COMMUNICATION_CHANNEL_LABEL = {
+  email: "Email",
+} as const satisfies Record<string, string>;
 
-const DEMO_COMMUNICATIONS_ENABLED =
-  DEMO_MODE_BUILD_ENABLED ||
-  (import.meta.env.MODE === "test" && import.meta.env.VITE_ADMIN_DEMO_MODE === "true");
+export const COMMUNICATION_STATUS_LABEL = {
+  queued: "Queued",
+  sent: "Sent",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  suppressed: "Suppressed",
+  skipped: "Skipped",
+} as const satisfies Record<string, string>;
 
-const demoCommunicationsModule: DemoCommunicationsModule | null = DEMO_COMMUNICATIONS_ENABLED
-  ? await import("@/features/admin/mock-data/communications")
-  : null;
-
-export const COMMUNICATION_CHANNEL_LABEL =
-  demoCommunicationsModule?.COMMUNICATION_CHANNEL_LABEL ??
-  ({
-    email: "Email",
-  } as Record<string, string>);
-export const COMMUNICATION_STATUS_LABEL =
-  demoCommunicationsModule?.COMMUNICATION_STATUS_LABEL ??
-  ({
-    queued: "Queued",
-    sent: "Sent",
-    failed: "Failed",
-    cancelled: "Cancelled",
-    suppressed: "Suppressed",
-    skipped: "Skipped",
-  } as Record<string, string>);
-export const COMMUNICATION_TYPE_LABEL =
-  demoCommunicationsModule?.COMMUNICATION_TYPE_LABEL ??
-  ({
-    signup_otp: "Signup OTP",
-    password_reset: "Password reset",
-    employer_verification: "Verification outreach",
-    trust_invitation_created: "Trust invitation",
-    verification_completed: "Verification completed",
-    admin_verification_review_required: "Admin review required",
-    admin_verification_quality_review_required: "Admin quality review required",
-  } as Record<string, string>);
-export const DELIVERY_EVENT_LABEL =
-  demoCommunicationsModule?.DELIVERY_EVENT_LABEL ??
-  ({
-    queued: "Queued",
-    sent: "Sent",
-    delivered: "Delivered",
-    failed: "Failed",
-    prepared: "Prepared",
-    reminder_sent: "Reminder sent",
-    notification_dispatch: "Notification dispatch",
-    notification_delivered: "Notification delivered",
-    notification_failed: "Notification failed",
-  } as Record<string, string>);
-export const FAILURE_REASON_LABEL =
-  demoCommunicationsModule?.FAILURE_REASON_LABEL ?? ({} as Record<string, string>);
-export const FAILURE_RECOMMENDED_ACTION =
-  demoCommunicationsModule?.FAILURE_RECOMMENDED_ACTION ?? ({} as Record<string, string>);
-export const isFailedStatus =
-  demoCommunicationsModule?.isFailedStatus ??
-  ((value: string) => ["failed", "bounced", "complaint", "suppressed"].includes(value));
-export const mockCommunications = demoCommunicationsModule?.mockCommunications ?? [];
-export const mockTemplates = demoCommunicationsModule?.mockTemplates ?? [];
-
-export type {
-  Communication,
-  CommunicationChannel,
-  CommunicationStatus,
-  CommunicationType,
-  DeliveryEvent,
-  FollowUpRecord,
-  InternalNoteSeed,
-  TemplateDefinition,
-  TemplateKey,
-};
+export const COMMUNICATION_TYPE_LABEL = {
+  signup_otp: "Signup OTP",
+  password_reset: "Password reset",
+  employer_verification: "Verification outreach",
+  trust_invitation_created: "Trust invitation",
+  verification_completed: "Verification completed",
+  admin_verification_review_required: "Admin review required",
+  admin_verification_quality_review_required: "Admin quality review required",
+} as const satisfies Record<string, string>;
 
 export interface AdminCommunicationListParams {
   query?: string;
@@ -217,12 +157,9 @@ interface BackendCommunicationDetailRecord extends BackendCommunicationRecord {
   delivery_timeline?: BackendTimelineEvent[];
 }
 
-const DEMO_PROVIDER = "demo";
-
 interface AdminCommunicationsAdapter {
-  mode: "demo" | "production";
   list: (params?: AdminCommunicationListParams) => Promise<AdminCommunicationListResult>;
-  detail: (id: string) => Promise<AdminCommunicationDetail | undefined>;
+  detail: (id: string) => Promise<AdminCommunicationDetail>;
 }
 
 export interface CreateAdminCommunicationsAdapterOptions {
@@ -234,11 +171,10 @@ const DEFAULT_PAGE_SIZE = 20;
 
 export const communicationKeys = {
   all: () => ["admin", "communications"] as const,
-  list: (mode: "demo" | "production", params: Required<AdminCommunicationListParams>) =>
+  list: (params: Required<AdminCommunicationListParams>) =>
     [
       ...communicationKeys.all(),
       "list",
-      mode,
       params.query,
       params.status,
       params.channel,
@@ -248,77 +184,30 @@ export const communicationKeys = {
       params.createdAfter,
       params.createdBefore,
     ] as const,
-  detail: (mode: "demo" | "production", id: string) =>
-    [...communicationKeys.all(), "detail", mode, id] as const,
-  metrics: () => [...communicationKeys.all(), "metrics"] as const,
+  detail: (id: string) => [...communicationKeys.all(), "detail", id] as const,
 };
 
-const EMPTY_COMMUNICATION_METRICS = {
-  total: 0,
-  pending: 0,
-  delivered: 0,
-  awaitingResponse: 0,
-  failed: 0,
-  bounced: 0,
-  complaints: 0,
-  followUpsDueToday: 0,
-  failedTotal: 0,
-};
-
-export function listCommunications(): Communication[] {
-  return mockCommunications;
-}
-
-export function getCommunicationById(id: string): Communication | undefined {
-  return demoCommunicationsModule?.getCommunication(id);
-}
-
-export function listCommunicationsForCase(caseId: string): Communication[] {
-  return demoCommunicationsModule?.getCommunicationsForCase(caseId) ?? [];
-}
-
-export function getMetrics() {
-  return demoCommunicationsModule?.getCommunicationMetrics() ?? EMPTY_COMMUNICATION_METRICS;
-}
-
-export const getCommunication =
-  demoCommunicationsModule?.getCommunication ??
-  ((_: string): Communication | undefined => undefined);
-export const getCommunicationMetrics =
-  demoCommunicationsModule?.getCommunicationMetrics ?? (() => EMPTY_COMMUNICATION_METRICS);
-export const getCommunicationsForCase =
-  demoCommunicationsModule?.getCommunicationsForCase ?? (() => []);
-export const getTemplate =
-  demoCommunicationsModule?.getTemplate ??
-  ((_: TemplateKey): TemplateDefinition | undefined => undefined);
-
-export function communicationsListQueryOptions() {
-  return queryOptions({
-    queryKey: communicationKeys.list("demo", normalizeListParams()),
-    queryFn: async () => listCommunications(),
-  });
+export function getCommunicationMetrics() {
+  return {
+    total: 0,
+    pending: 0,
+    delivered: 0,
+    awaitingResponse: 0,
+    failed: 0,
+    bounced: 0,
+    complaints: 0,
+    followUpsDueToday: 0,
+    failedTotal: 0,
+  };
 }
 
 export function createAdminCommunicationsAdapter(
   config: AppEnvConfig = appEnv,
   options: CreateAdminCommunicationsAdapterOptions = {},
 ): AdminCommunicationsAdapter {
-  if (config.adminDemoMode) {
-    return {
-      mode: "demo",
-      async list(params) {
-        return loadDemoCommunications(params);
-      },
-      async detail(id) {
-        return loadDemoCommunicationDetail(id);
-      },
-    };
-  }
-
   const api = createAdminAuthenticatedApi(config, options.production);
 
   return {
-    mode: "production",
     async list(params) {
       const normalized = normalizeListParams(params);
       const data = await api.request<BackendPage<BackendCommunicationRecord>>(
@@ -345,7 +234,7 @@ export function adminCommunicationListQueryOptions(params?: AdminCommunicationLi
   const adapter = createAdminCommunicationsAdapter();
   const normalized = normalizeListParams(params);
   return queryOptions({
-    queryKey: communicationKeys.list(adapter.mode, normalized),
+    queryKey: communicationKeys.list(normalized),
     queryFn: async () => adapter.list(normalized),
   });
 }
@@ -353,7 +242,7 @@ export function adminCommunicationListQueryOptions(params?: AdminCommunicationLi
 export function adminCommunicationDetailQueryOptions(id: string) {
   const adapter = createAdminCommunicationsAdapter();
   return queryOptions({
-    queryKey: communicationKeys.detail(adapter.mode, id),
+    queryKey: communicationKeys.detail(id),
     queryFn: async () => adapter.detail(id),
   });
 }
@@ -441,112 +330,6 @@ function mapBackendCommunicationDetail(
       occurredAt: event.occurred_at,
       detail: event.detail,
       status: event.status ?? null,
-    })),
-  };
-}
-
-async function loadDemoCommunications(
-  params?: AdminCommunicationListParams,
-): Promise<AdminCommunicationListResult> {
-  const normalized = normalizeListParams(params);
-  const rows = mockCommunications
-    .filter((row) => {
-      if (normalized.status !== "all" && row.status !== normalized.status) return false;
-      if (normalized.channel !== "all" && row.channel !== normalized.channel) return false;
-      if (normalized.templateKey !== "all" && row.template !== normalized.templateKey) return false;
-      if (!normalized.query) return true;
-      const haystack = [
-        row.reference,
-        row.id,
-        row.subject,
-        row.contactEmailMasked,
-        row.organizationName,
-        row.caseReference,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(normalized.query.toLowerCase());
-    })
-    .map<AdminCommunicationListItem>((row) => ({
-      id: row.id,
-      channel: row.channel,
-      eventType: row.type,
-      templateKey: row.template,
-      templateVersion: "demo",
-      status: row.status,
-      recipientMasked: row.contactEmailMasked ?? "Unavailable",
-      provider: DEMO_PROVIDER,
-      providerMessageId: null,
-      providerMessageIdDisplay: null,
-      subject: row.subject,
-      failureReason: row.failures[0]?.reason ?? null,
-      queuedAt: row.sentAt,
-      sentAt: row.sentAt,
-      failedAt: row.failures[0]?.at ?? null,
-      createdAt: row.sentAt,
-      updatedAt: row.lastEventAt,
-      retryable: false,
-      retryPolicy: "demo_only",
-      relatedObject: row.caseId
-        ? {
-            kind: "verification_request",
-            publicId: row.caseId,
-            label: row.caseReference ?? "Verification request",
-          }
-        : null,
-      notification: null,
-    }));
-
-  const start = (normalized.page - 1) * normalized.pageSize;
-  const items = rows.slice(start, start + normalized.pageSize);
-  return {
-    items,
-    total: rows.length,
-    page: normalized.page,
-    pageSize: normalized.pageSize,
-    totalPages: rows.length === 0 ? 0 : Math.ceil(rows.length / normalized.pageSize),
-  };
-}
-
-async function loadDemoCommunicationDetail(
-  id: string,
-): Promise<AdminCommunicationDetail | undefined> {
-  const row = demoCommunicationsModule?.getCommunication(id);
-  if (!row) return undefined;
-  return {
-    id: row.id,
-    channel: row.channel,
-    eventType: row.type,
-    templateKey: row.template,
-    templateVersion: "demo",
-    status: row.status,
-    recipientMasked: row.contactEmailMasked ?? "Unavailable",
-    provider: DEMO_PROVIDER,
-    providerMessageId: null,
-    providerMessageIdDisplay: null,
-    subject: row.subject,
-    failureReason: row.failures[0]?.reason ?? null,
-    queuedAt: row.sentAt,
-    sentAt: row.sentAt,
-    failedAt: row.failures[0]?.at ?? null,
-    createdAt: row.sentAt,
-    updatedAt: row.lastEventAt,
-    retryable: false,
-    retryPolicy: "demo_only",
-    relatedObject: row.caseId
-      ? {
-          kind: "verification_request",
-          publicId: row.caseId,
-          label: row.caseReference ?? "Verification request",
-        }
-      : null,
-    notification: null,
-    payloadSummary: {},
-    deliveryTimeline: row.events.map((event) => ({
-      kind: event.kind,
-      occurredAt: event.at,
-      detail: event.detail ?? "Event recorded.",
-      status: null,
     })),
   };
 }

@@ -19,7 +19,11 @@ import type {
 
 type DemoRiskModule = typeof import("@/features/admin/mock-data/risk");
 
-const demoRiskModule: DemoRiskModule | null = DEMO_MODE_BUILD_ENABLED
+const DEMO_RISK_ENABLED =
+  DEMO_MODE_BUILD_ENABLED ||
+  (import.meta.env.MODE === "test" && import.meta.env.VITE_ADMIN_DEMO_MODE === "true");
+
+const demoRiskModule: DemoRiskModule | null = DEMO_RISK_ENABLED
   ? await import("@/features/admin/mock-data/risk")
   : null;
 

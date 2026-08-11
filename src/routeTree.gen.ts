@@ -15,6 +15,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminCommunicationsRouteImport } from './routes/admin.communications'
 import { Route as AdminForgotPasswordRouteImport } from './routes/admin.forgot-password'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminRegistryRouteImport } from './routes/admin.registry'
 import { Route as AdminRiskRouteImport } from './routes/admin.risk'
 import { Route as AdminSystemRouteImport } from './routes/admin.system'
@@ -22,6 +23,8 @@ import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminVerificationsRouteImport } from './routes/admin.verifications'
 import { Route as AdminCommunicationsIndexRouteImport } from './routes/admin.communications.index'
 import { Route as AdminCommunicationsCommunicationIdRouteImport } from './routes/admin.communications.$communicationId'
+import { Route as AdminNotificationsIndexRouteImport } from './routes/admin.notifications.index'
+import { Route as AdminNotificationsNotificationIdRouteImport } from './routes/admin.notifications.$notificationId'
 import { Route as AdminRegistryIndexRouteImport } from './routes/admin.registry.index'
 import { Route as AdminRegistryOrganizationIdRouteImport } from './routes/admin.registry.$organizationId'
 import { Route as AdminRiskIndexRouteImport } from './routes/admin.risk.index'
@@ -61,6 +64,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminRegistryRoute = AdminRegistryRouteImport.update({
   id: '/registry',
   path: '/registry',
@@ -97,6 +105,17 @@ const AdminCommunicationsCommunicationIdRoute =
     id: '/$communicationId',
     path: '/$communicationId',
     getParentRoute: () => AdminCommunicationsRoute,
+  } as any)
+const AdminNotificationsIndexRoute = AdminNotificationsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminNotificationsRoute,
+} as any)
+const AdminNotificationsNotificationIdRoute =
+  AdminNotificationsNotificationIdRouteImport.update({
+    id: '/$notificationId',
+    path: '/$notificationId',
+    getParentRoute: () => AdminNotificationsRoute,
   } as any)
 const AdminRegistryIndexRoute = AdminRegistryIndexRouteImport.update({
   id: '/',
@@ -148,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/admin/communications': typeof AdminCommunicationsRouteWithChildren
   '/admin/forgot-password': typeof AdminForgotPasswordRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/notifications': typeof AdminNotificationsRouteWithChildren
   '/admin/registry': typeof AdminRegistryRouteWithChildren
   '/admin/risk': typeof AdminRiskRouteWithChildren
   '/admin/system': typeof AdminSystemRoute
@@ -155,11 +175,13 @@ export interface FileRoutesByFullPath {
   '/admin/verifications': typeof AdminVerificationsRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/admin/communications/$communicationId': typeof AdminCommunicationsCommunicationIdRoute
+  '/admin/notifications/$notificationId': typeof AdminNotificationsNotificationIdRoute
   '/admin/registry/$organizationId': typeof AdminRegistryOrganizationIdRoute
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
   '/admin/communications/': typeof AdminCommunicationsIndexRoute
+  '/admin/notifications/': typeof AdminNotificationsIndexRoute
   '/admin/registry/': typeof AdminRegistryIndexRoute
   '/admin/risk/': typeof AdminRiskIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
@@ -172,11 +194,13 @@ export interface FileRoutesByTo {
   '/admin/system': typeof AdminSystemRoute
   '/admin': typeof AdminIndexRoute
   '/admin/communications/$communicationId': typeof AdminCommunicationsCommunicationIdRoute
+  '/admin/notifications/$notificationId': typeof AdminNotificationsNotificationIdRoute
   '/admin/registry/$organizationId': typeof AdminRegistryOrganizationIdRoute
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
   '/admin/communications': typeof AdminCommunicationsIndexRoute
+  '/admin/notifications': typeof AdminNotificationsIndexRoute
   '/admin/registry': typeof AdminRegistryIndexRoute
   '/admin/risk': typeof AdminRiskIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
@@ -189,6 +213,7 @@ export interface FileRoutesById {
   '/admin/communications': typeof AdminCommunicationsRouteWithChildren
   '/admin/forgot-password': typeof AdminForgotPasswordRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/notifications': typeof AdminNotificationsRouteWithChildren
   '/admin/registry': typeof AdminRegistryRouteWithChildren
   '/admin/risk': typeof AdminRiskRouteWithChildren
   '/admin/system': typeof AdminSystemRoute
@@ -196,11 +221,13 @@ export interface FileRoutesById {
   '/admin/verifications': typeof AdminVerificationsRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/admin/communications/$communicationId': typeof AdminCommunicationsCommunicationIdRoute
+  '/admin/notifications/$notificationId': typeof AdminNotificationsNotificationIdRoute
   '/admin/registry/$organizationId': typeof AdminRegistryOrganizationIdRoute
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
   '/admin/communications/': typeof AdminCommunicationsIndexRoute
+  '/admin/notifications/': typeof AdminNotificationsIndexRoute
   '/admin/registry/': typeof AdminRegistryIndexRoute
   '/admin/risk/': typeof AdminRiskIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
@@ -214,6 +241,7 @@ export interface FileRouteTypes {
     | '/admin/communications'
     | '/admin/forgot-password'
     | '/admin/login'
+    | '/admin/notifications'
     | '/admin/registry'
     | '/admin/risk'
     | '/admin/system'
@@ -221,11 +249,13 @@ export interface FileRouteTypes {
     | '/admin/verifications'
     | '/admin/'
     | '/admin/communications/$communicationId'
+    | '/admin/notifications/$notificationId'
     | '/admin/registry/$organizationId'
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
     | '/admin/communications/'
+    | '/admin/notifications/'
     | '/admin/registry/'
     | '/admin/risk/'
     | '/admin/users/'
@@ -238,11 +268,13 @@ export interface FileRouteTypes {
     | '/admin/system'
     | '/admin'
     | '/admin/communications/$communicationId'
+    | '/admin/notifications/$notificationId'
     | '/admin/registry/$organizationId'
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
     | '/admin/communications'
+    | '/admin/notifications'
     | '/admin/registry'
     | '/admin/risk'
     | '/admin/users'
@@ -254,6 +286,7 @@ export interface FileRouteTypes {
     | '/admin/communications'
     | '/admin/forgot-password'
     | '/admin/login'
+    | '/admin/notifications'
     | '/admin/registry'
     | '/admin/risk'
     | '/admin/system'
@@ -261,11 +294,13 @@ export interface FileRouteTypes {
     | '/admin/verifications'
     | '/admin/'
     | '/admin/communications/$communicationId'
+    | '/admin/notifications/$notificationId'
     | '/admin/registry/$organizationId'
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
     | '/admin/communications/'
+    | '/admin/notifications/'
     | '/admin/registry/'
     | '/admin/risk/'
     | '/admin/users/'
@@ -321,6 +356,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/notifications': {
+      id: '/admin/notifications'
+      path: '/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AdminNotificationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/registry': {
       id: '/admin/registry'
       path: '/registry'
@@ -369,6 +411,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/communications/$communicationId'
       preLoaderRoute: typeof AdminCommunicationsCommunicationIdRouteImport
       parentRoute: typeof AdminCommunicationsRoute
+    }
+    '/admin/notifications/': {
+      id: '/admin/notifications/'
+      path: '/'
+      fullPath: '/admin/notifications/'
+      preLoaderRoute: typeof AdminNotificationsIndexRouteImport
+      parentRoute: typeof AdminNotificationsRoute
+    }
+    '/admin/notifications/$notificationId': {
+      id: '/admin/notifications/$notificationId'
+      path: '/$notificationId'
+      fullPath: '/admin/notifications/$notificationId'
+      preLoaderRoute: typeof AdminNotificationsNotificationIdRouteImport
+      parentRoute: typeof AdminNotificationsRoute
     }
     '/admin/registry/': {
       id: '/admin/registry/'
@@ -443,6 +499,19 @@ const AdminCommunicationsRouteChildren: AdminCommunicationsRouteChildren = {
 const AdminCommunicationsRouteWithChildren =
   AdminCommunicationsRoute._addFileChildren(AdminCommunicationsRouteChildren)
 
+interface AdminNotificationsRouteChildren {
+  AdminNotificationsNotificationIdRoute: typeof AdminNotificationsNotificationIdRoute
+  AdminNotificationsIndexRoute: typeof AdminNotificationsIndexRoute
+}
+
+const AdminNotificationsRouteChildren: AdminNotificationsRouteChildren = {
+  AdminNotificationsNotificationIdRoute: AdminNotificationsNotificationIdRoute,
+  AdminNotificationsIndexRoute: AdminNotificationsIndexRoute,
+}
+
+const AdminNotificationsRouteWithChildren =
+  AdminNotificationsRoute._addFileChildren(AdminNotificationsRouteChildren)
+
 interface AdminRegistryRouteChildren {
   AdminRegistryOrganizationIdRoute: typeof AdminRegistryOrganizationIdRoute
   AdminRegistryIndexRoute: typeof AdminRegistryIndexRoute
@@ -502,6 +571,7 @@ interface AdminRouteChildren {
   AdminCommunicationsRoute: typeof AdminCommunicationsRouteWithChildren
   AdminForgotPasswordRoute: typeof AdminForgotPasswordRoute
   AdminLoginRoute: typeof AdminLoginRoute
+  AdminNotificationsRoute: typeof AdminNotificationsRouteWithChildren
   AdminRegistryRoute: typeof AdminRegistryRouteWithChildren
   AdminRiskRoute: typeof AdminRiskRouteWithChildren
   AdminSystemRoute: typeof AdminSystemRoute
@@ -514,6 +584,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCommunicationsRoute: AdminCommunicationsRouteWithChildren,
   AdminForgotPasswordRoute: AdminForgotPasswordRoute,
   AdminLoginRoute: AdminLoginRoute,
+  AdminNotificationsRoute: AdminNotificationsRouteWithChildren,
   AdminRegistryRoute: AdminRegistryRouteWithChildren,
   AdminRiskRoute: AdminRiskRouteWithChildren,
   AdminSystemRoute: AdminSystemRoute,

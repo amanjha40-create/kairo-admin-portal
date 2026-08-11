@@ -1,1 +1,1 @@
-export * from "@/features/admin/data/communications";
+export * from "@/features/admin/data/communications.demo";

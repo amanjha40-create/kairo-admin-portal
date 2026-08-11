@@ -22,7 +22,11 @@ import type {
 
 type DemoSystemModule = typeof import("@/features/admin/mock-data/system");
 
-const demoSystemModule: DemoSystemModule | null = DEMO_MODE_BUILD_ENABLED
+const DEMO_SYSTEM_ENABLED =
+  DEMO_MODE_BUILD_ENABLED ||
+  (import.meta.env.MODE === "test" && import.meta.env.VITE_ADMIN_DEMO_MODE === "true");
+
+const demoSystemModule: DemoSystemModule | null = DEMO_SYSTEM_ENABLED
   ? await import("@/features/admin/mock-data/system")
   : null;
 

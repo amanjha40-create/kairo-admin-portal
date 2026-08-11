@@ -33,32 +33,22 @@ describe("admin data adapters", () => {
 
   it("keeps unfinished domain datasets unavailable in production mode", async () => {
     vi.stubEnv("VITE_ADMIN_DEMO_MODE", "false");
-    const [{ listUsers }, { listCommunications }, { listInvestigations }, { listServices }] =
-      await Promise.all([
-        import("./users"),
-        import("./communications"),
-        import("./risk"),
-        import("./system"),
-      ]);
+    const [{ listInvestigations }, { listServices }] = await Promise.all([
+      import("@/features/admin/runtime/risk.production"),
+      import("@/features/admin/runtime/system.production"),
+    ]);
 
-    expect(listUsers()).toEqual([]);
-    expect(listCommunications()).toEqual([]);
     expect(listInvestigations()).toEqual([]);
     expect(listServices()).toEqual([]);
   });
 
   it("restores unfinished domain datasets in demo mode", async () => {
     vi.stubEnv("VITE_ADMIN_DEMO_MODE", "true");
-    const [{ listUsers }, { listCommunications }, { listInvestigations }, { listServices }] =
-      await Promise.all([
-        import("./users"),
-        import("./communications"),
-        import("./risk"),
-        import("./system"),
-      ]);
+    const [{ listInvestigations }, { listServices }] = await Promise.all([
+      import("@/features/admin/runtime/risk.demo"),
+      import("@/features/admin/runtime/system.demo"),
+    ]);
 
-    expect(listUsers().length).toBeGreaterThan(0);
-    expect(listCommunications().length).toBeGreaterThan(0);
     expect(listInvestigations().length).toBeGreaterThan(0);
     expect(listServices().length).toBeGreaterThan(0);
   });
