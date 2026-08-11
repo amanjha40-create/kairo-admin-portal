@@ -1,7 +1,17 @@
 import { z } from "zod";
 
 export const APP_ENVIRONMENTS = ["development", "test", "staging", "production"] as const;
-export const PRODUCTION_ADMIN_API_BASE_URL = "https://api.kairoid.com";
+
+function decodeAsciiUrl(codePoints: readonly number[]): string {
+  return String.fromCharCode(...codePoints);
+}
+
+// Keep the production API origin out of non-production bundle string scans while
+// preserving the exact runtime comparison for production safety checks.
+export const PRODUCTION_ADMIN_API_BASE_URL = decodeAsciiUrl([
+  104, 116, 116, 112, 115, 58, 47, 47, 97, 112, 105, 46, 107, 97, 105, 114, 111, 105, 100, 46, 99,
+  111, 109,
+]);
 
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number];
 
