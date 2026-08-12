@@ -4,7 +4,7 @@
  * Single source of truth for the Kairo logo across the Admin Portal.
  * Swap the asset here to change every logo instance at once.
  */
-import kairoLogoAsset from "@/assets/kairo-logo.png.asset.json";
+import kairoLogoUrl from "@/assets/kairo-logo.png";
 import { cn } from "@/lib/utils";
 
 export interface KairoLogoProps {
@@ -18,9 +18,9 @@ export interface KairoLogoProps {
 }
 
 // Native aspect ratio of the uploaded logo asset.
-const LOGO_ASPECT = 605 / 195; // ≈ 3.1 : 1
-// The chevron mark occupies roughly the left ~28% of the image.
-const MARK_FRACTION = 0.28;
+const LOGO_ASPECT = 589 / 163;
+// The chevron mark occupies roughly the left third of the official wordmark asset.
+const MARK_FRACTION = 0.36;
 
 export function KairoLogo({
   className,
@@ -32,7 +32,7 @@ export function KairoLogo({
     const height = Math.round(width / LOGO_ASPECT);
     return (
       <img
-        src={kairoLogoAsset.url}
+        src={kairoLogoUrl}
         alt={title}
         width={width}
         height={height}
@@ -56,7 +56,7 @@ export function KairoLogo({
       style={{ width: boxSize, height: Math.min(boxSize, Math.round(fullImageHeight)) }}
     >
       <img
-        src={kairoLogoAsset.url}
+        src={kairoLogoUrl}
         alt=""
         width={fullImageWidth}
         height={fullImageHeight}

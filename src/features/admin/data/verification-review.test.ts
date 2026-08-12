@@ -497,6 +497,8 @@ describe("verification review adapter", () => {
     expect(detail?.routingContext).toMatchObject({
       workflowOwner: "Admin review",
       registryResolutionStatus: "resolved",
+      registryRecordId: "88888888-8888-8888-8888-888888888888",
+      registryName: "Kairo Canonical",
       routingConfidence: 97,
     });
     expect(detail?.timeline).toHaveLength(1);
