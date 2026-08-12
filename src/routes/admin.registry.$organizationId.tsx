@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Building2, ChevronRight, ExternalLink, GitMerge, Plus } from "lucide-react";
 import { appEnv } from "@/config/env";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
+import { useAdminAccess, AdminAccessChecking } from "@/features/admin/auth/admin-access";
+import { shouldEnableAdminProtectedQuery } from "@/features/admin/auth/protected-query";
 import { formatRelativeTime } from "@/features/admin/lib/format";
 import {
   REGISTRY_ORG_STATE_LABEL,
@@ -14,13 +16,13 @@ import {
   getRegistryLifecycleStatusLabel,
   getRegistryOrgTypeLabel,
   getRegistryTrustStatusLabel,
+  registryDetailQueryOptions,
   registryKeys,
   type RegistryAliasCreatePayload,
   type RegistryCapabilityCreatePayload,
   type RegistryDomainCreatePayload,
   type RegistryIdentifierCreatePayload,
   type RegistryMergePayload,
-  type RegistryOrganization,
   type RegistryRelationshipCreatePayload,
 } from "@/features/admin/data/registry";
 import { ApiError } from "@/lib/api/errors";
@@ -32,14 +34,6 @@ export const Route = createFileRoute("/admin/registry/$organizationId")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  loader: async ({ params }) => {
-    const org = await createRegistryDataAdapter(appEnv).getOrganization(params.organizationId);
-    if (!org) {
-      throw notFound();
-    }
-
-    return { org };
-  },
   component: RegistryOrgDetail,
   pendingComponent: () => (
     <div className="mx-auto max-w-5xl">
@@ -92,10 +86,15 @@ function RegistryDetailErrorBoundary({ error, reset }: { error: Error; reset: ()
 }
 
 function RegistryOrgDetail() {
+  const { organizationId } = Route.useParams();
+  const access = useAdminAccess();
   const router = useRouter();
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createRegistryDataAdapter(appEnv), []);
-  const { org } = Route.useLoaderData() as { org: RegistryOrganization };
+  const detailQuery = useQuery({
+    ...registryDetailQueryOptions(organizationId),
+    enabled: shouldEnableAdminProtectedQuery(access.state),
+  });
 
   const [showAliasForm, setShowAliasForm] = useState(false);
   const [showDomainForm, setShowDomainForm] = useState(false);
@@ -106,18 +105,18 @@ function RegistryOrgDetail() {
 
   const refreshRegistry = async () => {
     await queryClient.invalidateQueries({ queryKey: registryKeys.all() });
-    await router.invalidate();
   };
 
   const aliasMutation = useMutation({
-    mutationFn: (payload: RegistryAliasCreatePayload) => adapter.addAlias(org.id, payload),
+    mutationFn: (payload: RegistryAliasCreatePayload) => adapter.addAlias(organizationId, payload),
     onSuccess: async () => {
       setShowAliasForm(false);
       await refreshRegistry();
     },
   });
   const domainMutation = useMutation({
-    mutationFn: (payload: RegistryDomainCreatePayload) => adapter.addDomain(org.id, payload),
+    mutationFn: (payload: RegistryDomainCreatePayload) =>
+      adapter.addDomain(organizationId, payload),
     onSuccess: async () => {
       setShowDomainForm(false);
       await refreshRegistry();
@@ -125,7 +124,7 @@ function RegistryOrgDetail() {
   });
   const identifierMutation = useMutation({
     mutationFn: (payload: RegistryIdentifierCreatePayload) =>
-      adapter.addIdentifier(org.id, payload),
+      adapter.addIdentifier(organizationId, payload),
     onSuccess: async () => {
       setShowIdentifierForm(false);
       await refreshRegistry();
@@ -133,7 +132,7 @@ function RegistryOrgDetail() {
   });
   const capabilityMutation = useMutation({
     mutationFn: (payload: RegistryCapabilityCreatePayload) =>
-      adapter.addCapability(org.id, payload),
+      adapter.addCapability(organizationId, payload),
     onSuccess: async () => {
       setShowCapabilityForm(false);
       await refreshRegistry();
@@ -141,20 +140,76 @@ function RegistryOrgDetail() {
   });
   const relationshipMutation = useMutation({
     mutationFn: (payload: RegistryRelationshipCreatePayload) =>
-      adapter.addRelationship(org.id, payload),
+      adapter.addRelationship(organizationId, payload),
     onSuccess: async () => {
       setShowRelationshipForm(false);
       await refreshRegistry();
     },
   });
   const mergeMutation = useMutation({
-    mutationFn: (payload: RegistryMergePayload) => adapter.mergeOrganization(org.id, payload),
+    mutationFn: (payload: RegistryMergePayload) =>
+      adapter.mergeOrganization(organizationId, payload),
     onSuccess: async () => {
       setShowMergeForm(false);
       await queryClient.invalidateQueries({ queryKey: registryKeys.all() });
       await router.navigate({ to: "/admin/registry" });
     },
   });
+
+  if (!shouldEnableAdminProtectedQuery(access.state)) {
+    return <AdminAccessChecking />;
+  }
+
+  if (detailQuery.isPending) {
+    return (
+      <div className="mx-auto max-w-5xl">
+        <LoadingSkeleton rows={8} />
+      </div>
+    );
+  }
+
+  if (detailQuery.error) {
+    const copy = getRegistryDetailErrorCopy(detailQuery.error);
+    return (
+      <div className="mx-auto max-w-2xl">
+        <ErrorState
+          title={copy.title}
+          description={copy.description}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                void detailQuery.refetch();
+              }}
+              className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+            >
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const org = detailQuery.data;
+  if (!org) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <EmptyState
+          title="Organization not found"
+          description="The registry record may have been merged, archived, or the identifier is incorrect."
+          action={
+            <Link
+              to="/admin/registry"
+              className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+            >
+              Back to Registry
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const mutationError =
     aliasMutation.error ||

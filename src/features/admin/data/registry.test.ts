@@ -531,6 +531,29 @@ describe("registry data adapter", () => {
     await expect(adapter.getOrganization("unknown")).resolves.toBeUndefined();
   });
 
+  it("fails closed for registry detail when browser token storage is unavailable", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("registry detail fetch should not run without browser storage");
+    });
+
+    const adapter = createRegistryDataAdapter(createProductionConfig(), {
+      production: {
+        storage: null,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      adapter.getOrganization("11111111-1111-1111-1111-111111111111"),
+    ).rejects.toMatchObject({
+      code: "unauthorized",
+      status: 401,
+      message: "Your session is no longer valid. Sign in again to continue.",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("surfaces backend registry errors without falling back to mock data", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);
