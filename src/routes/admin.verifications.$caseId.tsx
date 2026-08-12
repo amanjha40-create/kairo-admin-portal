@@ -43,6 +43,8 @@ import {
 import { shouldEnableAdminProtectedQuery } from "@/features/admin/auth/protected-query";
 import { appEnv } from "@/config/env";
 import { formatAge, formatRelativeTime } from "@/features/admin/lib/format";
+import { AdminRegistryDetailLink } from "@/features/admin/lib/admin-registry-detail-link";
+import { getVerificationRegistryLinkModel } from "@/features/admin/lib/admin-registry-route";
 import {
   ALL_ASSIGNEES,
   ATTENTION_FLAG_LABEL,
@@ -804,6 +806,10 @@ function RequestContextSection({ detail }: { detail: VerificationCaseDetail }) {
   const linkedRecord = detail.linkedRecord;
   const consent = detail.consent;
   const context = detail.routingContext;
+  const registryLink = getVerificationRegistryLinkModel(
+    context.registryRecordId,
+    context.registryName,
+  );
 
   return (
     <WorkspaceSection
@@ -850,14 +856,13 @@ function RequestContextSection({ detail }: { detail: VerificationCaseDetail }) {
               : "Pending"
           }
           helper={
-            context.registryRecordId ? (
-              <Link
-                to="/admin/registry/$organizationId"
-                params={{ organizationId: context.registryRecordId }}
-                className="text-foreground hover:underline"
+            registryLink ? (
+              <AdminRegistryDetailLink
+                organizationId={registryLink.organizationId}
+                className="inline-flex items-center text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                {context.registryName ?? context.registryRecordId}
-              </Link>
+                {registryLink.label}
+              </AdminRegistryDetailLink>
             ) : (
               (context.registryName ?? undefined)
             )
@@ -940,13 +945,21 @@ function ContextField({
   value: string;
   helper?: React.ReactNode;
 }) {
+  const helperIsPlainText = typeof helper === "string" || typeof helper === "number";
+
   return (
     <div className="rounded-md border border-border bg-background p-3">
       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <p className="mt-1 text-sm text-foreground">{value}</p>
-      {helper ? <p className="mt-1 text-[11px] text-muted-foreground">{helper}</p> : null}
+      {helper ? (
+        helperIsPlainText ? (
+          <p className="mt-1 text-[11px] text-muted-foreground">{helper}</p>
+        ) : (
+          <div className="mt-1 text-[11px] text-muted-foreground">{helper}</div>
+        )
+      ) : null}
     </div>
   );
 }
