@@ -1,16 +1,21 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, AlertTriangle } from "lucide-react";
+import { AlertTriangle, Building2, Plus } from "lucide-react";
+import { appEnv } from "@/config/env";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { TablePagination } from "@/features/admin/components/table-pagination";
 import {
   REGISTRY_ORG_STATE_LABEL,
+  createRegistryDataAdapter,
+  getRegistryLifecycleStatusLabel,
   getRegistryOrgTypeLabel,
+  registryKeys,
   registryListQueryOptions,
   registryMetricsQueryOptions,
+  type RegistryCreatePayload,
   type RegistryOrgState,
 } from "@/features/admin/data/registry";
 import { ApiError } from "@/lib/api/errors";
@@ -30,21 +35,45 @@ const STATE_FILTERS: Array<{ key: "all" | RegistryOrgState; label: string }> = [
   { key: "deprecated", label: "Deprecated" },
 ];
 
+const ORG_TYPE_FILTERS = [
+  { value: "all", label: "All types" },
+  { value: "employer", label: "Employer" },
+  { value: "educational_institution", label: "Educational institution" },
+  { value: "private_company", label: "Private company" },
+  { value: "public_company", label: "Public company" },
+  { value: "government", label: "Government" },
+  { value: "non_profit", label: "Non-profit" },
+  { value: "platform", label: "Platform" },
+];
+
 function RegistryPage() {
+  const queryClient = useQueryClient();
+  const adapter = useMemo(() => createRegistryDataAdapter(appEnv), []);
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<"all" | RegistryOrgState>("all");
+  const [organizationType, setOrganizationType] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const metricsQuery = useQuery(registryMetricsQueryOptions());
   const listQuery = useQuery(
     registryListQueryOptions({
       query,
       state: stateFilter,
+      organizationType,
       page,
       pageSize,
     }),
   );
+
+  const createMutation = useMutation({
+    mutationFn: (payload: RegistryCreatePayload) => adapter.createOrganization(payload),
+    onSuccess: async () => {
+      setShowCreateForm(false);
+      await queryClient.invalidateQueries({ queryKey: registryKeys.all() });
+    },
+  });
 
   const onQueryChange = (next: string) => {
     setQuery(next);
@@ -69,7 +98,7 @@ function RegistryPage() {
     );
   }
 
-  const error = metricsQuery.error ?? listQuery.error ?? null;
+  const error = metricsQuery.error ?? listQuery.error ?? createMutation.error ?? null;
   if (error) {
     const copy = getRegistryListErrorCopy(error);
     return (
@@ -100,33 +129,66 @@ function RegistryPage() {
     return null;
   }
 
-  const hasFilters = query.trim().length > 0 || stateFilter !== "all";
+  const hasFilters = query.trim().length > 0 || stateFilter !== "all" || organizationType !== "all";
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
-      <header>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Registry</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Canonical organizations used across Kairo verifications. Contacts, activity, duplicate
-          review signals and lifecycle state live on the org detail page.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Registry</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Canonical organization truth for verifications, resolution, duplicate handling, and
+            shared operational identity across Kairo.
+          </p>
+        </div>
+        {!appEnv.adminDemoMode ? (
+          <button
+            type="button"
+            onClick={() => setShowCreateForm((value) => !value)}
+            className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            <Plus aria-hidden className="size-3.5" />
+            Create registry organization
+          </button>
+        ) : null}
       </header>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="Organizations" value={metrics.total} sub={`${metrics.verified} verified`} />
-        <Metric label="Unverified" value={metrics.unverified} sub="Needs registry review" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Metric
+          label="Organizations"
+          value={metrics.total}
+          sub={`${metrics.linkedOrganizations} linked`}
+        />
+        <Metric
+          label="Employers"
+          value={metrics.employers}
+          sub={`${metrics.institutions} institutions`}
+        />
+        <Metric
+          label="Unresolved orgs"
+          value={metrics.unresolvedOrganizations}
+          sub="Needs canonical resolution"
+        />
         <Metric
           label="Duplicate review"
           value={metrics.duplicates}
-          sub="Awaits canonicalization"
+          sub="Potential merge candidates"
           tone="warning"
         />
         <Metric
-          label="Approved contacts"
-          value={metrics.contactsApproved}
-          sub={`${metrics.contactsBounced} bounced`}
+          label="Verified"
+          value={metrics.verified}
+          sub={`${metrics.unverified} unverified`}
         />
       </div>
+
+      {showCreateForm && !appEnv.adminDemoMode ? (
+        <CreateRegistryForm
+          pending={createMutation.isPending}
+          onCancel={() => setShowCreateForm(false)}
+          onSubmit={(payload) => createMutation.mutate(payload)}
+        />
+      ) : null}
 
       <WorkspaceSection
         title="Organizations"
@@ -136,27 +198,43 @@ function RegistryPage() {
             <AdminSearchField
               value={query}
               onChange={onQueryChange}
-              placeholder="Search name, domain, country"
+              placeholder="Search name, domain, alias"
             />
           </div>
         }
       >
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {STATE_FILTERS.map((filter) => (
-            <button
-              key={filter.key}
-              type="button"
-              onClick={() => onStateFilterChange(filter.key)}
-              className={
-                "h-7 rounded-md border px-2 text-[11px] font-medium " +
-                (stateFilter === filter.key
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-foreground hover:bg-accent")
-              }
-            >
-              {filter.label}
-            </button>
-          ))}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {STATE_FILTERS.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => onStateFilterChange(filter.key)}
+                className={
+                  "h-7 rounded-md border px-2 text-[11px] font-medium " +
+                  (stateFilter === filter.key
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-foreground hover:bg-accent")
+                }
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={organizationType}
+            onChange={(event) => {
+              setOrganizationType(event.target.value);
+              setPage(1);
+            }}
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+          >
+            {ORG_TYPE_FILTERS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
         {result.total === 0 ? (
           <EmptyState
@@ -175,11 +253,13 @@ function RegistryPage() {
                   <tr>
                     <th className="px-3 py-2 font-medium">Organization</th>
                     <th className="px-3 py-2 font-medium">Type</th>
-                    <th className="px-3 py-2 font-medium">Country</th>
-                    <th className="px-3 py-2 font-medium">State</th>
-                    <th className="px-3 py-2 font-medium">Contacts</th>
-                    <th className="px-3 py-2 font-medium">Active cases</th>
+                    <th className="px-3 py-2 font-medium">Lifecycle</th>
+                    <th className="px-3 py-2 font-medium">Primary domain</th>
+                    <th className="px-3 py-2 font-medium">Aliases</th>
+                    <th className="px-3 py-2 font-medium">Identifiers</th>
+                    <th className="px-3 py-2 font-medium">Linked orgs</th>
                     <th className="px-3 py-2 font-medium">Verifications</th>
+                    <th className="px-3 py-2 font-medium">Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-background">
@@ -195,7 +275,7 @@ function RegistryPage() {
                           <span className="min-w-0">
                             <span className="block font-medium">{organization.canonicalName}</span>
                             <span className="block text-[11px] font-mono text-muted-foreground">
-                              {organization.domain ?? "Domain unavailable"}
+                              {organization.id}
                             </span>
                           </span>
                         </Link>
@@ -203,20 +283,31 @@ function RegistryPage() {
                       <td className="px-3 py-2 text-muted-foreground">
                         {getRegistryOrgTypeLabel(organization.orgType)}
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">{organization.country}</td>
                       <td className="px-3 py-2">
-                        <StateChip state={organization.state} />
+                        <div className="flex flex-col gap-1">
+                          <StateChip state={organization.state} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {getRegistryLifecycleStatusLabel(organization.lifecycleStatus)}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {typeof organization.contactCount === "number"
-                          ? organization.contactCount
-                          : "Unavailable"}
+                        {organization.domain ?? "Unavailable"}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {organization.activeCaseCount}
+                        {organization.aliasesCount}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {organization.identifiersCount}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {organization.linkedOrganizationCount}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {organization.totalVerifications}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {new Date(organization.updatedAt).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}
@@ -234,6 +325,132 @@ function RegistryPage() {
         )}
       </WorkspaceSection>
     </div>
+  );
+}
+
+function CreateRegistryForm({
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (payload: RegistryCreatePayload) => void;
+}) {
+  const [form, setForm] = useState<RegistryCreatePayload>({
+    legalName: "",
+    displayName: "",
+    organizationType: "employer",
+    country: "IN",
+    stateProvince: "",
+    website: "",
+    lifecycleStatus: "draft",
+    trustStatus: "unreviewed",
+    registryConfidenceScore: 0,
+  });
+
+  const invalid = form.legalName.trim().length === 0 || form.country.trim().length !== 2;
+
+  return (
+    <WorkspaceSection
+      title="Create registry organization"
+      description="Create a canonical operational organization record for resolution and verification routing."
+    >
+      <form
+        className="grid gap-3 md:grid-cols-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (invalid || pending) {
+            return;
+          }
+          onSubmit({
+            ...form,
+            country: form.country.trim().toUpperCase(),
+            displayName: form.displayName?.trim() || undefined,
+            stateProvince: form.stateProvince?.trim() || undefined,
+            website: form.website?.trim() || undefined,
+          });
+        }}
+      >
+        <label className="grid gap-1 text-xs">
+          <span className="font-medium text-foreground">Legal name</span>
+          <input
+            value={form.legalName}
+            onChange={(event) => setForm((value) => ({ ...value, legalName: event.target.value }))}
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          />
+        </label>
+        <label className="grid gap-1 text-xs">
+          <span className="font-medium text-foreground">Display name</span>
+          <input
+            value={form.displayName ?? ""}
+            onChange={(event) =>
+              setForm((value) => ({ ...value, displayName: event.target.value }))
+            }
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          />
+        </label>
+        <label className="grid gap-1 text-xs">
+          <span className="font-medium text-foreground">Organization type</span>
+          <select
+            value={form.organizationType}
+            onChange={(event) =>
+              setForm((value) => ({ ...value, organizationType: event.target.value }))
+            }
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          >
+            {ORG_TYPE_FILTERS.filter((item) => item.value !== "all").map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs">
+          <span className="font-medium text-foreground">Country</span>
+          <input
+            value={form.country}
+            maxLength={2}
+            onChange={(event) => setForm((value) => ({ ...value, country: event.target.value }))}
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm uppercase text-foreground"
+          />
+        </label>
+        <label className="grid gap-1 text-xs">
+          <span className="font-medium text-foreground">State / province</span>
+          <input
+            value={form.stateProvince ?? ""}
+            onChange={(event) =>
+              setForm((value) => ({ ...value, stateProvince: event.target.value }))
+            }
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          />
+        </label>
+        <label className="grid gap-1 text-xs">
+          <span className="font-medium text-foreground">Website</span>
+          <input
+            value={form.website ?? ""}
+            onChange={(event) => setForm((value) => ({ ...value, website: event.target.value }))}
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          />
+        </label>
+        <div className="md:col-span-2 flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={invalid || pending}
+            className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
+          >
+            {pending ? "Creating..." : "Create organization"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </WorkspaceSection>
   );
 }
 

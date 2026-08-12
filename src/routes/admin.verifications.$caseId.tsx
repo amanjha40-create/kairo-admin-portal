@@ -849,7 +849,19 @@ function RequestContextSection({ detail }: { detail: VerificationCaseDetail }) {
               ? formatBackendLabel(context.registryResolutionStatus)
               : "Pending"
           }
-          helper={context.registryName ?? undefined}
+          helper={
+            context.registryRecordId ? (
+              <Link
+                to="/admin/registry/$organizationId"
+                params={{ organizationId: context.registryRecordId }}
+                className="text-foreground hover:underline"
+              >
+                {context.registryName ?? context.registryRecordId}
+              </Link>
+            ) : (
+              (context.registryName ?? undefined)
+            )
+          }
         />
       </div>
       <div className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
@@ -919,7 +931,15 @@ function RequestContextSection({ detail }: { detail: VerificationCaseDetail }) {
   );
 }
 
-function ContextField({ label, value, helper }: { label: string; value: string; helper?: string }) {
+function ContextField({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper?: React.ReactNode;
+}) {
   return (
     <div className="rounded-md border border-border bg-background p-3">
       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

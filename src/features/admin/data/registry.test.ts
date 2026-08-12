@@ -89,6 +89,11 @@ function registryRecord(overrides: Partial<Record<string, unknown>> = {}) {
     state: "verified",
     active_case_count: 3,
     total_verifications: 9,
+    aliases_count: 1,
+    identifiers_count: 0,
+    relationship_count: 0,
+    capabilities_count: 0,
+    linked_organization_count: 0,
     possible_duplicate_ids: ["22222222-2222-2222-2222-222222222222"],
     registry_flags: ["possible_duplicate"],
     ...overrides,
@@ -243,9 +248,13 @@ describe("registry data adapter", () => {
 
     await expect(adapter.getMetrics()).resolves.toEqual({
       total: 6,
+      employers: 0,
+      institutions: 0,
       verified: 4,
       unverified: 1,
       duplicates: 1,
+      unresolvedOrganizations: 0,
+      linkedOrganizations: 0,
       contactsApproved: 7,
       contactsBounced: 2,
     });
@@ -260,6 +269,14 @@ describe("registry data adapter", () => {
       if (url.includes("/api/v1/admin/trust-registry/11111111-1111-1111-1111-111111111111")) {
         return jsonResponse({
           ...registryRecord(),
+          domains: [],
+          alias_items: [],
+          identifiers: [],
+          capabilities: [],
+          relationships: [],
+          verification_requests: [],
+          linked_organizations: [],
+          merge_history: [],
           contacts: [
             {
               public_id: "44444444-4444-4444-4444-444444444444",
@@ -319,6 +336,116 @@ describe("registry data adapter", () => {
       kind: "admin_reviewed",
       actor: "system",
       description: "Admin reviewed duplicate indicators.",
+    });
+  });
+
+  it("creates a registry organization and then reloads authoritative detail", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/v1/admin/trust-registry" && init?.method === "POST") {
+        expect(JSON.parse(String(init.body))).toMatchObject({
+          legal_name: "Platform QA Employer 0901",
+          organization_type: "employer",
+          country: "IN",
+        });
+        return jsonResponse({
+          public_id: "66666666-6666-6666-6666-666666666666",
+        });
+      }
+
+      if (url.pathname === "/api/v1/admin/trust-registry/66666666-6666-6666-6666-666666666666") {
+        return jsonResponse({
+          ...registryRecord({
+            public_id: "66666666-6666-6666-6666-666666666666",
+            legal_name: "Platform QA Employer 0901",
+            display_name: "Platform QA Employer 0901",
+            organization_type: "employer",
+          }),
+          domains: [],
+          alias_items: [],
+          identifiers: [],
+          capabilities: [],
+          relationships: [],
+          verification_requests: [],
+          linked_organizations: [],
+          merge_history: [],
+          contacts: [],
+          activity: [],
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createRegistryDataAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    const created = await adapter.createOrganization({
+      legalName: "Platform QA Employer 0901",
+      organizationType: "employer",
+      country: "IN",
+    });
+
+    expect(created).toMatchObject({
+      id: "66666666-6666-6666-6666-666666666666",
+      canonicalName: "Platform QA Employer 0901",
+      orgType: "employer",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the canonical merge endpoint without expecting an admin-detail payload", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (
+        url.pathname === "/api/v1/admin/trust-registry/11111111-1111-1111-1111-111111111111/merge"
+      ) {
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          target_registry_record_public_id: "22222222-2222-2222-2222-222222222222",
+          merge_reason: "duplicate employer",
+        });
+        return jsonResponse({
+          public_id: "77777777-7777-7777-7777-777777777777",
+          source_registry_record_public_id: "11111111-1111-1111-1111-111111111111",
+          target_registry_record_public_id: "22222222-2222-2222-2222-222222222222",
+          merge_reason: "duplicate employer",
+          metadata: {},
+          created_at: "2026-07-28T08:45:00.000Z",
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createRegistryDataAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      adapter.mergeOrganization("11111111-1111-1111-1111-111111111111", {
+        targetRegistryRecordPublicId: "22222222-2222-2222-2222-222222222222",
+        mergeReason: "duplicate employer",
+      }),
+    ).resolves.toMatchObject({
+      id: "77777777-7777-7777-7777-777777777777",
+      otherOrganizationId: "22222222-2222-2222-2222-222222222222",
+      mergeReason: "duplicate employer",
     });
   });
 
@@ -471,6 +598,14 @@ describe("registry data adapter", () => {
       if (url.includes("/api/v1/admin/trust-registry/11111111-1111-1111-1111-111111111111")) {
         return jsonResponse({
           ...registryRecord(),
+          domains: [],
+          alias_items: [],
+          identifiers: [],
+          capabilities: [],
+          relationships: [],
+          verification_requests: [],
+          linked_organizations: [],
+          merge_history: [],
           contacts: [],
           activity: [],
         });
