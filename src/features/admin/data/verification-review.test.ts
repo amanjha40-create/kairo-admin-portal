@@ -604,6 +604,12 @@ describe("verification review adapter", () => {
     await adapter.approveCase("case-1", "Approved.");
     await adapter.rejectCase("case-1", "Rejected.");
     await adapter.markUnableToVerify("case-1", "Unable.");
+    await adapter.finalizeCase("case-1", {
+      outcome: "verified",
+      decisionSummary: "Verifier confirmed the submitted claim.",
+    });
+    await adapter.returnToVerifier("case-1", "Verifier must confirm the end date.");
+    await adapter.cancelCase("case-1", "Request cancelled by admin review.");
     await adapter.recordClarificationResponse("case-1", "Updated role attached.");
     await adapter.createRegistryRecord("case-1", {
       legalName: "Kairo Labs Private Limited",
@@ -618,6 +624,9 @@ describe("verification review adapter", () => {
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/approve",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/reject",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/unable-to-verify",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/finalize",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/return-to-verifier",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/cancel",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/record-clarification-response",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/create-registry-record",
     ]);
@@ -628,6 +637,81 @@ describe("verification review adapter", () => {
         visibility: "internal",
         metadata: { category: "organization" },
       },
+    });
+    expect(requests[6]).toMatchObject({
+      body: {
+        outcome: "verified",
+        decision_summary: "Verifier confirmed the submitted claim.",
+      },
+    });
+    expect(requests[7]).toMatchObject({
+      body: {
+        decision_summary: "Verifier must confirm the end date.",
+      },
+    });
+    expect(requests[8]).toMatchObject({
+      body: {
+        decision_summary: "Request cancelled by admin review.",
+      },
+    });
+  });
+
+  it("maps canonical education verification status from the detail projection", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/timeline")) {
+        return jsonResponse(timelinePayload());
+      }
+      if (
+        url.includes("/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111")
+      ) {
+        return jsonResponse({
+          ...detailPayload(),
+          request: {
+            ...queuePayload().items[0],
+            employment_id: null,
+            education_id: "eeeeeee1-1111-1111-1111-111111111111",
+            request_type: "education",
+            education_claim: {
+              institution_name: "KDTU",
+              degree: "MBA",
+            },
+            employment_claim: null,
+          },
+          employment: null,
+          education: {
+            id: "eeeeeee1-1111-1111-1111-111111111111",
+            user_id: "99999999-9999-9999-9999-999999999999",
+            institution_name: "KDTU",
+            degree: "MBA",
+            is_currently_studying: false,
+            verification_status: "verified",
+            created_at: "2026-07-28T08:00:00.000Z",
+            updated_at: "2026-07-28T09:00:00.000Z",
+          },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+    expect(detail?.linkedRecord).toMatchObject({
+      type: "education",
+      publicId: "eeeeeee1-1111-1111-1111-111111111111",
+      canonicalStatus: "verified",
     });
   });
 
@@ -713,6 +797,69 @@ describe("verification review adapter", () => {
       status: 401,
     });
     expect(storage.local.getItem(AUTH_TOKEN_KEY)).toBeNull();
+  });
+
+  it("treats a 403 detail response as forbidden", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (
+        url.includes("/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111")
+      ) {
+        return jsonResponse({ detail: "Forbidden" }, { status: 403 });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      adapter.getCaseDetail("11111111-1111-1111-1111-111111111111"),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      status: 403,
+    });
+  });
+
+  it("surfaces a 409 finalize conflict without falling back to demo behavior", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.endsWith("/finalize")) {
+        return jsonResponse({ detail: "Conflict" }, { status: 409 });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      adapter.finalizeCase("case-1", {
+        outcome: "verified",
+        decisionSummary: "Verifier confirmed the submitted claim.",
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      status: 409,
+    });
   });
 
   it("surfaces backend errors without falling back to mock verification data", async () => {

@@ -294,7 +294,10 @@ function useProductionVerificationWorkflow(
       await refresh();
     },
     async submitUnable(payload) {
-      const decisionSummary = `${payload.attemptsSummary}\n\n${payload.outstandingUncertainty}`;
+      const decisionSummary = [payload.attemptsSummary, payload.outstandingUncertainty]
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .join("\n\n");
       if (detail.summary.status === "pending_admin_quality_review") {
         await adapter.finalizeCase(caseId, {
           outcome: "unable_to_verify",

@@ -668,6 +668,28 @@ interface BackendAdminReviewDetailResponse {
     created_at: string;
     updated_at: string;
   } | null;
+  education?: {
+    id: string;
+    user_id: string;
+    institution_name: string;
+    degree?: string | null;
+    field_of_study?: string | null;
+    education_level?: string | null;
+    grade?: string | null;
+    start_date?: string | null;
+    start_date_precision?: string | null;
+    end_date?: string | null;
+    end_date_precision?: string | null;
+    is_currently_studying: boolean;
+    verification_status: string;
+    submitted_at?: string | null;
+    reviewed_at?: string | null;
+    verified_at?: string | null;
+    reviewed_by_user_id?: string | null;
+    reviewer_note?: string | null;
+    created_at: string;
+    updated_at: string;
+  } | null;
   verification_contact?: BackendAdminVerificationContactResponse | null;
   verification_contact_history?: BackendAdminVerificationContactResponse[];
   evidence: BackendAdminReviewEvidenceResponse[];
@@ -1683,6 +1705,7 @@ function mapLinkedRecord(
       type: "education",
       publicId: detail.request.education_id,
       label: formatLinkedRecordLabel("education", detail.request.education_id),
+      canonicalStatus: detail.education?.verification_status,
     };
   }
 
