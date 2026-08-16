@@ -11,7 +11,7 @@ import { createAdminAuthenticatedApi } from "./admin-api";
 import type { Priority, VerificationStatus } from "./types";
 
 export type VerificationType =
-  "employment" | "education" | "certification" | "identity" | "platform" | "reference";
+  "employment" | "education" | "certification" | "identity" | "platform" | "reference" | "unknown";
 
 export type OrganizationStatus = "resolved" | "suggested_match" | "unresolved" | "duplicate_review";
 
@@ -84,6 +84,7 @@ export const VERIFICATION_TYPE_LABEL: Record<VerificationType, string> = {
   identity: "Identity",
   platform: "Platform",
   reference: "Reference",
+  unknown: "Professional record",
 };
 
 export const ORGANIZATION_STATUS_LABEL: Record<OrganizationStatus, string> = {
@@ -1288,7 +1289,7 @@ function adaptDemoDetail(detail: VerificationCaseDetail): VerificationCaseDetail
     routingContext: detail.routingContext ?? {
       workflowOwner: getWorkflowOwnerLabel(status),
     },
-    statusMeta: buildStatusMeta(status),
+    statusMeta: buildStatusMeta(status, detail.summary.verificationType),
   };
 }
 
@@ -1354,6 +1355,7 @@ function mapDetailResponse(
   const authoritativeOrganizationStatus = mapDetailOrganizationStatus(detail);
   const resolvedOrganization = getResolvedOrganization(detail);
   const claim = mapClaim(detail);
+  const linkedRecord = mapLinkedRecord(detail);
   const latestContact =
     detail.verification_contact ?? detail.verification_contact_history?.[0] ?? null;
   const evidence = detail.evidence.map((item) => mapEvidence(item, claim.fields));
@@ -1376,7 +1378,7 @@ function mapDetailResponse(
       organizationStatus: authoritativeOrganizationStatus,
     },
     claim,
-    linkedRecord: mapLinkedRecord(detail),
+    linkedRecord,
     consent: {
       fields: detail.request.consented_fields ?? [],
       evidenceScope: detail.request.consented_evidence_scope ?? [],
@@ -1438,7 +1440,10 @@ function mapDetailResponse(
     notes,
     flags: deriveFlagRecords(summary.attentionFlags, detail.request.created_at),
     timeline,
-    statusMeta: buildStatusMeta(summary.status),
+    statusMeta: buildStatusMeta(
+      summary.status,
+      linkedRecord?.type ?? detail.request.request_type ?? summary.verificationType,
+    ),
     verifierResponse: employerVerification
       ? {
           status: employerVerification.status,
@@ -1830,6 +1835,7 @@ function initialsFor(name: string, email: string): string {
 
 function mapVerificationType(value: string): VerificationType {
   switch (value) {
+    case "employment":
     case "education":
     case "certification":
     case "identity":
@@ -1837,7 +1843,7 @@ function mapVerificationType(value: string): VerificationType {
     case "reference":
       return value;
     default:
-      return "employment";
+      return "unknown";
   }
 }
 
@@ -1921,7 +1927,29 @@ function summarizeCaseActivity(item: BackendVerificationRequestResponse): string
   }
 }
 
-function buildStatusMeta(status: VerificationStatus): CaseStatusMeta {
+function resolveVerificationStageLabel(verificationType: string | null | undefined): string {
+  switch (verificationType) {
+    case "employment":
+      return VERIFICATION_TYPE_LABEL.employment;
+    case "education":
+      return VERIFICATION_TYPE_LABEL.education;
+    case "certification":
+      return VERIFICATION_TYPE_LABEL.certification;
+    case "identity":
+      return VERIFICATION_TYPE_LABEL.identity;
+    case "platform":
+      return VERIFICATION_TYPE_LABEL.platform;
+    case "reference":
+      return VERIFICATION_TYPE_LABEL.reference;
+    default:
+      return VERIFICATION_TYPE_LABEL.unknown;
+  }
+}
+
+function buildStatusMeta(
+  status: VerificationStatus,
+  verificationType: string | null | undefined,
+): CaseStatusMeta {
   const nextByStatus: Record<VerificationStatus, string> = {
     draft: "Request is not yet ready for admin review.",
     pending_subject_acceptance: "Candidate must accept the request.",
@@ -1945,7 +1973,7 @@ function buildStatusMeta(status: VerificationStatus): CaseStatusMeta {
 
   return {
     description: nextByStatus[status],
-    stage: VERIFICATION_TYPE_LABEL.employment,
+    stage: resolveVerificationStageLabel(verificationType),
     slaTargetHours: 72,
     nextExpectedAction: nextByStatus[status],
   };

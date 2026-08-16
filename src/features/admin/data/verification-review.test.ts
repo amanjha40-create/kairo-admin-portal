@@ -501,6 +501,7 @@ describe("verification review adapter", () => {
       registryName: "Kairo Canonical",
       routingConfidence: 97,
     });
+    expect(detail?.statusMeta.stage).toBe("Employment");
     expect(detail?.timeline).toHaveLength(1);
     expect(detail?.timeline[0]).toMatchObject({
       id: "66666666-6666-6666-6666-666666666666",
@@ -713,7 +714,104 @@ describe("verification review adapter", () => {
       publicId: "eeeeeee1-1111-1111-1111-111111111111",
       canonicalStatus: "verified",
     });
+    expect(detail?.statusMeta.stage).toBe("Education");
+    expect(detail?.routingContext).toMatchObject({
+      registryResolutionStatus: "resolved",
+      registryRecordId: "88888888-8888-8888-8888-888888888888",
+      registryName: "Kairo Canonical",
+    });
   });
+
+  it("uses a neutral stage label when the backend request type is unknown", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/timeline")) {
+        return jsonResponse(timelinePayload());
+      }
+      if (
+        url.includes("/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111")
+      ) {
+        return jsonResponse({
+          ...detailPayload(),
+          request: {
+            ...queuePayload().items[0],
+            employment_id: null,
+            education_id: null,
+            request_type: "volunteer",
+            employment_claim: null,
+            education_claim: null,
+          },
+          employment: null,
+          education: null,
+          registry_resolution: null,
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+    expect(detail?.summary.verificationType).toBe("unknown");
+    expect(detail?.statusMeta.stage).toBe("Professional record");
+    expect(detail?.linkedRecord).toBeUndefined();
+  });
+
+  it.each(["verified", "rejected", "unable_to_verify", "cancelled"] as const)(
+    "preserves canonical registry linkage for %s terminal verification details",
+    async (terminalStatus) => {
+      const storage = createMemoryStorage();
+      seedTokens(storage);
+
+      const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/timeline")) {
+          return jsonResponse(timelinePayload());
+        }
+        if (
+          url.includes("/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111")
+        ) {
+          return jsonResponse({
+            ...detailPayload(),
+            request: {
+              ...queuePayload().items[0],
+              status: terminalStatus,
+            },
+          });
+        }
+
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+        production: {
+          storage,
+          fetchImpl,
+          now: () => new Date("2026-07-28T12:00:00.000Z"),
+        },
+      });
+
+      const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+      expect(detail?.summary.status).toBe(terminalStatus);
+      expect(detail?.routingContext).toMatchObject({
+        registryResolutionStatus: "resolved",
+        registryRecordId: "88888888-8888-8888-8888-888888888888",
+        registryName: "Kairo Canonical",
+      });
+    },
+  );
 
   it("maps persisted backend internal notes without falling back to session-only state", async () => {
     const storage = createMemoryStorage();
