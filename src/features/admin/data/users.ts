@@ -1,10 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 import { appEnv, type AppEnvConfig } from "@/config/env";
 import { DEMO_MODE_BUILD_ENABLED } from "@/features/admin/controlled-pilot";
+import { ApiError } from "@/lib/api/errors";
 import type { ProductionAdminApiOptions } from "./admin-api";
 import { createAdminAuthenticatedApi } from "./admin-api";
 
-export type AdminUserAccountStatus = "active" | "inactive" | "deleted";
+export type AdminUserAccountStatus = "active" | "suspended" | "deleted";
 export type UserAccountStatus =
   "active" | "pending" | "disabled" | "suspended" | "deletion_requested";
 export type UserAttentionKind =
@@ -27,7 +28,7 @@ export type SortOrder = "asc" | "desc";
 
 export const ADMIN_USER_ACCOUNT_STATUS_LABEL: Record<AdminUserAccountStatus, string> = {
   active: "Active",
-  inactive: "Inactive",
+  suspended: "Suspended",
   deleted: "Deleted",
 };
 
@@ -129,12 +130,42 @@ export interface AdminUserActivityEvent {
   kind: string;
   title: string;
   detail?: string | null;
+  actorDisplayName?: string | null;
+  actorRole?: string | null;
+}
+
+export interface AdminUserSession {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActiveAt: string;
+  revokedAt?: string | null;
+  status: "active" | "expired" | "revoked";
+}
+
+export interface AdminUserNote {
+  id: string;
+  createdAt: string;
+  authorDisplayName?: string | null;
+  authorRole?: string | null;
+  body: string;
+}
+
+export interface AdminUserActionCapabilities {
+  viewNotes: boolean;
+  addNote: boolean;
+  suspend: boolean;
+  restore: boolean;
+  revokeSessions: boolean;
+  sendPasswordReset: boolean;
 }
 
 export interface AdminUserDetail {
   id: string;
   displayName: string;
   accountStatus: AdminUserAccountStatus;
+  profileSlug?: string | null;
+  candidateType: string;
   email: string;
   maskedEmail: string;
   phone?: string | null;
@@ -144,16 +175,25 @@ export interface AdminUserDetail {
   location?: string | null;
   createdAt: string;
   updatedAt: string;
+  lastLoginAt?: string | null;
+  lastActiveAt?: string | null;
   deletedAt?: string | null;
+  suspendedAt?: string | null;
+  suspensionReason?: string | null;
+  suspendedByDisplayName?: string | null;
   emailVerified: boolean;
   phoneVerified: boolean;
   onboardingCompleted: boolean;
+  onboardingState: string;
   profileCompletionPercentage: number;
   trust: AdminUserTrustSummary;
   careerSummary: AdminUserCareerSummary;
   verificationSummary: AdminUserVerificationSummary;
   verifications: AdminUserVerificationItem[];
   passport: AdminUserPassportSummary;
+  sessions: AdminUserSession[];
+  notes: AdminUserNote[];
+  capabilities: AdminUserActionCapabilities;
   activity: AdminUserActivityEvent[];
 }
 
@@ -191,6 +231,8 @@ interface BackendUserDetailRecord {
   public_id: string;
   display_name: string;
   account_status: string;
+  profile_slug?: string | null;
+  candidate_type?: string | null;
   email: string;
   masked_email: string;
   phone?: string | null;
@@ -200,10 +242,16 @@ interface BackendUserDetailRecord {
   location?: string | null;
   created_at: string;
   updated_at: string;
+  last_login_at?: string | null;
+  last_active_at?: string | null;
   deleted_at?: string | null;
+  suspended_at?: string | null;
+  suspension_reason?: string | null;
+  suspended_by_display_name?: string | null;
   email_verified?: boolean;
   phone_verified?: boolean;
   onboarding_completed?: boolean;
+  onboarding_state?: string | null;
   profile_completion_percentage?: number;
   trust?: {
     overall?: number | null;
@@ -253,12 +301,37 @@ interface BackendUserDetailRecord {
     latest_share_created_at?: string | null;
     last_viewed_at?: string | null;
   };
+  sessions?: Array<{
+    public_id: string;
+    created_at: string;
+    expires_at: string;
+    last_active_at: string;
+    revoked_at?: string | null;
+    status: "active" | "expired" | "revoked";
+  }>;
+  notes?: Array<{
+    public_id: string;
+    created_at: string;
+    author_display_name?: string | null;
+    author_role?: string | null;
+    body: string;
+  }>;
+  capabilities?: {
+    view_notes?: boolean;
+    add_note?: boolean;
+    suspend?: boolean;
+    restore?: boolean;
+    revoke_sessions?: boolean;
+    send_password_reset?: boolean;
+  };
   activity?: Array<{
     public_id: string;
     occurred_at: string;
     kind: string;
     title: string;
     detail?: string | null;
+    actor_display_name?: string | null;
+    actor_role?: string | null;
   }>;
 }
 
@@ -269,6 +342,12 @@ interface AdminUsersDataAdapter {
   mode: "demo" | "production";
   listUsers: (params?: AdminUserListParams) => Promise<AdminUserListResult>;
   getUser: (id: string) => Promise<AdminUserDetail | undefined>;
+  addNote: (id: string, body: string) => Promise<AdminUserNote>;
+  suspendUser: (id: string, reason: string) => Promise<AdminUserDetail>;
+  restoreUser: (id: string, reason: string) => Promise<AdminUserDetail>;
+  revokeSession: (id: string, sessionId: string) => Promise<AdminUserDetail>;
+  revokeAllSessions: (id: string) => Promise<AdminUserDetail>;
+  sendPasswordReset: (id: string) => Promise<AdminUserDetail>;
 }
 
 export interface CreateAdminUsersAdapterOptions {
@@ -314,6 +393,48 @@ export function createAdminUsersAdapter(
       listUsers: (params) =>
         options.demoListLoader?.(normalizeListParams(params)) ?? loadDemoUsers(params),
       getUser: (id) => options.demoDetailLoader?.(id) ?? loadDemoUser(id),
+      addNote: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not persist candidate account notes.",
+          status: 409,
+        });
+      },
+      suspendUser: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not suspend candidate accounts.",
+          status: 409,
+        });
+      },
+      restoreUser: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not restore candidate accounts.",
+          status: 409,
+        });
+      },
+      revokeSession: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not revoke candidate sessions.",
+          status: 409,
+        });
+      },
+      revokeAllSessions: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not revoke candidate sessions.",
+          status: 409,
+        });
+      },
+      sendPasswordReset: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not send candidate password reset emails.",
+          status: 409,
+        });
+      },
     };
   }
 
@@ -336,6 +457,60 @@ export function createAdminUsersAdapter(
     },
     async getUser(id) {
       const data = await api.request<BackendUserDetailRecord>(`/api/v1/admin/users/${id}`);
+      return mapBackendDetail(data);
+    },
+    async addNote(id, body) {
+      const data = await api.request<{
+        public_id: string;
+        created_at: string;
+        author_display_name?: string | null;
+        author_role?: string | null;
+        body: string;
+      }>(`/api/v1/admin/users/${id}/notes`, {
+        method: "POST",
+        body: { body },
+      });
+      return {
+        id: data.public_id,
+        createdAt: data.created_at,
+        authorDisplayName: data.author_display_name ?? null,
+        authorRole: data.author_role ?? null,
+        body: data.body,
+      };
+    },
+    async suspendUser(id, reason) {
+      const data = await api.request<BackendUserDetailRecord>(`/api/v1/admin/users/${id}/suspend`, {
+        method: "POST",
+        body: { reason },
+      });
+      return mapBackendDetail(data);
+    },
+    async restoreUser(id, reason) {
+      const data = await api.request<BackendUserDetailRecord>(`/api/v1/admin/users/${id}/restore`, {
+        method: "POST",
+        body: { reason },
+      });
+      return mapBackendDetail(data);
+    },
+    async revokeSession(id, sessionId) {
+      const data = await api.request<BackendUserDetailRecord>(
+        `/api/v1/admin/users/${id}/sessions/${sessionId}/revoke`,
+        { method: "POST" },
+      );
+      return mapBackendDetail(data);
+    },
+    async revokeAllSessions(id) {
+      const data = await api.request<BackendUserDetailRecord>(
+        `/api/v1/admin/users/${id}/sessions/revoke-all`,
+        { method: "POST" },
+      );
+      return mapBackendDetail(data);
+    },
+    async sendPasswordReset(id) {
+      const data = await api.request<BackendUserDetailRecord>(
+        `/api/v1/admin/users/${id}/password-reset`,
+        { method: "POST" },
+      );
       return mapBackendDetail(data);
     },
   };
@@ -386,7 +561,7 @@ function normalizeAccountStatus(value: string | null | undefined): AdminUserAcco
   const normalized = (value ?? "").trim().toLowerCase();
   if (normalized === "deleted") return "deleted";
   if (normalized === "inactive" || normalized === "disabled" || normalized === "suspended") {
-    return "inactive";
+    return "suspended";
   }
   return "active";
 }
@@ -424,6 +599,8 @@ function mapBackendDetail(record: BackendUserDetailRecord): AdminUserDetail {
     id: record.public_id,
     displayName: record.display_name,
     accountStatus: normalizeAccountStatus(record.account_status),
+    profileSlug: record.profile_slug ?? null,
+    candidateType: record.candidate_type ?? "candidate",
     email: record.email,
     maskedEmail: record.masked_email,
     phone: record.phone ?? null,
@@ -433,10 +610,16 @@ function mapBackendDetail(record: BackendUserDetailRecord): AdminUserDetail {
     location: record.location ?? null,
     createdAt: record.created_at,
     updatedAt: record.updated_at,
+    lastLoginAt: record.last_login_at ?? null,
+    lastActiveAt: record.last_active_at ?? null,
     deletedAt: record.deleted_at ?? null,
+    suspendedAt: record.suspended_at ?? null,
+    suspensionReason: record.suspension_reason ?? null,
+    suspendedByDisplayName: record.suspended_by_display_name ?? null,
     emailVerified: Boolean(record.email_verified),
     phoneVerified: Boolean(record.phone_verified),
     onboardingCompleted: Boolean(record.onboarding_completed),
+    onboardingState: record.onboarding_state ?? "incomplete",
     profileCompletionPercentage: record.profile_completion_percentage ?? 0,
     trust: {
       overall: record.trust?.overall ?? null,
@@ -486,12 +669,37 @@ function mapBackendDetail(record: BackendUserDetailRecord): AdminUserDetail {
       latestShareCreatedAt: record.passport?.latest_share_created_at ?? null,
       lastViewedAt: record.passport?.last_viewed_at ?? null,
     },
+    sessions: (record.sessions ?? []).map((item) => ({
+      id: item.public_id,
+      createdAt: item.created_at,
+      expiresAt: item.expires_at,
+      lastActiveAt: item.last_active_at,
+      revokedAt: item.revoked_at ?? null,
+      status: item.status,
+    })),
+    notes: (record.notes ?? []).map((item) => ({
+      id: item.public_id,
+      createdAt: item.created_at,
+      authorDisplayName: item.author_display_name ?? null,
+      authorRole: item.author_role ?? null,
+      body: item.body,
+    })),
+    capabilities: {
+      viewNotes: Boolean(record.capabilities?.view_notes),
+      addNote: Boolean(record.capabilities?.add_note),
+      suspend: Boolean(record.capabilities?.suspend),
+      restore: Boolean(record.capabilities?.restore),
+      revokeSessions: Boolean(record.capabilities?.revoke_sessions),
+      sendPasswordReset: Boolean(record.capabilities?.send_password_reset),
+    },
     activity: (record.activity ?? []).map((event) => ({
       id: event.public_id,
       occurredAt: event.occurred_at,
       kind: event.kind,
       title: event.title,
       detail: event.detail ?? null,
+      actorDisplayName: event.actor_display_name ?? null,
+      actorRole: event.actor_role ?? null,
     })),
   };
 }
@@ -534,6 +742,8 @@ async function loadDemoUser(id: string): Promise<AdminUserDetail | undefined> {
     id: user.id,
     displayName: user.fullName,
     accountStatus: mapDemoAccountStatus(user.accountStatus),
+    profileSlug: null,
+    candidateType: "candidate",
     email: user.email,
     maskedEmail: maskEmail(user.email),
     phone: user.phone,
@@ -543,10 +753,16 @@ async function loadDemoUser(id: string): Promise<AdminUserDetail | undefined> {
     location: user.location,
     createdAt: user.joinedAt,
     updatedAt: user.lastActiveAt,
+    lastLoginAt: user.lastActiveAt,
+    lastActiveAt: user.lastActiveAt,
     deletedAt: null,
+    suspendedAt: null,
+    suspensionReason: null,
+    suspendedByDisplayName: null,
     emailVerified: user.emailVerified,
     phoneVerified: user.phoneVerified,
     onboardingCompleted: user.onboarding.state === "completed",
+    onboardingState: user.onboarding.state,
     profileCompletionPercentage: user.onboarding.profileCompletionPct,
     trust: {
       overall: user.trustScore.current,
@@ -581,6 +797,16 @@ async function loadDemoUser(id: string): Promise<AdminUserDetail | undefined> {
       uniqueViews: user.shares.reduce((sum, share) => sum + Math.min(share.viewCount, 1), 0),
       latestShareCreatedAt: user.shares[0]?.createdAt ?? null,
       lastViewedAt: user.shares.find((share) => share.lastViewedAt)?.lastViewedAt ?? null,
+    },
+    sessions: [],
+    notes: [],
+    capabilities: {
+      viewNotes: false,
+      addNote: false,
+      suspend: false,
+      restore: false,
+      revokeSessions: false,
+      sendPasswordReset: false,
     },
     activity: user.activity.map((item) => ({
       id: item.id,
@@ -692,7 +918,7 @@ function buildDemoVerificationSummary(
 
 function mapDemoAccountStatus(value: DemoUsersModule["mockUsers"][number]["accountStatus"]) {
   if (value === "active") return "active";
-  return "inactive";
+  return "suspended";
 }
 
 function humanize(value: string) {

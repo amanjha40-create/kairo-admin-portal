@@ -91,15 +91,17 @@ const BACKEND_PERMISSION_MAP: Record<string, WorkflowPermission[]> = {
     "verification.return_to_verifier",
   ],
   request_more_info: ["verification.request_correction", "verification.record_clarification"],
+  read_users: ["users.view"],
+  manage_user_notes: ["users.notes.create"],
+  manage_user_accounts: ["users.account.disable", "users.account.enable"],
+  manage_user_security: ["users.sessions.revoke", "users.password_reset.prepare"],
   manage_users: [
+    "users.view",
+    "users.notes.create",
     "users.account.disable",
     "users.account.enable",
     "users.sessions.revoke",
-    "users.verification.resend",
     "users.password_reset.prepare",
-    "users.risk.flag",
-    "users.data_export.prepare",
-    "users.deletion.prepare",
   ],
 };
 

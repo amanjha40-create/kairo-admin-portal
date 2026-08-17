@@ -26,7 +26,7 @@ export const Route = createFileRoute("/admin/users/")({
 const STATUS_FILTERS: Array<{ key: "all" | AdminUserAccountStatus; label: string }> = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
-  { key: "inactive", label: "Inactive" },
+  { key: "suspended", label: "Suspended" },
   { key: "deleted", label: "Deleted" },
 ];
 

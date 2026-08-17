@@ -136,7 +136,7 @@ describe("admin users data adapter", () => {
       const url = new URL(String(input));
       expect(url.pathname).toBe("/api/v1/admin/users");
       expect(url.searchParams.get("search")).toBe("candidate");
-      expect(url.searchParams.get("status")).toBe("inactive");
+      expect(url.searchParams.get("status")).toBe("suspended");
       expect(url.searchParams.get("page")).toBe("2");
       expect(url.searchParams.get("page_size")).toBe("1");
       expect(url.searchParams.get("sort_by")).toBe("full_name");
@@ -160,7 +160,7 @@ describe("admin users data adapter", () => {
 
     const result = await adapter.listUsers({
       query: "candidate",
-      status: "inactive",
+      status: "suspended",
       page: 2,
       pageSize: 1,
       sortBy: "full_name",
@@ -216,16 +216,24 @@ describe("admin users data adapter", () => {
         public_id: "11111111-1111-1111-1111-111111111111",
         display_name: "Deleted Candidate",
         account_status: "deleted",
+        profile_slug: null,
+        candidate_type: "candidate",
         email: "deleted+candidate@example.com",
         masked_email: "de******@example.com",
         phone: null,
         masked_phone: null,
         created_at: "2026-08-11T08:00:00.000Z",
         updated_at: "2026-08-11T09:00:00.000Z",
+        last_login_at: null,
+        last_active_at: null,
         deleted_at: "2026-08-11T10:00:00.000Z",
+        suspended_at: null,
+        suspension_reason: null,
+        suspended_by_display_name: null,
         email_verified: true,
         phone_verified: false,
         onboarding_completed: false,
+        onboarding_state: "incomplete",
         profile_completion_percentage: 34,
         trust: {
           overall: 40,
@@ -276,6 +284,33 @@ describe("admin users data adapter", () => {
           latest_share_created_at: "2026-08-11T08:40:00.000Z",
           last_viewed_at: "2026-08-11T08:50:00.000Z",
         },
+        sessions: [
+          {
+            public_id: "55555555-5555-5555-5555-555555555555",
+            created_at: "2026-08-11T08:15:00.000Z",
+            expires_at: "2026-08-18T08:15:00.000Z",
+            last_active_at: "2026-08-11T09:15:00.000Z",
+            revoked_at: null,
+            status: "active",
+          },
+        ],
+        notes: [
+          {
+            public_id: "66666666-6666-6666-6666-666666666666",
+            created_at: "2026-08-11T09:10:00.000Z",
+            author_display_name: "Admin Operator",
+            author_role: "admin",
+            body: "Internal note",
+          },
+        ],
+        capabilities: {
+          view_notes: true,
+          add_note: false,
+          suspend: false,
+          restore: false,
+          revoke_sessions: false,
+          send_password_reset: false,
+        },
         activity: [
           {
             public_id: "33333333-3333-3333-3333-333333333333",
@@ -283,6 +318,8 @@ describe("admin users data adapter", () => {
             kind: "account_created",
             title: "Account created",
             detail: null,
+            actor_display_name: "System",
+            actor_role: "system",
           },
         ],
       });
@@ -301,6 +338,9 @@ describe("admin users data adapter", () => {
     expect(result).toMatchObject({
       id: "11111111-1111-1111-1111-111111111111",
       accountStatus: "deleted",
+      onboardingState: "incomplete",
+      sessions: [expect.objectContaining({ id: "55555555-5555-5555-5555-555555555555" })],
+      notes: [expect.objectContaining({ body: "Internal note" })],
       verifications: [
         expect.objectContaining({
           id: "22222222-2222-2222-2222-222222222222",
@@ -308,6 +348,109 @@ describe("admin users data adapter", () => {
           submittedAt: "2026-08-11T08:35:00.000Z",
         }),
       ],
+    });
+  });
+
+  it("creates an internal admin note through the backend", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe("/api/v1/admin/users/11111111-1111-1111-1111-111111111111/notes");
+      expect(init?.method).toBe("POST");
+      expect(init?.body).toContain("Needs review");
+      return jsonResponse({
+        public_id: "77777777-7777-7777-7777-777777777777",
+        created_at: "2026-08-11T10:00:00.000Z",
+        author_display_name: "Admin Operator",
+        author_role: "admin",
+        body: "Needs review",
+      });
+    });
+
+    const adapter = createAdminUsersAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-08-11T12:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      adapter.addNote("11111111-1111-1111-1111-111111111111", "Needs review"),
+    ).resolves.toMatchObject({
+      id: "77777777-7777-7777-7777-777777777777",
+      body: "Needs review",
+    });
+  });
+
+  it("suspends a candidate through the backend detail contract", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe("/api/v1/admin/users/11111111-1111-1111-1111-111111111111/suspend");
+      expect(init?.method).toBe("POST");
+      return jsonResponse({
+        public_id: "11111111-1111-1111-1111-111111111111",
+        display_name: "Candidate One",
+        account_status: "suspended",
+        profile_slug: "candidate-one",
+        candidate_type: "candidate",
+        email: "candidate.one@example.com",
+        masked_email: "ca******@example.com",
+        phone: "+15551234567",
+        masked_phone: "+15 •••••••67",
+        created_at: "2026-08-11T08:00:00.000Z",
+        updated_at: "2026-08-11T09:00:00.000Z",
+        suspended_at: "2026-08-11T10:00:00.000Z",
+        suspension_reason: "Risk review",
+        suspended_by_display_name: "Admin Operator",
+        email_verified: true,
+        phone_verified: true,
+        onboarding_completed: true,
+        onboarding_state: "completed",
+        profile_completion_percentage: 78,
+        trust: {},
+        career_summary: { total_items: 0 },
+        verification_summary: {
+          overall: { total: 0, statuses: {} },
+          employments: { total: 0, statuses: {} },
+          educations: { total: 0, statuses: {} },
+          certifications: { total: 0, statuses: {} },
+        },
+        verifications: [],
+        passport: { ready: false },
+        sessions: [],
+        notes: [],
+        capabilities: {
+          view_notes: true,
+          add_note: true,
+          suspend: false,
+          restore: true,
+          revoke_sessions: true,
+          send_password_reset: false,
+        },
+        activity: [],
+      });
+    });
+
+    const adapter = createAdminUsersAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-08-11T12:00:00.000Z"),
+      },
+    });
+
+    await expect(
+      adapter.suspendUser("11111111-1111-1111-1111-111111111111", "Risk review"),
+    ).resolves.toMatchObject({
+      accountStatus: "suspended",
+      suspensionReason: "Risk review",
+      capabilities: expect.objectContaining({ restore: true }),
     });
   });
 
@@ -380,6 +523,8 @@ describe("admin users data adapter", () => {
       id: demoList.items[0]!.id,
       displayName: demoList.items[0]!.displayName,
       accountStatus: demoList.items[0]!.accountStatus,
+      profileSlug: null,
+      candidateType: "candidate",
       email: "demo@example.com",
       maskedEmail: demoList.items[0]!.maskedEmail,
       phone: null,
@@ -389,10 +534,16 @@ describe("admin users data adapter", () => {
       location: null,
       createdAt: demoList.items[0]!.createdAt,
       updatedAt: "2026-08-11T13:00:00.000Z",
+      lastLoginAt: "2026-08-11T13:00:00.000Z",
+      lastActiveAt: "2026-08-11T13:00:00.000Z",
       deletedAt: null,
+      suspendedAt: null,
+      suspensionReason: null,
+      suspendedByDisplayName: null,
       emailVerified: true,
       phoneVerified: false,
       onboardingCompleted: true,
+      onboardingState: "completed",
       profileCompletionPercentage: 80,
       trust: {
         overall: 72,
@@ -429,6 +580,16 @@ describe("admin users data adapter", () => {
         uniqueViews: 2,
         latestShareCreatedAt: "2026-08-11T13:00:00.000Z",
         lastViewedAt: "2026-08-11T13:30:00.000Z",
+      },
+      sessions: [],
+      notes: [],
+      capabilities: {
+        viewNotes: false,
+        addNote: false,
+        suspend: false,
+        restore: false,
+        revokeSessions: false,
+        sendPasswordReset: false,
       },
       activity: [],
     };
