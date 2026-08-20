@@ -33,6 +33,10 @@ import {
   type AdminUserVerificationBreakdown,
 } from "@/features/admin/data/users";
 import { formatRelativeTime } from "@/features/admin/lib/format";
+import {
+  submitUserActionMutation,
+  submitUserNoteMutation,
+} from "@/features/admin/lib/user-mutation-submit";
 import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/users/$userId")({
@@ -455,7 +459,7 @@ function UserDetailPage() {
                   <div className="mt-3 flex items-center justify-end">
                     <button
                       type="button"
-                      onClick={() => void noteMutation.mutateAsync(noteBody.trim())}
+                      onClick={() => submitUserNoteMutation(noteMutation, noteBody.trim())}
                       disabled={noteMutation.isPending || noteBody.trim().length === 0}
                       className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -580,7 +584,7 @@ function UserDetailPage() {
         reason={reason}
         onReasonChange={setReason}
         isSubmitting={actionMutation.isPending}
-        onConfirm={() => void actionMutation.mutateAsync()}
+        onConfirm={() => submitUserActionMutation(actionMutation)}
       />
     </>
   );
