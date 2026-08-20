@@ -68,6 +68,9 @@ describe("admin notifications adapter", () => {
       if (url.pathname === "/api/v1/admin/notifications/inbox") {
         expect(url.searchParams.get("page")).toBe("2");
         expect(url.searchParams.get("page_size")).toBe("5");
+        expect(url.searchParams.get("search")).toBe("review");
+        expect(url.searchParams.get("unread")).toBe("true");
+        expect(url.searchParams.get("event_type")).toBe("admin_verification_review_required");
         return jsonResponse({
           items: [
             {
@@ -84,6 +87,7 @@ describe("admin notifications adapter", () => {
               updated_at: "2026-08-11T09:05:00.000Z",
               status: "sent",
               channel: "in_app",
+              priority: "normal",
             },
           ],
           total: 1,
@@ -106,7 +110,15 @@ describe("admin notifications adapter", () => {
       },
     });
 
-    await expect(adapter.listInbox({ page: 2, pageSize: 5 })).resolves.toEqual({
+    await expect(
+      adapter.listInbox({
+        page: 2,
+        pageSize: 5,
+        search: "review",
+        readState: "unread",
+        eventType: "admin_verification_review_required",
+      }),
+    ).resolves.toEqual({
       items: [
         {
           id: "11111111-1111-1111-1111-111111111111",
@@ -122,6 +134,7 @@ describe("admin notifications adapter", () => {
           updatedAt: "2026-08-11T09:05:00.000Z",
           status: "sent",
           channel: "in_app",
+          priority: "normal",
         },
       ],
       total: 1,

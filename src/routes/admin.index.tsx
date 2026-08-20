@@ -24,6 +24,8 @@ import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { shouldEnableAdminProtectedQuery } from "@/features/admin/auth/protected-query";
 import { overviewDashboardQueryOptions } from "@/features/admin/data/overview";
 import { appEnv } from "@/config/env";
+import { adminNotificationUnreadCountQueryOptions } from "@/features/admin/data/notifications";
+import { adminCommunicationSummaryQueryOptions } from "@/features/admin/data/communications.production";
 import { getCommunicationMetrics } from "@/features/admin/runtime/communications";
 import {
   SERVICE_HEALTH_LABEL,
@@ -61,6 +63,14 @@ function OverviewPage() {
     enabled: shouldEnableAdminProtectedQuery(access.state),
   });
   const showDemoOperationalSections = shouldShowOverviewDemoOperationalSections(appEnv);
+  const notificationsSummaryQuery = useQuery({
+    ...adminNotificationUnreadCountQueryOptions(),
+    enabled: shouldEnableAdminProtectedQuery(access.state) && !showDemoOperationalSections,
+  });
+  const communicationsSummaryQuery = useQuery({
+    ...adminCommunicationSummaryQueryOptions(),
+    enabled: shouldEnableAdminProtectedQuery(access.state) && !showDemoOperationalSections,
+  });
   const comms = showDemoOperationalSections ? getCommunicationMetrics() : null;
   const services = showDemoOperationalSections
     ? listServices().map<PlatformServiceStatus>((service) => ({
@@ -250,6 +260,48 @@ function OverviewPage() {
             />
             <CommTile label="Follow-ups due today" value={comms.followUpsDueToday} tone="warn" />
           </div>
+        ) : notificationsSummaryQuery.data && communicationsSummaryQuery.data ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <CommTile
+              label="Unread notifications"
+              value={notificationsSummaryQuery.data.unreadCount}
+              tone={notificationsSummaryQuery.data.unreadCount > 0 ? "warn" : "neutral"}
+              icon={<Bell aria-hidden className="size-3.5" />}
+            />
+            <CommTile
+              label="Queued"
+              value={communicationsSummaryQuery.data.queued}
+              tone="neutral"
+            />
+            <CommTile label="Sent" value={communicationsSummaryQuery.data.sent} tone="good" />
+            <CommTile label="Failed" value={communicationsSummaryQuery.data.failed} tone="bad" />
+            <CommTile
+              label="Failures (24h)"
+              value={communicationsSummaryQuery.data.recentFailures24h}
+              tone={communicationsSummaryQuery.data.recentFailures24h > 0 ? "bad" : "neutral"}
+              icon={<MailWarning aria-hidden className="size-3.5" />}
+            />
+            <CommTile
+              label="Resendable failed"
+              value={communicationsSummaryQuery.data.resendableFailed}
+              tone={communicationsSummaryQuery.data.resendableFailed > 0 ? "warn" : "neutral"}
+            />
+          </div>
+        ) : notificationsSummaryQuery.isPending || communicationsSummaryQuery.isPending ? (
+          <LoadingSkeleton rows={2} />
+        ) : notificationsSummaryQuery.isError || communicationsSummaryQuery.isError ? (
+          <RetryState
+            title="Communications summary unavailable"
+            description={
+              notificationsSummaryQuery.error?.message ??
+              communicationsSummaryQuery.error?.message ??
+              "Unable to load the communications summary."
+            }
+            onRetry={() => {
+              void notificationsSummaryQuery.refetch();
+              void communicationsSummaryQuery.refetch();
+            }}
+          />
         ) : (
           <ControlledPilotUnavailableState section="Communications" />
         )}

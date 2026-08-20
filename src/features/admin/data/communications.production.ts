@@ -31,10 +31,14 @@ export interface AdminCommunicationListParams {
   status?: string | "all";
   channel?: string | "all";
   templateKey?: string | "all";
+  provider?: string | "all";
   page?: number;
   pageSize?: number;
   createdAfter?: string | null;
   createdBefore?: string | null;
+  relatedCandidateId?: string | null;
+  relatedVerificationId?: string | null;
+  relatedOrganizationId?: string | null;
 }
 
 export interface AdminCommunicationRelatedObject {
@@ -87,6 +91,39 @@ export interface AdminCommunicationListItem {
 export interface AdminCommunicationDetail extends AdminCommunicationListItem {
   payloadSummary: Record<string, unknown>;
   deliveryTimeline: AdminCommunicationTimelineEvent[];
+  notificationId?: string | null;
+  deliveryAttempts: Array<{
+    notificationDeliveryId: string;
+    communicationId?: string | null;
+    channel: string;
+    status: string;
+    provider?: string | null;
+    providerMessageIdDisplay?: string | null;
+    attemptCount: number;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    dispatchedAt?: string | null;
+    deliveredAt?: string | null;
+    failedAt?: string | null;
+    createdAt: string;
+  }>;
+  auditHistory: Array<{
+    id: string;
+    actorUserId?: string | null;
+    eventType: string;
+    status?: string | null;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+  }>;
+}
+
+export interface AdminCommunicationSummary {
+  total: number;
+  queued: number;
+  sent: number;
+  failed: number;
+  recentFailures24h: number;
+  resendableFailed: number;
 }
 
 export interface AdminCommunicationListResult {
@@ -155,11 +192,46 @@ interface BackendCommunicationRecord {
 interface BackendCommunicationDetailRecord extends BackendCommunicationRecord {
   payload_summary?: Record<string, unknown>;
   delivery_timeline?: BackendTimelineEvent[];
+  notification_public_id?: string | null;
+  delivery_attempts?: Array<{
+    notification_delivery_public_id: string;
+    communication_public_id?: string | null;
+    channel: string;
+    status: string;
+    provider?: string | null;
+    provider_message_id_display?: string | null;
+    attempt_count: number;
+    error_code?: string | null;
+    error_message?: string | null;
+    dispatched_at?: string | null;
+    delivered_at?: string | null;
+    failed_at?: string | null;
+    created_at: string;
+  }>;
+  audit_history?: Array<{
+    public_id: string;
+    actor_user_id?: string | null;
+    event_type: string;
+    status?: string | null;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  }>;
+}
+
+interface BackendCommunicationSummary {
+  total: number;
+  queued: number;
+  sent: number;
+  failed: number;
+  recent_failures_24h: number;
+  resendable_failed: number;
 }
 
 interface AdminCommunicationsAdapter {
   list: (params?: AdminCommunicationListParams) => Promise<AdminCommunicationListResult>;
   detail: (id: string) => Promise<AdminCommunicationDetail>;
+  summary: () => Promise<AdminCommunicationSummary>;
+  resend: (id: string) => Promise<AdminCommunicationDetail>;
 }
 
 export interface CreateAdminCommunicationsAdapterOptions {
@@ -179,12 +251,17 @@ export const communicationKeys = {
       params.status,
       params.channel,
       params.templateKey,
+      params.provider,
       params.page,
       params.pageSize,
       params.createdAfter,
       params.createdBefore,
+      params.relatedCandidateId,
+      params.relatedVerificationId,
+      params.relatedOrganizationId,
     ] as const,
   detail: (id: string) => [...communicationKeys.all(), "detail", id] as const,
+  summary: () => [...communicationKeys.all(), "summary"] as const,
 };
 
 export function getCommunicationMetrics() {
@@ -227,6 +304,26 @@ export function createAdminCommunicationsAdapter(
       );
       return mapBackendCommunicationDetail(data);
     },
+    async summary() {
+      const data = await api.request<BackendCommunicationSummary>(
+        "/api/v1/admin/communications/statistics/summary",
+      );
+      return {
+        total: data.total ?? 0,
+        queued: data.queued ?? 0,
+        sent: data.sent ?? 0,
+        failed: data.failed ?? 0,
+        recentFailures24h: data.recent_failures_24h ?? 0,
+        resendableFailed: data.resendable_failed ?? 0,
+      };
+    },
+    async resend(id) {
+      const data = await api.request<{ communication: BackendCommunicationDetailRecord }>(
+        `/api/v1/admin/communications/${id}/resend`,
+        { method: "POST" },
+      );
+      return mapBackendCommunicationDetail(data.communication);
+    },
   };
 }
 
@@ -247,6 +344,14 @@ export function adminCommunicationDetailQueryOptions(id: string) {
   });
 }
 
+export function adminCommunicationSummaryQueryOptions() {
+  const adapter = createAdminCommunicationsAdapter();
+  return queryOptions({
+    queryKey: communicationKeys.summary(),
+    queryFn: async () => adapter.summary(),
+  });
+}
+
 function normalizeListParams(
   params: AdminCommunicationListParams = {},
 ): Required<AdminCommunicationListParams> {
@@ -255,10 +360,14 @@ function normalizeListParams(
     status: params.status ?? "all",
     channel: params.channel ?? "all",
     templateKey: params.templateKey ?? "all",
+    provider: params.provider ?? "all",
     page: params.page ?? DEFAULT_PAGE,
     pageSize: params.pageSize ?? DEFAULT_PAGE_SIZE,
     createdAfter: params.createdAfter ?? null,
     createdBefore: params.createdBefore ?? null,
+    relatedCandidateId: params.relatedCandidateId ?? null,
+    relatedVerificationId: params.relatedVerificationId ?? null,
+    relatedOrganizationId: params.relatedOrganizationId ?? null,
   };
 }
 
@@ -272,8 +381,18 @@ function buildCommunicationsListPath(params: Required<AdminCommunicationListPara
   if (params.status !== "all") search.set("status", params.status);
   if (params.channel !== "all") search.set("channel", params.channel);
   if (params.templateKey !== "all") search.set("template_key", params.templateKey);
+  if (params.provider !== "all") search.set("provider", params.provider);
   if (params.createdAfter) search.set("created_after", params.createdAfter);
   if (params.createdBefore) search.set("created_before", params.createdBefore);
+  if (params.relatedCandidateId) {
+    search.set("related_candidate_public_id", params.relatedCandidateId);
+  }
+  if (params.relatedVerificationId) {
+    search.set("related_verification_public_id", params.relatedVerificationId);
+  }
+  if (params.relatedOrganizationId) {
+    search.set("related_organization_public_id", params.relatedOrganizationId);
+  }
   return `/api/v1/admin/communications?${search.toString()}`;
 }
 
@@ -330,6 +449,30 @@ function mapBackendCommunicationDetail(
       occurredAt: event.occurred_at,
       detail: event.detail,
       status: event.status ?? null,
+    })),
+    notificationId: record.notification_public_id ?? null,
+    deliveryAttempts: (record.delivery_attempts ?? []).map((attempt) => ({
+      notificationDeliveryId: attempt.notification_delivery_public_id,
+      communicationId: attempt.communication_public_id ?? null,
+      channel: attempt.channel,
+      status: attempt.status,
+      provider: attempt.provider ?? null,
+      providerMessageIdDisplay: attempt.provider_message_id_display ?? null,
+      attemptCount: attempt.attempt_count,
+      errorCode: attempt.error_code ?? null,
+      errorMessage: attempt.error_message ?? null,
+      dispatchedAt: attempt.dispatched_at ?? null,
+      deliveredAt: attempt.delivered_at ?? null,
+      failedAt: attempt.failed_at ?? null,
+      createdAt: attempt.created_at,
+    })),
+    auditHistory: (record.audit_history ?? []).map((event) => ({
+      id: event.public_id,
+      actorUserId: event.actor_user_id ?? null,
+      eventType: event.event_type,
+      status: event.status ?? null,
+      metadata: event.metadata ?? {},
+      createdAt: event.created_at,
     })),
   };
 }

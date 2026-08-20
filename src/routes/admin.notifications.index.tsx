@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, Search } from "lucide-react";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { TablePagination } from "@/features/admin/components/table-pagination";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
@@ -26,10 +26,21 @@ function AdminNotificationsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const adapter = createAdminNotificationsAdapter();
-  const search = Route.useSearch() as { page?: number; pageSize?: number };
+  const search = Route.useSearch() as {
+    page?: number;
+    pageSize?: number;
+    query?: string;
+    readState?: "all" | "read" | "unread";
+    eventType?: string;
+  };
   const page = Number(search.page ?? 1);
   const pageSize = Number(search.pageSize ?? 20);
-  const inboxQuery = useQuery(adminNotificationInboxQueryOptions({ page, pageSize }));
+  const query = String(search.query ?? "");
+  const readState = search.readState ?? "all";
+  const eventType = search.eventType ?? "all";
+  const inboxQuery = useQuery(
+    adminNotificationInboxQueryOptions({ page, pageSize, search: query, readState, eventType }),
+  );
 
   async function markAllRead() {
     await adapter.markAllRead();
@@ -99,6 +110,69 @@ function AdminNotificationsPage() {
         title="Inbox"
         description={`${result.total} notification${result.total === 1 ? "" : "s"} recorded for your Admin account.`}
       >
+        <div className="mb-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_220px]">
+          <label className="relative block">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => {
+                navigate({
+                  to: "/admin/notifications",
+                  search: {
+                    page: 1,
+                    pageSize,
+                    query: event.target.value,
+                    readState,
+                    eventType,
+                  },
+                });
+              }}
+              placeholder="Search title, body, event"
+              className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Search notifications"
+            />
+          </label>
+
+          <Select
+            label="Read state"
+            value={readState}
+            options={[
+              ["all", "All states"],
+              ["unread", "Unread only"],
+              ["read", "Read only"],
+            ]}
+            onChange={(next) => {
+              navigate({
+                to: "/admin/notifications",
+                search: { page: 1, pageSize, query, readState: next, eventType },
+              });
+            }}
+          />
+
+          <Select
+            label="Event"
+            value={eventType}
+            options={[
+              ["all", "All events"],
+              ["admin_verification_review_required", "Admin review required"],
+              ["admin_verification_quality_review_required", "Final quality review"],
+              ["trust_invitation_created", "Trust invitation"],
+              ["password_reset_requested", "Password reset"],
+              ["verification_completed", "Verification completed"],
+            ]}
+            onChange={(next) => {
+              navigate({
+                to: "/admin/notifications",
+                search: { page: 1, pageSize, query, readState, eventType: next },
+              });
+            }}
+          />
+        </div>
+
         <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
           {result.items.map((item) => {
             const target = resolveAdminNotificationTarget(item.metadata, item.id);
@@ -166,18 +240,47 @@ function AdminNotificationsPage() {
             onPageChange={(nextPage) => {
               navigate({
                 to: "/admin/notifications",
-                search: { page: nextPage, pageSize },
+                search: { page: nextPage, pageSize, query, readState, eventType },
               });
             }}
             onPageSizeChange={(nextPageSize) => {
               navigate({
                 to: "/admin/notifications",
-                search: { page: 1, pageSize: nextPageSize },
+                search: { page: 1, pageSize: nextPageSize, query, readState, eventType },
               });
             }}
           />
         </div>
       </WorkspaceSection>
     </div>
+  );
+}
+
+function Select({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+      >
+        {options.map(([option, text]) => (
+          <option key={option} value={option}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

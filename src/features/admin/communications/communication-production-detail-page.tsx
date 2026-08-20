@@ -1,12 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Mail, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Mail, RotateCw, TriangleAlert } from "lucide-react";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import {
   adminCommunicationDetailQueryOptions,
+  communicationKeys,
   COMMUNICATION_STATUS_LABEL,
   COMMUNICATION_TYPE_LABEL,
+  createAdminCommunicationsAdapter,
 } from "@/features/admin/data/communications.production";
 import { formatRelativeTime } from "@/features/admin/lib/format";
 
@@ -18,7 +21,22 @@ export function CommunicationProductionDetailPage({
 }: {
   communicationId: string;
 }) {
+  const queryClient = useQueryClient();
+  const adapter = createAdminCommunicationsAdapter();
+  const [resendError, setResendError] = useState<string | null>(null);
   const detailQuery = useQuery(adminCommunicationDetailQueryOptions(communicationId));
+  const resendMutation = useMutation({
+    mutationFn: async () => adapter.resend(communicationId),
+    onSuccess: async (detail) => {
+      setResendError(null);
+      queryClient.setQueryData(communicationKeys.detail(communicationId), detail);
+      queryClient.setQueryData(communicationKeys.detail(detail.id), detail);
+      await queryClient.invalidateQueries({ queryKey: communicationKeys.all() });
+    },
+    onError: (error) => {
+      setResendError(error instanceof Error ? error.message : "Resend failed.");
+    },
+  });
 
   if (detailQuery.isPending) {
     return (
@@ -89,6 +107,26 @@ export function CommunicationProductionDetailPage({
             {COMMUNICATION_STATUS_TEXT[detail.status] ?? detail.status}
           </span>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={!detail.retryable || resendMutation.isPending}
+            onClick={() => {
+              if (!window.confirm("Resend this communication and create a new delivery attempt?")) {
+                return;
+              }
+              resendMutation.mutate();
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RotateCw aria-hidden className="size-3.5" />
+            {resendMutation.isPending ? "Resending…" : "Resend communication"}
+          </button>
+          <span className="text-xs text-muted-foreground">
+            Resend policy: {formatPolicy(detail.retryPolicy)}
+          </span>
+        </div>
+        {resendError ? <p className="mt-2 text-sm text-destructive">{resendError}</p> : null}
       </header>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -109,6 +147,62 @@ export function CommunicationProductionDetailPage({
                 </li>
               ))}
             </ul>
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="Delivery attempts"
+            description="Every canonical delivery attempt recorded for this notification chain."
+          >
+            {detail.deliveryAttempts.length === 0 ? (
+              <EmptyState title="No delivery attempts recorded" />
+            ) : (
+              <ul className="divide-y divide-border rounded-md border border-border bg-card">
+                {detail.deliveryAttempts.map((attempt) => (
+                  <li key={attempt.notificationDeliveryId} className="px-3 py-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-foreground">
+                        Attempt {attempt.attemptCount || 1}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {attempt.communicationId
+                          ? `Communication ${attempt.communicationId}`
+                          : "No email log"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {attempt.provider ?? "Unknown provider"} · {attempt.status}
+                      {attempt.providerMessageIdDisplay
+                        ? ` · ${attempt.providerMessageIdDisplay}`
+                        : ""}
+                    </p>
+                    {attempt.errorMessage ? (
+                      <p className="mt-2 text-xs text-destructive">{attempt.errorMessage}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </WorkspaceSection>
+
+          <WorkspaceSection
+            title="Audit history"
+            description="Backend-owned notification and resend history."
+          >
+            {detail.auditHistory.length === 0 ? (
+              <EmptyState title="No audit history recorded" />
+            ) : (
+              <ul className="divide-y divide-border rounded-md border border-border bg-card">
+                {detail.auditHistory.map((event) => (
+                  <li key={event.id} className="px-3 py-3">
+                    <p className="text-sm font-medium text-foreground">{event.eventType}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatRelativeTime(event.createdAt)}
+                      {event.status ? ` · ${event.status}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </WorkspaceSection>
 
           <WorkspaceSection
@@ -138,7 +232,7 @@ export function CommunicationProductionDetailPage({
                 label="Provider message ID"
                 value={detail.providerMessageIdDisplay ?? "Unavailable"}
               />
-              <MetaRow label="Retry policy" value={detail.retryPolicy.replaceAll("_", " ")} />
+              <MetaRow label="Resend policy" value={formatPolicy(detail.retryPolicy)} />
             </dl>
           </WorkspaceSection>
 
@@ -184,6 +278,10 @@ export function CommunicationProductionDetailPage({
       </Link>
     </div>
   );
+}
+
+function formatPolicy(value: string) {
+  return value.replaceAll("_", " ");
 }
 
 function MetaRow({ label, value }: { label: string; value: string }) {

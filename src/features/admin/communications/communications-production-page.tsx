@@ -15,7 +15,9 @@ import { formatRelativeTime } from "@/features/admin/lib/format";
 const COMMUNICATION_STATUS_TEXT = COMMUNICATION_STATUS_LABEL as Record<string, string>;
 const COMMUNICATION_TYPE_TEXT = COMMUNICATION_TYPE_LABEL as Record<string, string>;
 
-const STATUS_OPTIONS = ["all", "queued", "sent", "failed"];
+const STATUS_OPTIONS = ["all", "queued", "sent", "failed", "cancelled", "suppressed", "skipped"];
+const CHANNEL_OPTIONS = ["all", "email"];
+const PROVIDER_OPTIONS = ["all", "brevo"];
 const TEMPLATE_OPTIONS = [
   "all",
   "signup_otp",
@@ -23,13 +25,20 @@ const TEMPLATE_OPTIONS = [
   "employer_verification",
   "trust_invitation_created",
   "verification_completed",
+  "admin_verification_review_required",
+  "admin_verification_quality_review_required",
 ];
 
 export function CommunicationsProductionPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [channel, setChannel] = useState("all");
+  const [provider, setProvider] = useState("all");
   const [templateKey, setTemplateKey] = useState("all");
   const [dateWindow, setDateWindow] = useState<"any" | "24h" | "7d" | "30d">("any");
+  const [relatedCandidateId, setRelatedCandidateId] = useState("");
+  const [relatedVerificationId, setRelatedVerificationId] = useState("");
+  const [relatedOrganizationId, setRelatedOrganizationId] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -45,10 +54,15 @@ export function CommunicationsProductionPage() {
     adminCommunicationListQueryOptions({
       query,
       status,
+      channel,
+      provider,
       templateKey,
       page,
       pageSize,
       createdAfter,
+      relatedCandidateId: relatedCandidateId || null,
+      relatedVerificationId: relatedVerificationId || null,
+      relatedOrganizationId: relatedOrganizationId || null,
     }),
   );
 
@@ -97,7 +111,7 @@ export function CommunicationsProductionPage() {
         title="Operational delivery history"
         description={`${result.total} communication record${result.total === 1 ? "" : "s"} returned by the shared backend.`}
       >
-        <div className="mb-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,180px)]">
+        <div className="mb-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(4,180px)]">
           <label className="relative block">
             <Search
               aria-hidden
@@ -126,6 +140,24 @@ export function CommunicationsProductionPage() {
             options={STATUS_OPTIONS}
           />
           <Select
+            value={channel}
+            onChange={(next) => {
+              setChannel(next);
+              setPage(1);
+            }}
+            label="Channel"
+            options={CHANNEL_OPTIONS}
+          />
+          <Select
+            value={provider}
+            onChange={(next) => {
+              setProvider(next);
+              setPage(1);
+            }}
+            label="Provider"
+            options={PROVIDER_OPTIONS}
+          />
+          <Select
             value={templateKey}
             onChange={(next) => {
               setTemplateKey(next);
@@ -142,6 +174,36 @@ export function CommunicationsProductionPage() {
             }}
             label="Date window"
             options={["any", "24h", "7d", "30d"]}
+          />
+        </div>
+
+        <div className="mb-3 grid gap-3 lg:grid-cols-3">
+          <InlineInput
+            label="Candidate public ID"
+            value={relatedCandidateId}
+            onChange={(next) => {
+              setRelatedCandidateId(next);
+              setPage(1);
+            }}
+            placeholder="Filter candidate-linked communications"
+          />
+          <InlineInput
+            label="Verification public ID"
+            value={relatedVerificationId}
+            onChange={(next) => {
+              setRelatedVerificationId(next);
+              setPage(1);
+            }}
+            placeholder="Filter verification-linked communications"
+          />
+          <InlineInput
+            label="Organization public ID"
+            value={relatedOrganizationId}
+            onChange={(next) => {
+              setRelatedOrganizationId(next);
+              setPage(1);
+            }}
+            placeholder="Filter organization-linked communications"
           />
         </div>
 
@@ -289,5 +351,29 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>
       {COMMUNICATION_STATUS_TEXT[status] ?? status}
     </span>
+  );
+}
+
+function InlineInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+      <span>{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+      />
+    </label>
   );
 }

@@ -15,6 +15,7 @@ export interface AdminNotificationInboxItem {
   updatedAt: string;
   status: string;
   channel: string;
+  priority: string;
 }
 
 export interface AdminNotificationInboxResult {
@@ -74,6 +75,9 @@ export interface AdminNotificationDetail {
 export interface AdminNotificationListParams {
   page?: number;
   pageSize?: number;
+  search?: string;
+  readState?: "all" | "read" | "unread";
+  eventType?: string | "all";
 }
 
 interface BackendPage<T> {
@@ -96,6 +100,7 @@ interface BackendInboxRecord {
   updated_at: string;
   status: string;
   channel: string;
+  priority: string;
 }
 
 interface BackendUnreadCount {
@@ -161,8 +166,16 @@ const DEFAULT_PAGE_SIZE = 20;
 
 export const adminNotificationKeys = {
   all: () => ["admin", "notifications"] as const,
-  inbox: (page: number, pageSize: number) =>
-    [...adminNotificationKeys.all(), "inbox", page, pageSize] as const,
+  inbox: (params: Required<AdminNotificationListParams>) =>
+    [
+      ...adminNotificationKeys.all(),
+      "inbox",
+      params.page,
+      params.pageSize,
+      params.search,
+      params.readState,
+      params.eventType,
+    ] as const,
   unreadCount: () => [...adminNotificationKeys.all(), "unread-count"] as const,
   detail: (id: string) => [...adminNotificationKeys.all(), "detail", id] as const,
 };
@@ -176,9 +189,7 @@ export function createAdminNotificationsAdapter(
   return {
     async listInbox(params) {
       const normalized = normalizeListParams(params);
-      const data = await api.request<BackendPage<BackendInboxRecord>>(
-        `/api/v1/admin/notifications/inbox?paginate=true&page=${normalized.page}&page_size=${normalized.pageSize}`,
-      );
+      const data = await api.request<BackendPage<BackendInboxRecord>>(buildInboxPath(normalized));
       return {
         items: (data.items ?? []).map(mapInboxRecord),
         total: data.total ?? 0,
@@ -212,7 +223,7 @@ export function adminNotificationInboxQueryOptions(params?: AdminNotificationLis
   const adapter = createAdminNotificationsAdapter();
   const normalized = normalizeListParams(params);
   return queryOptions({
-    queryKey: adminNotificationKeys.inbox(normalized.page, normalized.pageSize),
+    queryKey: adminNotificationKeys.inbox(normalized),
     queryFn: async () => adapter.listInbox(normalized),
   });
 }
@@ -239,7 +250,23 @@ function normalizeListParams(
   return {
     page: params.page ?? DEFAULT_PAGE,
     pageSize: params.pageSize ?? DEFAULT_PAGE_SIZE,
+    search: params.search?.trim() ?? "",
+    readState: params.readState ?? "all",
+    eventType: params.eventType ?? "all",
   };
+}
+
+function buildInboxPath(params: Required<AdminNotificationListParams>) {
+  const search = new URLSearchParams({
+    paginate: "true",
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  });
+  if (params.search) search.set("search", params.search);
+  if (params.readState === "unread") search.set("unread", "true");
+  if (params.readState === "read") search.set("unread", "false");
+  if (params.eventType !== "all") search.set("event_type", params.eventType);
+  return `/api/v1/admin/notifications/inbox?${search.toString()}`;
 }
 
 function mapInboxRecord(record: BackendInboxRecord): AdminNotificationInboxItem {
@@ -255,6 +282,7 @@ function mapInboxRecord(record: BackendInboxRecord): AdminNotificationInboxItem 
     updatedAt: record.updated_at,
     status: record.status,
     channel: record.channel,
+    priority: record.priority,
   };
 }
 
