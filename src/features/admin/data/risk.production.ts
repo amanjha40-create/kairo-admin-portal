@@ -225,7 +225,8 @@ interface BackendEvent {
 
 interface BackendSubjectContext {
   user?: {
-    id: string;
+    public_id?: string;
+    id?: string;
     display_name: string;
     account_status: string;
     trust_summary?: {
@@ -635,7 +636,7 @@ function mapSubjectContext(context: BackendSubjectContext): AdminRiskSubjectCont
   return {
     user: context.user
       ? {
-          id: context.user.id,
+          id: context.user.public_id ?? context.user.id ?? "",
           displayName: context.user.display_name,
           accountStatus: context.user.account_status,
           trustStatus: context.user.trust_summary?.status ?? null,

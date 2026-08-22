@@ -269,7 +269,7 @@ describe("trust safety production adapter", () => {
           timeline: [],
           subject_context: {
             user: {
-              id: "77777777-7777-7777-7777-777777777777",
+              public_id: "77777777-7777-7777-7777-777777777777",
               display_name: "Aman Jha",
               account_status: "active",
               trust_summary: { status: "manual_review", overall_score: 42 },
@@ -297,6 +297,7 @@ describe("trust safety production adapter", () => {
     });
 
     expect(result.subjectType).toBe("user");
+    expect(result.subjectContext.user?.id).toBe("77777777-7777-7777-7777-777777777777");
     expect(result.subjectContext.user?.displayName).toBe("Aman Jha");
   });
 
