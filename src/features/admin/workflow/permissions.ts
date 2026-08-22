@@ -54,8 +54,11 @@ const ALL_COMMS_PERMISSIONS: WorkflowPermission[] = [
 
 const ALL_RISK_PERMISSIONS: WorkflowPermission[] = [
   "risk.view",
+  "risk.create",
+  "risk.assign",
   "risk.note",
   "risk.review",
+  "risk.update_severity",
   "risk.escalate",
   "risk.resolve",
   "risk.prepare_actions",

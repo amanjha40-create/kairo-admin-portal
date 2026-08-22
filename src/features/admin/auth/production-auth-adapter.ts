@@ -80,6 +80,12 @@ const BACKEND_PERMISSION_MAP: Record<string, WorkflowPermission[]> = {
   ],
   view_audit_log: ["system.audit.view"],
   add_remark: ["users.notes.create", "communications.notes.create", "risk.note"],
+  trust_safety_read: ["risk.view"],
+  trust_safety_create: ["risk.create"],
+  trust_safety_assign: ["risk.assign"],
+  trust_safety_note: ["risk.note"],
+  trust_safety_update_severity: ["risk.update_severity"],
+  trust_safety_resolve: ["risk.resolve"],
   assign_reviewer: ["verification.assign"],
   change_verification_priority: ["verification.change_priority"],
   review_verification: [

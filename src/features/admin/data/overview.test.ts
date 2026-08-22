@@ -115,6 +115,12 @@ describe("overview data adapter", () => {
           organization_total: 4,
           registry_total: 6,
           user_total: 18,
+          trust_safety: {
+            open_investigations: 3,
+            high_or_critical_investigations: 1,
+            unassigned_investigations: 1,
+            active_signals: 4,
+          },
         });
       }
 
@@ -139,7 +145,9 @@ describe("overview data adapter", () => {
       ["organizations", 4],
       ["registry_records", 6],
       ["registered_users", 18],
+      ["trust_safety_open", 3],
     ]);
+    expect(result.attention.find((item) => item.id === "trust_safety_open")?.count).toBe(3);
     expect(result.statuses.find((item) => item.status === "pending_admin_re_review")?.count).toBe(
       2,
     );
@@ -169,6 +177,12 @@ describe("overview data adapter", () => {
           organization_total: 0,
           registry_total: 0,
           user_total: 0,
+          trust_safety: {
+            open_investigations: 0,
+            high_or_critical_investigations: 0,
+            unassigned_investigations: 0,
+            active_signals: 0,
+          },
         });
       }
 

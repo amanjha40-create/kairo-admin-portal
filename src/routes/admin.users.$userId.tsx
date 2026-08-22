@@ -37,6 +37,8 @@ import {
   submitUserActionMutation,
   submitUserNoteMutation,
 } from "@/features/admin/lib/user-mutation-submit";
+import { buildTrustSafetyCreateHref } from "@/features/admin/lib/trust-safety";
+import { hasPermission } from "@/features/admin/workflow/permissions";
 import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/users/$userId")({
@@ -63,6 +65,7 @@ function UserDetailPage() {
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createAdminUsersAdapter(), []);
   const detailQuery = useQuery(userDetailQueryOptions(userId));
+  const canCreateRiskInvestigation = hasPermission(access.admin?.permissions ?? [], "risk.create");
   const [noteBody, setNoteBody] = useState("");
   const [dialog, setDialog] = useState<ActionDialogState>(null);
   const [reason, setReason] = useState("");
@@ -195,6 +198,15 @@ function UserDetailPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {canCreateRiskInvestigation ? (
+                <a
+                  href={buildTrustSafetyCreateHref("user", user.id)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+                >
+                  <ShieldCheck className="size-3.5" />
+                  Create investigation
+                </a>
+              ) : null}
               {user.capabilities.sendPasswordReset ? (
                 <HeaderActionButton
                   label="Send password reset"

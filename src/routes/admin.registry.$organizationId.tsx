@@ -8,6 +8,8 @@ import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/compon
 import { useAdminAccess, AdminAccessChecking } from "@/features/admin/auth/admin-access";
 import { shouldEnableAdminProtectedQuery } from "@/features/admin/auth/protected-query";
 import { formatRelativeTime } from "@/features/admin/lib/format";
+import { buildTrustSafetyCreateHref } from "@/features/admin/lib/trust-safety";
+import { hasPermission } from "@/features/admin/workflow/permissions";
 import {
   REGISTRY_ORG_STATE_LABEL,
   createRegistryDataAdapter,
@@ -91,6 +93,7 @@ function RegistryOrgDetail() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createRegistryDataAdapter(appEnv), []);
+  const canCreateRiskInvestigation = hasPermission(access.admin?.permissions ?? [], "risk.create");
   const detailQuery = useQuery({
     ...registryDetailQueryOptions(organizationId),
     enabled: shouldEnableAdminProtectedQuery(access.state),
@@ -261,6 +264,16 @@ function RegistryOrgDetail() {
             ) : null}
           </div>
           <div className="text-right text-[11px] text-muted-foreground">
+            {canCreateRiskInvestigation ? (
+              <div className="mb-2">
+                <a
+                  href={buildTrustSafetyCreateHref("trust_registry_record", org.id)}
+                  className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+                >
+                  Create investigation
+                </a>
+              </div>
+            ) : null}
             {org.website ? (
               <a
                 href={org.website}

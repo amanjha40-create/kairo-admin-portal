@@ -45,6 +45,7 @@ import { appEnv } from "@/config/env";
 import { formatAge, formatRelativeTime } from "@/features/admin/lib/format";
 import { AdminRegistryDetailLink } from "@/features/admin/lib/admin-registry-detail-link";
 import { getVerificationRegistryLinkModel } from "@/features/admin/lib/admin-registry-route";
+import { buildTrustSafetyCreateHref } from "@/features/admin/lib/trust-safety";
 import {
   ALL_ASSIGNEES,
   ATTENTION_FLAG_LABEL,
@@ -83,7 +84,7 @@ import {
   type AdminRoleKey,
   type WorkflowActor,
 } from "@/features/admin/workflow/types";
-import { ROLE_LABEL } from "@/features/admin/workflow/permissions";
+import { ROLE_LABEL, hasPermission } from "@/features/admin/workflow/permissions";
 import {
   CancelDialog,
   CorrectionDialog,
@@ -352,6 +353,7 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
     }),
     [admin],
   );
+  const canCreateRiskInvestigation = hasPermission(admin?.permissions ?? [], "risk.create");
 
   const demoWorkflow = useVerificationWorkflow(detail as never, actor);
   const productionWorkflow = useProductionVerificationWorkflow(
@@ -548,6 +550,15 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
+            {canCreateRiskInvestigation ? (
+              <a
+                href={buildTrustSafetyCreateHref("verification_request", detail.summary.id)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs text-foreground hover:bg-accent"
+              >
+                <Shield aria-hidden className="size-3.5" />
+                Create investigation
+              </a>
+            ) : null}
             <Menu
               label="Assign"
               icon={UserPlus}

@@ -67,6 +67,12 @@ interface BackendAdminOverviewResponse {
   organization_total: number;
   registry_total: number;
   user_total: number | null;
+  trust_safety?: {
+    open_investigations: number;
+    high_or_critical_investigations: number;
+    unassigned_investigations: number;
+    active_signals: number;
+  } | null;
 }
 
 export interface OverviewDashboardData {
@@ -393,6 +399,12 @@ function mapBackendOverviewToDashboard(
         response.user_total ?? 0,
         "Active user accounts",
       ),
+      metric(
+        "trust_safety_open",
+        "Open T&S investigations",
+        response.trust_safety?.open_investigations ?? 0,
+        "Backend-owned Trust & Safety investigations",
+      ),
     ],
     attention: buildAttentionItems(response),
     funnel: buildFunnel(response),
@@ -457,6 +469,24 @@ function buildAttentionItems(response: BackendAdminOverviewResponse): AttentionI
       priority: "normal",
       destinationHref: "/admin/verifications?view=pending-resolution",
       destinationLabel: "Resolve matches",
+    },
+    {
+      id: "trust_safety_open",
+      category: "Trust & Safety investigations",
+      count: response.trust_safety?.open_investigations ?? 0,
+      reason: "Open investigations require operational review and documented resolution.",
+      priority: "high",
+      destinationHref: "/admin/risk",
+      destinationLabel: "Open investigations",
+    },
+    {
+      id: "trust_safety_high",
+      category: "High or critical Trust & Safety",
+      count: response.trust_safety?.high_or_critical_investigations ?? 0,
+      reason: "High-severity investigations should be triaged before lower-risk work.",
+      priority: "urgent",
+      destinationHref: "/admin/risk",
+      destinationLabel: "Review Trust & Safety",
     },
   ];
 }
@@ -574,6 +604,8 @@ function isOverviewEmpty(response: BackendAdminOverviewResponse): boolean {
     response.recent_admin_activity.length === 0 &&
     response.organization_total === 0 &&
     response.registry_total === 0 &&
-    (response.user_total ?? 0) === 0
+    (response.user_total ?? 0) === 0 &&
+    (response.trust_safety?.open_investigations ?? 0) === 0 &&
+    (response.trust_safety?.active_signals ?? 0) === 0
   );
 }
