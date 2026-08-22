@@ -5,5 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["**/.amplify-hosting/**", "**/node_modules/.nitro/**"],
   },
 });

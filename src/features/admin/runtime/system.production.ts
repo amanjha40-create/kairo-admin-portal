@@ -27,14 +27,14 @@ export const JOB_TYPE_LABEL = {} as Record<JobType, string>;
 export const MESSAGE_KIND_LABEL = {} as Record<MessageKind, string>;
 export const MESSAGE_STATUS_LABEL = {} as Record<MessageStatus, string>;
 export const SERVICE_HEALTH_LABEL = {} as Record<ServiceHealthState, string>;
-export const mockAlerts: AlertRecord[] = [];
-export const mockAuditEvents: AuditEvent[] = [];
-export const mockBackgroundJobs: BackgroundJob[] = [];
-export const mockConfigReference: ConfigEntry[] = [];
-export const mockDeployments: Deployment[] = [];
-export const mockFeatureFlags: FeatureFlag[] = [];
-export const mockMessageLogs: MessageLog[] = [];
-export const mockPlatformServices: PlatformService[] = [];
+const EMPTY_ALERTS: AlertRecord[] = [];
+const EMPTY_AUDIT_EVENTS: AuditEvent[] = [];
+const EMPTY_BACKGROUND_JOBS: BackgroundJob[] = [];
+const EMPTY_CONFIG_REFERENCE: ConfigEntry[] = [];
+const EMPTY_DEPLOYMENTS: Deployment[] = [];
+const EMPTY_FEATURE_FLAGS: FeatureFlag[] = [];
+const EMPTY_MESSAGE_LOGS: MessageLog[] = [];
+const EMPTY_PLATFORM_SERVICES: PlatformService[] = [];
 
 const EMPTY_SYSTEM_OVERVIEW: SystemOverviewMetrics = {
   api: "operational",
@@ -51,15 +51,15 @@ const EMPTY_SYSTEM_OVERVIEW: SystemOverviewMetrics = {
   auditEvents24h: 0,
 };
 
-export const listServices = (): PlatformService[] => mockPlatformServices;
-export const listJobs = (): BackgroundJob[] => mockBackgroundJobs;
+export const listServices = (): PlatformService[] => EMPTY_PLATFORM_SERVICES;
+export const listJobs = (): BackgroundJob[] => EMPTY_BACKGROUND_JOBS;
 export const getJob = (_: string): BackgroundJob | undefined => undefined;
-export const listFlags = (): FeatureFlag[] => mockFeatureFlags;
-export const listMessageLogs = (): MessageLog[] => mockMessageLogs;
-export const listAuditEvents = (): AuditEvent[] => mockAuditEvents;
-export const listAlerts = (): AlertRecord[] => mockAlerts;
-export const listDeployments = (): Deployment[] => mockDeployments;
-export const listConfigReference = (): ConfigEntry[] => mockConfigReference;
+export const listFlags = (): FeatureFlag[] => EMPTY_FEATURE_FLAGS;
+export const listMessageLogs = (): MessageLog[] => EMPTY_MESSAGE_LOGS;
+export const listAuditEvents = (): AuditEvent[] => EMPTY_AUDIT_EVENTS;
+export const listAlerts = (): AlertRecord[] => EMPTY_ALERTS;
+export const listDeployments = (): Deployment[] => EMPTY_DEPLOYMENTS;
+export const listConfigReference = (): ConfigEntry[] => EMPTY_CONFIG_REFERENCE;
 export const getOverviewMetrics = (): SystemOverviewMetrics => EMPTY_SYSTEM_OVERVIEW;
 
 export const getJobById = (_: string): BackgroundJob | undefined => undefined;

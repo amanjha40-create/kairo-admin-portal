@@ -26,12 +26,17 @@ import { overviewDashboardQueryOptions } from "@/features/admin/data/overview";
 import { appEnv } from "@/config/env";
 import { adminNotificationUnreadCountQueryOptions } from "@/features/admin/data/notifications";
 import { adminCommunicationSummaryQueryOptions } from "@/features/admin/data/communications.production";
+import {
+  adminSystemIncidentsQueryOptions,
+  adminSystemRuntimeQueryOptions,
+  adminSystemStatusQueryOptions,
+} from "@/features/admin/data/system.production";
 import { getCommunicationMetrics } from "@/features/admin/runtime/communications";
 import {
   SERVICE_HEALTH_LABEL,
   listServices,
   getSystemOverviewMetrics,
-  mockDeployments,
+  listDeployments,
   type ServiceHealthState,
 } from "@/features/admin/runtime/system";
 import type { PlatformServiceStatus } from "@/features/admin/data/types";
@@ -71,6 +76,18 @@ function OverviewPage() {
     ...adminCommunicationSummaryQueryOptions(),
     enabled: shouldEnableAdminProtectedQuery(access.state) && !showDemoOperationalSections,
   });
+  const systemStatusQuery = useQuery({
+    ...adminSystemStatusQueryOptions(),
+    enabled: shouldEnableAdminProtectedQuery(access.state) && !showDemoOperationalSections,
+  });
+  const systemRuntimeQuery = useQuery({
+    ...adminSystemRuntimeQueryOptions(),
+    enabled: shouldEnableAdminProtectedQuery(access.state) && !showDemoOperationalSections,
+  });
+  const systemIncidentsQuery = useQuery({
+    ...adminSystemIncidentsQueryOptions({ status: "open", page: 1, pageSize: 5 }),
+    enabled: shouldEnableAdminProtectedQuery(access.state) && !showDemoOperationalSections,
+  });
   const comms = showDemoOperationalSections ? getCommunicationMetrics() : null;
   const services = showDemoOperationalSections
     ? listServices().map<PlatformServiceStatus>((service) => ({
@@ -87,8 +104,25 @@ function OverviewPage() {
     : null;
   const sys = showDemoOperationalSections ? getSystemOverviewMetrics() : null;
   const recentDeployment = showDemoOperationalSections
-    ? getOverviewRecentDeployment(mockDeployments)
+    ? getOverviewRecentDeployment(listDeployments())
     : null;
+  const productionServices = !showDemoOperationalSections
+    ? (systemStatusQuery.data?.dependencies ?? []).map<PlatformServiceStatus>((dependency) => ({
+        id: dependency.key,
+        name: dependency.name,
+        note: dependency.reason ?? undefined,
+        state:
+          dependency.status === "healthy"
+            ? "operational"
+            : dependency.status === "degraded"
+              ? "degraded"
+              : "action_required",
+      }))
+    : null;
+  const productionOpenIncidentCount =
+    !showDemoOperationalSections && systemIncidentsQuery.data
+      ? systemIncidentsQuery.data.items.filter((item) => item.status !== "resolved").length
+      : 0;
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-8">
@@ -214,6 +248,18 @@ function OverviewPage() {
               </h2>
               {services ? (
                 <PlatformSummary services={services} />
+              ) : systemStatusQuery.data ? (
+                <PlatformSummary services={productionServices ?? []} />
+              ) : systemStatusQuery.isPending ? (
+                <LoadingSkeleton rows={4} />
+              ) : systemStatusQuery.isError ? (
+                <RetryState
+                  title="Platform summary unavailable"
+                  description={systemStatusQuery.error.message}
+                  onRetry={() => {
+                    void systemStatusQuery.refetch();
+                  }}
+                />
               ) : (
                 <ControlledPilotUnavailableState section="System" />
               )}
@@ -313,7 +359,7 @@ function OverviewPage() {
           title="System operations"
           description="Platform health, background activity and open incidents."
           actions={
-            showDemoOperationalSections ? (
+            showDemoOperationalSections || !shouldEnableAdminProtectedQuery(access.state) ? (
               <Link
                 to="/admin/system"
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
@@ -399,6 +445,109 @@ function OverviewPage() {
               )}
             </SysTile>
           </div>
+        ) : systemStatusQuery.data &&
+          systemRuntimeQuery.data &&
+          communicationsSummaryQuery.data &&
+          systemIncidentsQuery.data ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <SysTile label="Platform status" href="/admin/system">
+              <PlatformSummaryChip
+                states={systemStatusQuery.data.dependencies.map((dependency) =>
+                  dependency.status === "healthy"
+                    ? "operational"
+                    : dependency.status === "degraded"
+                      ? "degraded"
+                      : "incident",
+                )}
+              />
+            </SysTile>
+            <SysTile
+              label="Delivery failures (24h)"
+              href="/admin/system"
+              icon={<AlertTriangle aria-hidden className="size-3.5" />}
+            >
+              <p
+                className={cn(
+                  "text-xl font-semibold tabular-nums",
+                  communicationsSummaryQuery.data.recentFailures24h > 0
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-foreground",
+                )}
+              >
+                {communicationsSummaryQuery.data.recentFailures24h}
+              </p>
+            </SysTile>
+            <SysTile
+              label="Open incidents"
+              href="/admin/system"
+              icon={<Bell aria-hidden className="size-3.5" />}
+            >
+              <p
+                className={cn(
+                  "text-xl font-semibold tabular-nums",
+                  productionOpenIncidentCount > 0
+                    ? "text-rose-700 dark:text-rose-300"
+                    : "text-foreground",
+                )}
+              >
+                {productionOpenIncidentCount}
+              </p>
+            </SysTile>
+            <SysTile
+              label="Runtime status"
+              href="/admin/system"
+              icon={<Zap aria-hidden className="size-3.5" />}
+            >
+              <p className="text-xs font-medium text-foreground">
+                {systemRuntimeQuery.data.migration.matchesExpected ? "Current" : "Check migration"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {systemRuntimeQuery.data.jobBackend}
+              </p>
+            </SysTile>
+            <SysTile
+              label="Current release"
+              href="/admin/system"
+              icon={<Rocket aria-hidden className="size-3.5" />}
+            >
+              {systemRuntimeQuery.data.release.gitSha ||
+              systemRuntimeQuery.data.release.deployedAt ? (
+                <>
+                  <p className="text-xs font-medium text-foreground">
+                    {systemRuntimeQuery.data.applicationVersion}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {systemRuntimeQuery.data.release.deployedAt
+                      ? formatRelativeTime(systemRuntimeQuery.data.release.deployedAt)
+                      : "Deployment timestamp unavailable"}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Release metadata unavailable.</p>
+              )}
+            </SysTile>
+          </div>
+        ) : systemStatusQuery.isPending ||
+          systemRuntimeQuery.isPending ||
+          systemIncidentsQuery.isPending ? (
+          <LoadingSkeleton rows={2} />
+        ) : systemStatusQuery.isError ||
+          systemRuntimeQuery.isError ||
+          systemIncidentsQuery.isError ? (
+          <RetryState
+            title="System summary unavailable"
+            description={
+              systemStatusQuery.error?.message ??
+              systemRuntimeQuery.error?.message ??
+              systemIncidentsQuery.error?.message ??
+              "Unable to load the system summary."
+            }
+            onRetry={() => {
+              void systemStatusQuery.refetch();
+              void systemRuntimeQuery.refetch();
+              void systemIncidentsQuery.refetch();
+            }}
+          />
         ) : (
           <ControlledPilotUnavailableState section="System" />
         )}

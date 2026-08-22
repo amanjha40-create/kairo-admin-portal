@@ -22,6 +22,10 @@ declare module "virtual:kairo-admin-system-runtime" {
   export * from "@/features/admin/runtime/system.demo";
 }
 
+declare module "virtual:kairo-admin-system-page-runtime" {
+  export { SystemOperationsPage } from "@/features/admin/runtime/system-page.demo";
+}
+
 declare module "virtual:kairo-admin-verifications-runtime" {
   export * from "@/features/admin/runtime/verifications.demo";
 }

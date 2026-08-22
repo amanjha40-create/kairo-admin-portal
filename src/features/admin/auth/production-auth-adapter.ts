@@ -109,6 +109,16 @@ const BACKEND_PERMISSION_MAP: Record<string, WorkflowPermission[]> = {
     "users.sessions.revoke",
     "users.password_reset.prepare",
   ],
+  system_operations_read: [
+    "system.view",
+    "system.jobs.view",
+    "system.messaging.view",
+    "system.audit.view",
+    "system.configuration.view",
+  ],
+  system_operations_incident_create: ["system.alerts.manage"],
+  system_operations_incident_update: ["system.alerts.manage"],
+  system_operations_retry: ["communications.failure.review"],
 };
 
 export function createProductionAuthAdapter(

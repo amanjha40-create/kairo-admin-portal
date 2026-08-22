@@ -60,6 +60,14 @@ function createAdminRuntimePlugin(): Plugin {
         import.meta.url,
       ),
     ),
+    "virtual:kairo-admin-system-page-runtime": fileURLToPath(
+      new URL(
+        isDemoModeBuild
+          ? "./src/features/admin/runtime/system-page.demo.ts"
+          : "./src/features/admin/runtime/system-page.production.ts",
+        import.meta.url,
+      ),
+    ),
     "virtual:kairo-admin-verifications-runtime": fileURLToPath(
       new URL(
         isDemoModeBuild
