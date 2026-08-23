@@ -18,6 +18,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminRegistryRouteImport } from './routes/admin.registry'
 import { Route as AdminRiskRouteImport } from './routes/admin.risk'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSystemRouteImport } from './routes/admin.system'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminVerificationsRouteImport } from './routes/admin.verifications'
@@ -77,6 +78,11 @@ const AdminRegistryRoute = AdminRegistryRouteImport.update({
 const AdminRiskRoute = AdminRiskRouteImport.update({
   id: '/risk',
   path: '/risk',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSystemRoute = AdminSystemRouteImport.update({
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/admin/notifications': typeof AdminNotificationsRouteWithChildren
   '/admin/registry': typeof AdminRegistryRouteWithChildren
   '/admin/risk': typeof AdminRiskRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/verifications': typeof AdminVerificationsRouteWithChildren
@@ -191,6 +198,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin/forgot-password': typeof AdminForgotPasswordRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin': typeof AdminIndexRoute
   '/admin/communications/$communicationId': typeof AdminCommunicationsCommunicationIdRoute
@@ -216,6 +224,7 @@ export interface FileRoutesById {
   '/admin/notifications': typeof AdminNotificationsRouteWithChildren
   '/admin/registry': typeof AdminRegistryRouteWithChildren
   '/admin/risk': typeof AdminRiskRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/verifications': typeof AdminVerificationsRouteWithChildren
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/registry'
     | '/admin/risk'
+    | '/admin/settings'
     | '/admin/system'
     | '/admin/users'
     | '/admin/verifications'
@@ -265,6 +275,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin/forgot-password'
     | '/admin/login'
+    | '/admin/settings'
     | '/admin/system'
     | '/admin'
     | '/admin/communications/$communicationId'
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/registry'
     | '/admin/risk'
+    | '/admin/settings'
     | '/admin/system'
     | '/admin/users'
     | '/admin/verifications'
@@ -375,6 +387,13 @@ declare module '@tanstack/react-router' {
       path: '/risk'
       fullPath: '/admin/risk'
       preLoaderRoute: typeof AdminRiskRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/system': {
@@ -574,6 +593,7 @@ interface AdminRouteChildren {
   AdminNotificationsRoute: typeof AdminNotificationsRouteWithChildren
   AdminRegistryRoute: typeof AdminRegistryRouteWithChildren
   AdminRiskRoute: typeof AdminRiskRouteWithChildren
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSystemRoute: typeof AdminSystemRoute
   AdminUsersRoute: typeof AdminUsersRouteWithChildren
   AdminVerificationsRoute: typeof AdminVerificationsRouteWithChildren
@@ -587,6 +607,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminNotificationsRoute: AdminNotificationsRouteWithChildren,
   AdminRegistryRoute: AdminRegistryRouteWithChildren,
   AdminRiskRoute: AdminRiskRouteWithChildren,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminSystemRoute: AdminSystemRoute,
   AdminUsersRoute: AdminUsersRouteWithChildren,
   AdminVerificationsRoute: AdminVerificationsRouteWithChildren,

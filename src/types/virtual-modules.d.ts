@@ -33,3 +33,7 @@ declare module "virtual:kairo-admin-verifications-runtime" {
 declare module "virtual:kairo-admin-verification-review-runtime" {
   export * from "@/features/admin/runtime/verification-review.demo";
 }
+
+declare module "virtual:kairo-admin-settings-page-runtime" {
+  export { AdminSettingsPage } from "@/features/admin/runtime/settings-page.demo";
+}

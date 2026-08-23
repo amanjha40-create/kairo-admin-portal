@@ -84,6 +84,14 @@ function createAdminRuntimePlugin(): Plugin {
         import.meta.url,
       ),
     ),
+    "virtual:kairo-admin-settings-page-runtime": fileURLToPath(
+      new URL(
+        isDemoModeBuild
+          ? "./src/features/admin/runtime/settings-page.demo.ts"
+          : "./src/features/admin/runtime/settings-page.production.ts",
+        import.meta.url,
+      ),
+    ),
   };
 
   return {

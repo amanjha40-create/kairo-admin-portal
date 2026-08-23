@@ -218,6 +218,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
                     </span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin/settings">
+                      <Settings aria-hidden className="mr-2 size-4" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                 </>
               ) : null}
               <DropdownMenuItem
@@ -311,7 +318,9 @@ function SidebarInner({
         ) : null}
         <ul className="space-y-0.5">
           <li>
-            <button
+            <Link
+              to="/admin/settings"
+              onClick={onNavigate}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground",
                 collapsed && "justify-center px-0",
@@ -320,7 +329,7 @@ function SidebarInner({
             >
               <Settings aria-hidden className="size-4" />
               {!collapsed && <span>Settings</span>}
-            </button>
+            </Link>
           </li>
           <li>
             <button
