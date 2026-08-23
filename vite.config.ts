@@ -23,8 +23,8 @@ function createAdminRuntimePlugin(): Plugin {
     "virtual:kairo-admin-demo-credentials-runtime": fileURLToPath(
       new URL(
         isDemoModeBuild
-          ? "./src/features/admin/runtime/demo-credentials.demo.ts"
-          : "./src/features/admin/runtime/demo-credentials.production.ts",
+          ? "./src/features/admin/runtime/demo-credentials.demo.tsx"
+          : "./src/features/admin/runtime/demo-credentials.production.tsx",
         import.meta.url,
       ),
     ),
@@ -113,6 +113,9 @@ export default defineConfig({
     preset: process.env.NITRO_PRESET ?? "aws_amplify",
   },
   vite: {
+    define: {
+      __KAIRO_ADMIN_DEMO_MODE__: JSON.stringify(isDemoModeBuild),
+    },
     plugins: [createAdminRuntimePlugin()],
   },
 });

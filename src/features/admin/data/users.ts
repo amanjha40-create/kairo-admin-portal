@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
 import { appEnv, type AppEnvConfig } from "@/config/env";
-import { DEMO_MODE_BUILD_ENABLED } from "@/features/admin/controlled-pilot";
 import { ApiError } from "@/lib/api/errors";
 import type { ProductionAdminApiOptions } from "./admin-api";
 import { createAdminAuthenticatedApi } from "./admin-api";
@@ -360,6 +359,10 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_SORT_BY: AdminUserSortBy = "created_at";
 const DEFAULT_SORT_ORDER: SortOrder = "desc";
+const DEMO_RUNTIME_AVAILABLE =
+  typeof __KAIRO_ADMIN_DEMO_MODE__ !== "undefined"
+    ? __KAIRO_ADMIN_DEMO_MODE__
+    : import.meta.env.MODE === "test";
 
 export const userKeys = {
   all: () => ["admin", "users"] as const,
@@ -387,7 +390,7 @@ export function createAdminUsersAdapter(
   config: AppEnvConfig = appEnv,
   options: CreateAdminUsersAdapterOptions = {},
 ): AdminUsersDataAdapter {
-  if (config.adminDemoMode) {
+  if (DEMO_RUNTIME_AVAILABLE && config.adminDemoMode) {
     return {
       mode: "demo",
       listUsers: (params) =>
@@ -939,7 +942,7 @@ function maskPhone(value: string | null | undefined) {
 }
 
 async function loadDemoModules() {
-  if (!DEMO_MODE_BUILD_ENABLED) {
+  if (!DEMO_RUNTIME_AVAILABLE) {
     throw new Error("Demo users are unavailable when the demo build is disabled.");
   }
   const usersModule = await import("@/features/admin/mock-data/users");

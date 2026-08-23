@@ -1,6 +1,9 @@
 import { appEnv, type AppEnvConfig } from "@/config/env";
 
-export const DEMO_MODE_BUILD_ENABLED = import.meta.env.VITE_ADMIN_DEMO_MODE === "true";
+export const DEMO_MODE_BUILD_ENABLED =
+  typeof __KAIRO_ADMIN_DEMO_MODE__ !== "undefined"
+    ? __KAIRO_ADMIN_DEMO_MODE__
+    : import.meta.env.MODE === "test";
 
 export type ControlledPilotSection = "Users" | "Communications" | "Risk" | "System";
 

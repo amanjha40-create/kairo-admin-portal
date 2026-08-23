@@ -3,7 +3,10 @@ declare module "virtual:kairo-admin-auth-runtime" {
 }
 
 declare module "virtual:kairo-admin-demo-credentials-runtime" {
-  export { loadDemoCredentials } from "@/features/admin/runtime/demo-credentials.demo";
+  export {
+    loadDemoCredentials,
+    renderDemoCredentials,
+  } from "@/features/admin/runtime/demo-credentials.demo";
 }
 
 declare module "virtual:kairo-admin-users-runtime" {

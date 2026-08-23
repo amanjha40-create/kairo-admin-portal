@@ -1,1 +1,4 @@
-export { loadDemoCredentials } from "virtual:kairo-admin-demo-credentials-runtime";
+export {
+  loadDemoCredentials,
+  renderDemoCredentials,
+} from "virtual:kairo-admin-demo-credentials-runtime";

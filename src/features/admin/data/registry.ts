@@ -523,6 +523,10 @@ export interface CreateRegistryDataAdapterOptions {
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
+const DEMO_RUNTIME_AVAILABLE =
+  typeof __KAIRO_ADMIN_DEMO_MODE__ !== "undefined"
+    ? __KAIRO_ADMIN_DEMO_MODE__
+    : import.meta.env.MODE === "test";
 
 export const registryKeys = {
   all: () => ["admin", "registry"] as const,
@@ -549,7 +553,7 @@ export function createRegistryDataAdapter(
   config: AppEnvConfig = appEnv,
   options: CreateRegistryDataAdapterOptions = {},
 ): RegistryDataAdapter {
-  if (config.adminDemoMode) {
+  if (DEMO_RUNTIME_AVAILABLE && config.adminDemoMode) {
     const unsupportedMutation = async () => {
       throw new ApiError({
         code: "configuration",

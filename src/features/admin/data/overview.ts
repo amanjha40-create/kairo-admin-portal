@@ -29,6 +29,10 @@ import type {
 
 const OVERVIEW_RECENT_WINDOW_DAYS = 30;
 const UNAUTHORIZED_MESSAGE = "Your session is no longer valid. Sign in again to continue.";
+const DEMO_RUNTIME_AVAILABLE =
+  typeof __KAIRO_ADMIN_DEMO_MODE__ !== "undefined"
+    ? __KAIRO_ADMIN_DEMO_MODE__
+    : import.meta.env.MODE === "test";
 
 interface BackendTokenResponse {
   access_token: string;
@@ -157,7 +161,7 @@ export function createOverviewDataAdapter(
   config: AppEnvConfig = appEnv,
   options: CreateOverviewDataAdapterOptions = {},
 ): OverviewDataAdapter {
-  if (config.adminDemoMode) {
+  if (DEMO_RUNTIME_AVAILABLE && config.adminDemoMode) {
     return {
       mode: "demo",
       loadDashboard: options.demoLoader ?? loadDemoOverviewDashboard,
