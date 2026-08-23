@@ -690,6 +690,7 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
           >
             <InternalNotesPanel
               notes={workflow.notes}
+              canAdd={hasPermission(admin?.permissions ?? [], "verification.note")}
               onAdd={async (body, cat) => {
                 await workflow.addNote(body, cat);
                 toast("Internal note added", {

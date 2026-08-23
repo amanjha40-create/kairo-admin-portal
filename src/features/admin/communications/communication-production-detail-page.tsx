@@ -12,6 +12,8 @@ import {
   createAdminCommunicationsAdapter,
 } from "@/features/admin/data/communications.production";
 import { formatRelativeTime } from "@/features/admin/lib/format";
+import { useAdminAccess } from "@/features/admin/auth/admin-access";
+import { hasPermission } from "@/features/admin/workflow/permissions";
 
 const COMMUNICATION_STATUS_TEXT = COMMUNICATION_STATUS_LABEL as Record<string, string>;
 const COMMUNICATION_TYPE_TEXT = COMMUNICATION_TYPE_LABEL as Record<string, string>;
@@ -22,8 +24,10 @@ export function CommunicationProductionDetailPage({
   communicationId: string;
 }) {
   const queryClient = useQueryClient();
+  const access = useAdminAccess();
   const adapter = createAdminCommunicationsAdapter();
   const [resendError, setResendError] = useState<string | null>(null);
+  const canResend = hasPermission(access.admin?.permissions ?? [], "communications.failure.review");
   const detailQuery = useQuery(adminCommunicationDetailQueryOptions(communicationId));
   const resendMutation = useMutation({
     mutationFn: async () => adapter.resend(communicationId),
@@ -110,7 +114,8 @@ export function CommunicationProductionDetailPage({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            disabled={!detail.retryable || resendMutation.isPending}
+            disabled={!canResend || !detail.retryable || resendMutation.isPending}
+            title={!canResend ? "Your role cannot resend communications." : undefined}
             onClick={() => {
               if (!window.confirm("Resend this communication and create a new delivery attempt?")) {
                 return;

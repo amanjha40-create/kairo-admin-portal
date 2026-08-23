@@ -102,6 +102,8 @@ describe("production auth adapter", () => {
               "change_verification_priority",
               "review_verification",
               "request_more_info",
+              "dispatch_verification",
+              "finalize_verification",
               "manage_users",
               "view_audit_log",
             ],
@@ -212,11 +214,9 @@ describe("production auth adapter", () => {
         roleKey: "operations_lead",
         role: "Hr",
         permissions: expect.arrayContaining([
-          "users.view",
-          "verification.verify",
-          "verification.reject",
-          "verification.request_correction",
-          "verification.record_clarification",
+          "verification.note",
+          "communications.view",
+          "communications.failure.review",
           "system.audit.view",
         ]),
       },
@@ -224,6 +224,67 @@ describe("production auth adapter", () => {
     });
 
     expect(storage.session.getItem(AUTH_TOKEN_KEY)).toContain('"accessToken":"fresh-access"');
+  });
+
+  it("does not project backend permissions into unrelated or stronger UI privileges", async () => {
+    const storage = createMemoryStorage();
+    storage.session.setItem(
+      AUTH_TOKEN_KEY,
+      JSON.stringify({
+        accessToken: "support-access",
+        refreshToken: "support-refresh",
+        tokenType: "bearer",
+        expiresAt: "2026-07-27T12:00:00.000Z",
+        signedInAt: "2026-07-27T08:00:00.000Z",
+        remember: false,
+      }),
+    );
+
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        account: {
+          id: "support-user",
+          email: "support@kairoid.com",
+          name: "Support User",
+          initials: "SU",
+          role_key: "support",
+          permissions: [
+            "access_admin_portal",
+            "view_all_cases",
+            "view_audit_log",
+            "system_operations_read",
+          ],
+          is_active: true,
+        },
+      }),
+    );
+
+    const adapter = createProductionAuthAdapter(createConfiguredEnv(), {
+      storage,
+      fetchImpl,
+      now: () => new Date("2026-07-27T10:00:00.000Z"),
+    });
+    const result = await adapter.restoreSession();
+
+    expect(result.status).toBe("authenticated");
+    if (result.status !== "authenticated") return;
+    expect(result.account.permissions).toEqual(
+      expect.arrayContaining([
+        "communications.view",
+        "communications.view_failures",
+        "system.view",
+        "system.audit.view",
+      ]),
+    );
+    expect(result.account.permissions).not.toEqual(
+      expect.arrayContaining([
+        "users.view",
+        "risk.view",
+        "risk.review",
+        "verification.verify",
+        "registry.manage",
+      ]),
+    );
   });
 
   it("refreshes after a 401 session check and then restores access", async () => {

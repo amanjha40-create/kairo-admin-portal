@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertTriangle, Building2, Plus } from "lucide-react";
 import { appEnv } from "@/config/env";
+import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
@@ -19,6 +20,7 @@ import {
   type RegistryOrgState,
 } from "@/features/admin/data/registry";
 import { ApiError } from "@/lib/api/errors";
+import { hasPermission } from "@/features/admin/workflow/permissions";
 
 export const Route = createFileRoute("/admin/registry/")({
   head: () => ({
@@ -47,6 +49,7 @@ const ORG_TYPE_FILTERS = [
 ];
 
 function RegistryPage() {
+  const access = useAdminAccess();
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createRegistryDataAdapter(appEnv), []);
   const [query, setQuery] = useState("");
@@ -55,6 +58,7 @@ function RegistryPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const canManageRegistry = hasPermission(access.admin?.permissions ?? [], "registry.manage");
 
   const metricsQuery = useQuery(registryMetricsQueryOptions());
   const listQuery = useQuery(
@@ -141,7 +145,7 @@ function RegistryPage() {
             shared operational identity across Kairo.
           </p>
         </div>
-        {!appEnv.adminDemoMode ? (
+        {!appEnv.adminDemoMode && canManageRegistry ? (
           <button
             type="button"
             onClick={() => setShowCreateForm((value) => !value)}
@@ -182,7 +186,7 @@ function RegistryPage() {
         />
       </div>
 
-      {showCreateForm && !appEnv.adminDemoMode ? (
+      {showCreateForm && !appEnv.adminDemoMode && canManageRegistry ? (
         <CreateRegistryForm
           pending={createMutation.isPending}
           onCancel={() => setShowCreateForm(false)}

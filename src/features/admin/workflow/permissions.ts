@@ -27,6 +27,7 @@ const ALL_DECISION_PERMISSIONS: WorkflowPermission[] = [
   "verification.change_priority",
   "verification.acknowledge_flag",
   "verification.record_clarification",
+  "verification.note",
 ];
 
 const ALL_USER_PERMISSIONS: WorkflowPermission[] = [
@@ -41,6 +42,8 @@ const ALL_USER_PERMISSIONS: WorkflowPermission[] = [
   "users.data_export.prepare",
   "users.deletion.prepare",
 ];
+
+const ALL_REGISTRY_PERMISSIONS: WorkflowPermission[] = ["registry.manage"];
 
 const ALL_COMMS_PERMISSIONS: WorkflowPermission[] = [
   "communications.view",
@@ -97,6 +100,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleKey, WorkflowPermission[]> = {
   admin: [
     ...ALL_DECISION_PERMISSIONS,
     ...ALL_USER_PERMISSIONS,
+    ...ALL_REGISTRY_PERMISSIONS,
     ...ALL_COMMS_PERMISSIONS,
     ...ALL_RISK_PERMISSIONS,
     ...ALL_SYSTEM_PERMISSIONS,
@@ -104,6 +108,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleKey, WorkflowPermission[]> = {
   operations_lead: [
     ...ALL_DECISION_PERMISSIONS,
     ...ALL_USER_PERMISSIONS,
+    ...ALL_REGISTRY_PERMISSIONS,
     ...ALL_COMMS_PERMISSIONS,
     ...ALL_RISK_PERMISSIONS,
     ...ALL_SYSTEM_PERMISSIONS,
@@ -118,6 +123,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleKey, WorkflowPermission[]> = {
     "verification.record_clarification",
     "verification.assign",
     "verification.change_priority",
+    "verification.note",
     "users.view",
     "users.notes.create",
     "users.sessions.revoke",
@@ -136,6 +142,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleKey, WorkflowPermission[]> = {
     "verification.change_priority",
     "verification.acknowledge_flag",
     "verification.record_clarification",
+    "verification.note",
     "users.view",
     "users.notes.create",
     "communications.view",

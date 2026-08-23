@@ -20,12 +20,14 @@ const CATEGORY_ORDER: NoteCategory[] = [
 
 export function InternalNotesPanel({
   notes,
+  canAdd,
   onAdd,
   author,
   role,
   mode,
 }: {
   notes: InternalNote[];
+  canAdd: boolean;
   onAdd: (body: string, category: NoteCategory) => void | Promise<void>;
   author: string;
   role: string;
@@ -56,46 +58,56 @@ export function InternalNotesPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <form onSubmit={submit} className="rounded-md border border-border bg-background p-3">
-        <label htmlFor="internal-note-body" className="sr-only">
-          Internal note
-        </label>
-        <textarea
-          id="internal-note-body"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder={`Add an internal note as ${author}. Never visible to candidates or employers.`}
-          rows={3}
-          className="block w-full resize-y rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs">
-            <label htmlFor="internal-note-cat" className="text-muted-foreground">
-              Category
-            </label>
-            <select
-              id="internal-note-cat"
-              value={category}
-              onChange={(e) => setCategory(e.target.value as NoteCategory)}
-              className="h-7 rounded border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      {canAdd ? (
+        <form onSubmit={submit} className="rounded-md border border-border bg-background p-3">
+          <label htmlFor="internal-note-body" className="sr-only">
+            Internal note
+          </label>
+          <textarea
+            id="internal-note-body"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={`Add an internal note as ${author}. Never visible to candidates or employers.`}
+            rows={3}
+            className="block w-full resize-y rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs">
+              <label htmlFor="internal-note-cat" className="text-muted-foreground">
+                Category
+              </label>
+              <select
+                id="internal-note-cat"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as NoteCategory)}
+                className="h-7 rounded border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {CATEGORY_ORDER.map((c) => (
+                  <option key={c} value={c}>
+                    {NOTE_CATEGORY_LABEL[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={!body.trim() || isSubmitting}
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-foreground px-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
             >
-              {CATEGORY_ORDER.map((c) => (
-                <option key={c} value={c}>
-                  {NOTE_CATEGORY_LABEL[c]}
-                </option>
-              ))}
-            </select>
+              <StickyNote aria-hidden className="size-3" />
+              {isSubmitting
+                ? "Saving..."
+                : mode === "demo"
+                  ? "Add note (session-only)"
+                  : "Add note"}
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={!body.trim() || isSubmitting}
-            className="inline-flex h-7 items-center gap-1 rounded-md bg-foreground px-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
-          >
-            <StickyNote aria-hidden className="size-3" />
-            {isSubmitting ? "Saving..." : mode === "demo" ? "Add note (session-only)" : "Add note"}
-          </button>
-        </div>
-      </form>
+        </form>
+      ) : (
+        <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          Your role can view internal notes but cannot add them.
+        </p>
+      )}
 
       {notes.length === 0 ? (
         <EmptyState

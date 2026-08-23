@@ -94,6 +94,7 @@ function RegistryOrgDetail() {
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createRegistryDataAdapter(appEnv), []);
   const canCreateRiskInvestigation = hasPermission(access.admin?.permissions ?? [], "risk.create");
+  const canManageRegistry = hasPermission(access.admin?.permissions ?? [], "registry.manage");
   const detailQuery = useQuery({
     ...registryDetailQueryOptions(organizationId),
     enabled: shouldEnableAdminProtectedQuery(access.state),
@@ -355,7 +356,7 @@ function RegistryOrgDetail() {
             title="Identity"
             description="Canonical names, domains, and identifiers used to resolve this organization."
             action={
-              !appEnv.adminDemoMode ? (
+              !appEnv.adminDemoMode && canManageRegistry ? (
                 <div className="flex flex-wrap gap-1.5">
                   <ToggleAction
                     label="Add alias"
@@ -418,21 +419,21 @@ function RegistryOrgDetail() {
                 ))}
               />
             </div>
-            {showAliasForm && !appEnv.adminDemoMode ? (
+            {showAliasForm && !appEnv.adminDemoMode && canManageRegistry ? (
               <AliasForm
                 pending={aliasMutation.isPending}
                 onCancel={() => setShowAliasForm(false)}
                 onSubmit={(payload) => aliasMutation.mutate(payload)}
               />
             ) : null}
-            {showDomainForm && !appEnv.adminDemoMode ? (
+            {showDomainForm && !appEnv.adminDemoMode && canManageRegistry ? (
               <DomainForm
                 pending={domainMutation.isPending}
                 onCancel={() => setShowDomainForm(false)}
                 onSubmit={(payload) => domainMutation.mutate(payload)}
               />
             ) : null}
-            {showIdentifierForm && !appEnv.adminDemoMode ? (
+            {showIdentifierForm && !appEnv.adminDemoMode && canManageRegistry ? (
               <IdentifierForm
                 pending={identifierMutation.isPending}
                 onCancel={() => setShowIdentifierForm(false)}
@@ -445,7 +446,7 @@ function RegistryOrgDetail() {
             title="Relationships"
             description="Canonical organization relationships projected from the shared registry."
             action={
-              !appEnv.adminDemoMode ? (
+              !appEnv.adminDemoMode && canManageRegistry ? (
                 <ToggleAction
                   label="Add relationship"
                   open={showRelationshipForm}
@@ -482,7 +483,7 @@ function RegistryOrgDetail() {
                 ))}
               </ul>
             )}
-            {showRelationshipForm && !appEnv.adminDemoMode ? (
+            {showRelationshipForm && !appEnv.adminDemoMode && canManageRegistry ? (
               <RelationshipForm
                 pending={relationshipMutation.isPending}
                 onCancel={() => setShowRelationshipForm(false)}
@@ -578,7 +579,7 @@ function RegistryOrgDetail() {
             title="Capabilities"
             description="Authoritative capability flags for this canonical organization."
             action={
-              !appEnv.adminDemoMode ? (
+              !appEnv.adminDemoMode && canManageRegistry ? (
                 <ToggleAction
                   label="Add capability"
                   open={showCapabilityForm}
@@ -601,7 +602,7 @@ function RegistryOrgDetail() {
                 ))}
               </ul>
             )}
-            {showCapabilityForm && !appEnv.adminDemoMode ? (
+            {showCapabilityForm && !appEnv.adminDemoMode && canManageRegistry ? (
               <CapabilityForm
                 pending={capabilityMutation.isPending}
                 onCancel={() => setShowCapabilityForm(false)}
@@ -675,7 +676,7 @@ function RegistryOrgDetail() {
             title="Merge history"
             description="Audited consolidation events for this canonical record."
             action={
-              !appEnv.adminDemoMode ? (
+              !appEnv.adminDemoMode && canManageRegistry ? (
                 <ToggleAction
                   label="Merge record"
                   open={showMergeForm}
@@ -703,7 +704,7 @@ function RegistryOrgDetail() {
                 ))}
               </ul>
             )}
-            {showMergeForm && !appEnv.adminDemoMode ? (
+            {showMergeForm && !appEnv.adminDemoMode && canManageRegistry ? (
               <MergeForm
                 duplicates={org.possibleDuplicateLinks}
                 pending={mergeMutation.isPending}
