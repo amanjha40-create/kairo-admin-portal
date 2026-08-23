@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAcceptInvitationRouteImport } from './routes/admin.accept-invitation'
 import { Route as AdminCommunicationsRouteImport } from './routes/admin.communications'
 import { Route as AdminForgotPasswordRouteImport } from './routes/admin.forgot-password'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
@@ -48,6 +49,11 @@ const AdminRoute = AdminRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAcceptInvitationRoute = AdminAcceptInvitationRouteImport.update({
+  id: '/accept-invitation',
+  path: '/accept-invitation',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCommunicationsRoute = AdminCommunicationsRouteImport.update({
@@ -170,6 +176,7 @@ const AdminVerificationsCaseIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/admin/accept-invitation': typeof AdminAcceptInvitationRoute
   '/admin/communications': typeof AdminCommunicationsRouteWithChildren
   '/admin/forgot-password': typeof AdminForgotPasswordRoute
   '/admin/login': typeof AdminLoginRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin/accept-invitation': typeof AdminAcceptInvitationRoute
   '/admin/forgot-password': typeof AdminForgotPasswordRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/admin/accept-invitation': typeof AdminAcceptInvitationRoute
   '/admin/communications': typeof AdminCommunicationsRouteWithChildren
   '/admin/forgot-password': typeof AdminForgotPasswordRoute
   '/admin/login': typeof AdminLoginRoute
@@ -247,6 +256,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/admin/accept-invitation'
     | '/admin/communications'
     | '/admin/forgot-password'
     | '/admin/login'
@@ -273,6 +283,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin/accept-invitation'
     | '/admin/forgot-password'
     | '/admin/login'
     | '/admin/settings'
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/admin/accept-invitation'
     | '/admin/communications'
     | '/admin/forgot-password'
     | '/admin/login'
@@ -345,6 +357,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/accept-invitation': {
+      id: '/admin/accept-invitation'
+      path: '/accept-invitation'
+      fullPath: '/admin/accept-invitation'
+      preLoaderRoute: typeof AdminAcceptInvitationRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/communications': {
@@ -587,6 +606,7 @@ const AdminVerificationsRouteWithChildren =
   AdminVerificationsRoute._addFileChildren(AdminVerificationsRouteChildren)
 
 interface AdminRouteChildren {
+  AdminAcceptInvitationRoute: typeof AdminAcceptInvitationRoute
   AdminCommunicationsRoute: typeof AdminCommunicationsRouteWithChildren
   AdminForgotPasswordRoute: typeof AdminForgotPasswordRoute
   AdminLoginRoute: typeof AdminLoginRoute
@@ -601,6 +621,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAcceptInvitationRoute: AdminAcceptInvitationRoute,
   AdminCommunicationsRoute: AdminCommunicationsRouteWithChildren,
   AdminForgotPasswordRoute: AdminForgotPasswordRoute,
   AdminLoginRoute: AdminLoginRoute,

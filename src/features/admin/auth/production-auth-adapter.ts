@@ -9,7 +9,12 @@ import {
   writeStoredAuthTokens,
   type SessionStorageBag,
 } from "./session-storage";
-import type { AdminAccount, AdminAuthAdapter, StoredAuthTokens } from "./types";
+import type {
+  AdminAccount,
+  AdminAuthActionResult,
+  AdminAuthAdapter,
+  StoredAuthTokens,
+} from "./types";
 
 const INVALID_CREDENTIALS_MESSAGE =
   "Invalid email or password. Check your credentials and try again.";
@@ -17,6 +22,7 @@ const ACCESS_DENIED_MESSAGE =
   "Your account does not have permission to access the Kairo Admin Portal.";
 const NOT_CONFIGURED_MESSAGE = "Admin authentication is not configured.";
 const PASSWORD_RESET_NOT_CONFIGURED_MESSAGE = "Admin password reset is not configured.";
+const INVITATION_NOT_CONFIGURED_MESSAGE = "Admin invitation acceptance is not configured.";
 
 type BackendRoleKey = "user" | "support" | "moderator" | "hr" | "admin" | "superadmin";
 
@@ -201,6 +207,43 @@ export function createProductionAuthAdapter(
     });
   }
 
+  async function establishAdminSession(
+    response: BackendTokenResponse,
+    remember: boolean,
+  ): Promise<AdminAuthActionResult> {
+    const signedInAt = now().toISOString();
+    const tokens = toStoredAuthTokens(response, { remember, now, signedInAt });
+    const sessionResult = await fetchAdminSession(tokens.accessToken);
+
+    if (sessionResult.kind !== "authenticated") {
+      clearStoredAuthTokens(storage);
+      if (sessionResult.kind === "forbidden") {
+        await revokeRefreshToken(tokens.refreshToken);
+        return { ok: false, error: ACCESS_DENIED_MESSAGE };
+      }
+
+      if (sessionResult.kind === "unauthorized") {
+        await revokeRefreshToken(tokens.refreshToken);
+        return {
+          ok: false,
+          error: "Your session could not be verified. Sign in again to continue.",
+        };
+      }
+
+      return {
+        ok: false,
+        error: "Admin authentication is temporarily unavailable. Try again shortly.",
+      };
+    }
+
+    writeStoredAuthTokens(storage, tokens);
+    return {
+      ok: true,
+      account: sessionResult.account,
+      signedInAt,
+    };
+  }
+
   return {
     mode: "production",
     isConfigured,
@@ -290,40 +333,7 @@ export function createProductionAuthAdapter(
         };
       }
 
-      const signedInAt = now().toISOString();
-      const tokens = toStoredAuthTokens(result.data, { remember, now, signedInAt });
-      const sessionResult = await fetchAdminSession(tokens.accessToken);
-
-      if (sessionResult.kind !== "authenticated") {
-        clearStoredAuthTokens(storage);
-        if (sessionResult.kind === "forbidden") {
-          await revokeRefreshToken(tokens.refreshToken);
-          return {
-            ok: false,
-            error: ACCESS_DENIED_MESSAGE,
-          };
-        }
-
-        if (sessionResult.kind === "unauthorized") {
-          await revokeRefreshToken(tokens.refreshToken);
-          return {
-            ok: false,
-            error: "Your session could not be verified. Sign in again to continue.",
-          };
-        }
-
-        return {
-          ok: false,
-          error: "Admin authentication is temporarily unavailable. Try again shortly.",
-        };
-      }
-
-      writeStoredAuthTokens(storage, tokens);
-      return {
-        ok: true,
-        account: sessionResult.account,
-        signedInAt,
-      };
+      return establishAdminSession(result.data, remember);
     },
     async logout() {
       if (isConfigured) {
@@ -362,6 +372,39 @@ export function createProductionAuthAdapter(
           "If an authorised Admin account exists for this email, password reset instructions will be sent.",
       };
     },
+    async acceptInvitation(input) {
+      if (!isConfigured) {
+        return { ok: false, error: INVITATION_NOT_CONFIGURED_MESSAGE };
+      }
+
+      const result = await apiClient.request<BackendTokenResponse>(
+        "/api/v1/auth/admin-invitations/accept",
+        {
+          method: "POST",
+          body: {
+            token: input.token,
+            ...(input.fullName ? { full_name: input.fullName.trim() } : {}),
+            ...(input.password ? { password: input.password } : {}),
+          },
+        },
+      );
+
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: getInvitationErrorMessage(result.status, result.error?.details),
+        };
+      }
+
+      if (!result.data) {
+        return {
+          ok: false,
+          error: "The invitation could not be accepted. Try again shortly.",
+        };
+      }
+
+      return establishAdminSession(result.data, false);
+    },
   };
 }
 
@@ -369,6 +412,24 @@ function getLoginErrorMessage(status: number | null, fallbackMessage: string): s
   if (status === 401) return INVALID_CREDENTIALS_MESSAGE;
   if (status === 403) return ACCESS_DENIED_MESSAGE;
   return fallbackMessage;
+}
+
+function getInvitationErrorMessage(status: number | null, details: unknown): string {
+  const detail = getBackendDetail(details);
+  if (detail === "Full name and password are required to accept this invitation") {
+    return detail;
+  }
+  if (status === 404) return "This Admin invitation link is invalid.";
+  if (status === 409 || status === 410) {
+    return "This Admin invitation has expired, been revoked, or already been used.";
+  }
+  if (status === 422) return "This Admin invitation link is invalid.";
+  return "The invitation could not be accepted. Try again shortly.";
+}
+
+function getBackendDetail(details: unknown): string | null {
+  if (!details || typeof details !== "object" || !("detail" in details)) return null;
+  return typeof details.detail === "string" ? details.detail : null;
 }
 
 function toStoredAuthTokens(

@@ -30,6 +30,7 @@ function buildAdapter(
     login: async () => ({ ok: false, error: "unused" }),
     logout: async () => undefined,
     forgotPassword: async () => ({ ok: false, error: "unused" }),
+    acceptInvitation: async () => ({ ok: false, error: "unused" }),
   };
 }
 

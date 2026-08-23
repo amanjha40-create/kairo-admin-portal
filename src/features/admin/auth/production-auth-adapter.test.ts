@@ -455,6 +455,92 @@ describe("production auth adapter", () => {
     });
   });
 
+  it("accepts an Admin invitation and establishes the backend session", async () => {
+    const storage = createMemoryStorage();
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/auth/admin-invitations/accept")) {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          token: "single-use-admin-invitation-token-1234567890",
+          full_name: "Invited Admin",
+          password: "StrongPassword123!",
+        });
+        return jsonResponse({
+          access_token: "invitation-access",
+          refresh_token: "invitation-refresh",
+          token_type: "bearer",
+          expires_in: 1800,
+        });
+      }
+
+      if (url.endsWith("/api/v1/admin/session")) {
+        expect(getHeader(init, "authorization")).toBe("Bearer invitation-access");
+        return jsonResponse({
+          account: {
+            id: "invited-user",
+            email: "invited-admin@example.com",
+            name: "Invited Admin",
+            initials: "IA",
+            role_key: "support",
+            permissions: ["access_admin_portal", "view_all_cases", "view_audit_log"],
+            is_active: true,
+          },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const adapter = createProductionAuthAdapter(createConfiguredEnv(), {
+      storage,
+      fetchImpl,
+      now: () => new Date("2026-08-23T12:00:00.000Z"),
+    });
+
+    await expect(
+      adapter.acceptInvitation({
+        token: "single-use-admin-invitation-token-1234567890",
+        fullName: "Invited Admin",
+        password: "StrongPassword123!",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      account: { id: "invited-user", role: "Support" },
+      signedInAt: "2026-08-23T12:00:00.000Z",
+    });
+    expect(storage.session.getItem(AUTH_TOKEN_KEY)).toContain(
+      '"refreshToken":"invitation-refresh"',
+    );
+    expect(storage.local.getItem(AUTH_TOKEN_KEY)).toBeNull();
+  });
+
+  it.each([
+    [404, { detail: "Admin invitation not found" }, "This Admin invitation link is invalid."],
+    [
+      409,
+      { detail: "Admin invitation is no longer actionable" },
+      "This Admin invitation has expired, been revoked, or already been used.",
+    ],
+    [
+      409,
+      { detail: "Full name and password are required to accept this invitation" },
+      "Full name and password are required to accept this invitation",
+    ],
+  ])(
+    "maps invitation failure status %s without exposing its token",
+    async (status, body, error) => {
+      const fetchImpl = vi.fn(async () => jsonResponse(body, { status }));
+      const adapter = createProductionAuthAdapter(createConfiguredEnv(), {
+        storage: createMemoryStorage(),
+        fetchImpl,
+      });
+
+      await expect(
+        adapter.acceptInvitation({ token: "single-use-admin-invitation-token-1234567890" }),
+      ).resolves.toEqual({ ok: false, error });
+      expect(error).not.toContain("single-use-admin-invitation-token");
+    },
+  );
+
   it("never calls mock auth when production mode is enabled", async () => {
     const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
       const url = String(input);

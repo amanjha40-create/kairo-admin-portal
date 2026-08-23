@@ -65,6 +65,12 @@ export type AdminAuthActionResult =
       error: string;
     };
 
+export interface AdminInvitationAcceptanceInput {
+  token: string;
+  fullName?: string;
+  password?: string;
+}
+
 export interface AdminAuthAdapter {
   mode: "demo" | "production";
   isConfigured: boolean;
@@ -73,4 +79,5 @@ export interface AdminAuthAdapter {
   login: (email: string, password: string, remember: boolean) => Promise<AdminAuthActionResult>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<AdminAuthActionResult>;
+  acceptInvitation: (input: AdminInvitationAcceptanceInput) => Promise<AdminAuthActionResult>;
 }

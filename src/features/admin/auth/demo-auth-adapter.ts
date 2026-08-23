@@ -92,5 +92,11 @@ export function createDemoAuthAdapter(options: DemoAuthAdapterOptions = {}): Adm
           "If an authorised Admin account exists for this email, password reset instructions will be sent.",
       };
     },
+    async acceptInvitation() {
+      return {
+        ok: false,
+        error: "Admin invitation acceptance is unavailable in Demo Mode.",
+      };
+    },
   };
 }

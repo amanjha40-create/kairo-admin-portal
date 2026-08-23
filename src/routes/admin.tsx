@@ -9,7 +9,11 @@ import { AdminAuthProvider, useAdminAuth } from "@/features/admin/auth/admin-aut
 import { getAdminRouterRedirect, getAdminRouterView } from "@/features/admin/auth/router-state";
 import { AdminShell } from "@/features/admin/shell/admin-shell";
 
-const PUBLIC_ADMIN_ROUTES = new Set<string>(["/admin/login", "/admin/forgot-password"]);
+const PUBLIC_ADMIN_ROUTES = new Set<string>([
+  "/admin/login",
+  "/admin/forgot-password",
+  "/admin/accept-invitation",
+]);
 
 function isPublicAdminPath(pathname: string): boolean {
   const trimmed = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;

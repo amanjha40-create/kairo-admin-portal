@@ -25,6 +25,7 @@ export interface AdminAuthContextValue {
   forgotPassword: (
     email: string,
   ) => Promise<{ ok: true; message?: string } | { ok: false; error: string }>;
+  acceptInvitation: AdminAuthAdapter["acceptInvitation"];
   retrySession: () => void;
   mode: AdminAuthAdapter["mode"];
   isConfigured: boolean;
@@ -105,6 +106,20 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     [adapter],
   );
 
+  const acceptInvitation = useCallback<AdminAuthContextValue["acceptInvitation"]>(
+    async (input) => {
+      const result = await adapter.acceptInvitation(input);
+      if (result.ok && result.account && result.signedInAt) {
+        setAccount(result.account);
+        setSignedInAt(result.signedInAt);
+        setError(null);
+        setStatus("authenticated");
+      }
+      return result;
+    },
+    [adapter],
+  );
+
   const value = useMemo<AdminAuthContextValue>(
     () => ({
       status,
@@ -114,12 +129,24 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       forgotPassword,
+      acceptInvitation,
       retrySession,
       mode: adapter.mode,
       isConfigured: adapter.isConfigured,
       notice: adapter.notice,
     }),
-    [status, account, signedInAt, error, login, logout, forgotPassword, retrySession, adapter],
+    [
+      status,
+      account,
+      signedInAt,
+      error,
+      login,
+      logout,
+      forgotPassword,
+      acceptInvitation,
+      retrySession,
+      adapter,
+    ],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;

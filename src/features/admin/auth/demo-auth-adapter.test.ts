@@ -23,6 +23,17 @@ function createMemoryStorage(): SessionStorageBag {
 }
 
 describe("createDemoAuthAdapter", () => {
+  it("does not provide a mock Admin invitation acceptance flow", async () => {
+    const adapter = createDemoAuthAdapter({ storage: createMemoryStorage(), delayMs: 0 });
+
+    await expect(
+      adapter.acceptInvitation({ token: "single-use-admin-invitation-token-1234567890" }),
+    ).resolves.toEqual({
+      ok: false,
+      error: "Admin invitation acceptance is unavailable in Demo Mode.",
+    });
+  });
+
   it("supports demo login success and restore", async () => {
     const storage = createMemoryStorage();
     const adapter = createDemoAuthAdapter({ storage, delayMs: 0 });
