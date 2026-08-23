@@ -211,6 +211,7 @@ interface BackendInvitationRecord {
 
 export interface AdminListParams {
   query?: string;
+  role?: string;
   status?: string;
   page?: number;
   pageSize?: number;
@@ -501,6 +502,7 @@ function buildPageUrl(path: string, params: AdminListParams) {
   search.set("page", String(params.page ?? 1));
   search.set("page_size", String(params.pageSize ?? 10));
   if (params.query?.trim()) search.set("search", params.query.trim());
+  if (params.role && params.role !== "all") search.set("role", params.role);
   if (params.status && params.status !== "all") search.set("status", params.status);
   return `${path}?${search.toString()}`;
 }

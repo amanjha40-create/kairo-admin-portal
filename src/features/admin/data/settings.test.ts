@@ -133,7 +133,7 @@ describe("admin settings adapter", () => {
     );
   });
 
-  it("supports administrator search and pagination from backend APIs", async () => {
+  it("supports combined administrator filters and pagination from backend APIs", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);
 
@@ -141,6 +141,7 @@ describe("admin settings adapter", () => {
       const url = new URL(String(input));
       expect(url.pathname).toBe("/api/v1/admin/administrators");
       expect(url.searchParams.get("search")).toBe("ada");
+      expect(url.searchParams.get("role")).toBe("admin");
       expect(url.searchParams.get("status")).toBe("active");
       expect(url.searchParams.get("page")).toBe("2");
       expect(url.searchParams.get("page_size")).toBe("5");
@@ -177,6 +178,7 @@ describe("admin settings adapter", () => {
     await expect(
       adapter.listAdministrators({
         query: "ada",
+        role: "admin",
         status: "active",
         page: 2,
         pageSize: 5,

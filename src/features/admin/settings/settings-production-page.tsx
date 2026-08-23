@@ -43,6 +43,7 @@ export function AdminSettingsProductionPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [adminQuery, setAdminQuery] = useState("");
+  const [adminRole, setAdminRole] = useState("all");
   const [adminStatus, setAdminStatus] = useState("all");
   const [adminPage, setAdminPage] = useState(1);
   const [selectedAdminId, setSelectedAdminId] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export function AdminSettingsProductionPage() {
     adminAdministratorsQueryOptions(
       {
         query: adminQuery,
+        role: adminRole,
         status: adminStatus,
         page: adminPage,
         pageSize: 10,
@@ -99,8 +101,13 @@ export function AdminSettingsProductionPage() {
   }, [meQuery.data]);
 
   useEffect(() => {
-    if (!selectedAdminId && administratorsQuery.data?.items[0]) {
-      setSelectedAdminId(administratorsQuery.data.items[0].id);
+    const items = administratorsQuery.data?.items ?? [];
+    if (!items.length) {
+      if (selectedAdminId) setSelectedAdminId(null);
+      return;
+    }
+    if (!selectedAdminId || !items.some((item) => item.id === selectedAdminId)) {
+      setSelectedAdminId(items[0].id);
     }
   }, [administratorsQuery.data?.items, selectedAdminId]);
 
@@ -521,6 +528,7 @@ export function AdminSettingsProductionPage() {
                         onChange={(value) => {
                           setAdminQuery(value);
                           setAdminPage(1);
+                          setSelectedAdminId(null);
                         }}
                         placeholder="Search internal admins"
                       />
@@ -538,6 +546,60 @@ export function AdminSettingsProductionPage() {
                   </div>
                 }
               >
+                <div className="mb-3 flex flex-wrap items-end gap-2">
+                  <label className="flex min-w-44 flex-col gap-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Role</span>
+                    <select
+                      aria-label="Filter administrators by role"
+                      value={adminRole}
+                      onChange={(event) => {
+                        setAdminRole(event.target.value);
+                        setAdminPage(1);
+                        setSelectedAdminId(null);
+                      }}
+                      className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="all">All roles</option>
+                      {rolesQuery.data?.map((role) => (
+                        <option key={role.key} value={role.key}>
+                          {role.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex min-w-44 flex-col gap-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Status</span>
+                    <select
+                      aria-label="Filter administrators by status"
+                      value={adminStatus}
+                      onChange={(event) => {
+                        setAdminStatus(event.target.value);
+                        setAdminPage(1);
+                        setSelectedAdminId(null);
+                      }}
+                      className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="active">Active</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                  </label>
+                  {adminQuery || adminRole !== "all" || adminStatus !== "all" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminQuery("");
+                        setAdminRole("all");
+                        setAdminStatus("all");
+                        setAdminPage(1);
+                        setSelectedAdminId(null);
+                      }}
+                      className="h-9 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+                    >
+                      Clear filters
+                    </button>
+                  ) : null}
+                </div>
                 {canInviteAdminAccess ? (
                   <div className="mb-3 grid gap-2 rounded-md border border-dashed border-border bg-muted/30 p-3 lg:grid-cols-[minmax(0,1fr)_220px]">
                     <InputField
@@ -620,15 +682,39 @@ export function AdminSettingsProductionPage() {
                       page={administratorsQuery.data.page}
                       pageSize={administratorsQuery.data.pageSize}
                       total={administratorsQuery.data.total}
-                      onPageChange={setAdminPage}
+                      onPageChange={(page) => {
+                        setAdminPage(page);
+                        setSelectedAdminId(null);
+                      }}
                       onPageSizeChange={() => {}}
                       pageSizeOptions={[10]}
                     />
                   </div>
                 ) : (
                   <EmptyState
-                    title="No internal admins found"
+                    title={
+                      adminQuery || adminRole !== "all" || adminStatus !== "all"
+                        ? "No administrators match these filters"
+                        : "No internal admins found"
+                    }
                     description="Only backend-authoritative Admin/staff accounts are listed here."
+                    action={
+                      adminQuery || adminRole !== "all" || adminStatus !== "all" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminQuery("");
+                            setAdminRole("all");
+                            setAdminStatus("all");
+                            setAdminPage(1);
+                            setSelectedAdminId(null);
+                          }}
+                          className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+                        >
+                          Clear filters
+                        </button>
+                      ) : null
+                    }
                   />
                 )}
               </WorkspaceSection>
