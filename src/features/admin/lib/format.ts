@@ -12,15 +12,27 @@ export function formatSignedPct(pct: number): string {
 
 export function formatRelativeTime(iso: string): string {
   const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "Unavailable";
+
   const now = Date.now();
   const diffSec = Math.round((now - then) / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const min = Math.round(diffSec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.round(hr / 24);
-  return `${day}d ago`;
+  const future = diffSec < 0;
+  const absoluteSeconds = Math.abs(diffSec);
+
+  let value: string;
+  if (absoluteSeconds < 60) {
+    value = `${absoluteSeconds}s`;
+  } else {
+    const minutes = Math.round(absoluteSeconds / 60);
+    if (minutes < 60) {
+      value = `${minutes}m`;
+    } else {
+      const hours = Math.round(minutes / 60);
+      value = hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
+    }
+  }
+
+  return future ? `in ${value}` : `${value} ago`;
 }
 
 export function formatAge(hours: number): string {
