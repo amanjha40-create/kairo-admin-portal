@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
+import { forbiddenAbsoluteBuildPaths } from "./admin-artifact-safety.mjs";
+
 if (process.env.VITE_ADMIN_DEMO_MODE === "true") {
   process.exit(0);
 }
@@ -17,8 +19,33 @@ const forbidden = [
   "cand-101",
   "Wayne Industries",
   "Local demo credentials",
+  "http://localhost:8000",
+  "@example.invalid",
+  "admin5-invite-",
+  "admin5-failure-",
+  "admin8-replay-",
+  "admin8-revoked-",
+  "STAGING_PHONE_OTP_CODE",
+  "BREVO_API_KEY",
+  "JWT_SECRET_KEY",
+  "-----BEGIN PRIVATE KEY-----",
 ];
+forbidden.push(...forbiddenAbsoluteBuildPaths);
+const appEnvironment = process.env.VITE_APP_ENV ?? "production";
+const requiredApiOrigin =
+  appEnvironment === "staging" ? "https://staging-api.kairoid.com" : "https://api.kairoid.com";
+
+if (appEnvironment === "production") {
+  forbidden.push(
+    "https://staging-api.kairoid.com",
+    "admin-staging.kairoid.com",
+    "codex-admin-verification-operations.d2bqzsobe5n064.amplifyapp.com",
+  );
+} else if (appEnvironment === "staging") {
+  forbidden.push("https://api.kairoid.com");
+}
 const violations = [];
+let requiredApiOriginFound = false;
 
 async function scan(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -30,6 +57,7 @@ async function scan(directory) {
 
     const content = await readFile(path, "utf8").catch(() => null);
     if (content === null) continue;
+    if (content.includes(requiredApiOrigin)) requiredApiOriginFound = true;
     for (const marker of forbidden) {
       if (entry.name.includes(marker) || content.includes(marker)) {
         violations.push(`${relative(artifactRoot.pathname, path)}: ${marker}`);
@@ -41,7 +69,15 @@ async function scan(directory) {
 await scan(artifactRoot.pathname);
 
 if (violations.length > 0) {
-  throw new Error(`Production Admin artifact contains demo data:\n${violations.join("\n")}`);
+  throw new Error(
+    `Admin artifact contains forbidden data or build metadata:\n${violations.join("\n")}`,
+  );
 }
 
-console.log("Production Admin artifact contains no forbidden demo fixtures.");
+if (!requiredApiOriginFound) {
+  throw new Error(`Admin artifact does not contain the required ${appEnvironment} API origin.`);
+}
+
+console.log(
+  `${appEnvironment} Admin artifact contains no forbidden fixtures or environment leakage.`,
+);

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && node scripts/verify-admin-artifact.mjs",
+    "build": "node scripts/prepare-admin-build.mjs && vite build && node scripts/sanitize-admin-artifact.mjs && node scripts/verify-admin-artifact.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
