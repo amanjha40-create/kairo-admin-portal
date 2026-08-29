@@ -22,12 +22,30 @@ export function shouldLoadDemoCredentials(
   return showDemoCredentials && authMode === "demo" && DEMO_RUNTIME_AVAILABLE;
 }
 
+function shouldShowAdminEnvironmentNotice(): boolean {
+  return appEnv.appEnv !== "production";
+}
+
 export function AdminEnvironmentNotice({
   variant = "card",
   showDemoCredentials = false,
 }: {
   variant?: "banner" | "card";
   showDemoCredentials?: boolean;
+}) {
+  if (!shouldShowAdminEnvironmentNotice()) return null;
+
+  return (
+    <AdminEnvironmentNoticeContent variant={variant} showDemoCredentials={showDemoCredentials} />
+  );
+}
+
+function AdminEnvironmentNoticeContent({
+  variant,
+  showDemoCredentials,
+}: {
+  variant: "banner" | "card";
+  showDemoCredentials: boolean;
 }) {
   const auth = useAdminAuth();
   const [credentials, setCredentials] = useState<DemoCredential[]>([]);
