@@ -360,6 +360,13 @@ export function OutreachDialog({
               </li>
               <li>Evidence: {detail.evidence.length}</li>
               <li>
+                Candidate consent:{" "}
+                {detail.consent.grantedAt &&
+                (detail.consent.fields.length > 0 || detail.consent.evidenceScope.length > 0)
+                  ? "Authoritative"
+                  : "Missing metadata"}
+              </li>
+              <li>
                 Open flags:{" "}
                 {
                   detail.flags.filter(

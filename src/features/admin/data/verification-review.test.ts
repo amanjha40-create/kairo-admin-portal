@@ -91,6 +91,7 @@ function queuePayload() {
         created_at: "2026-07-28T08:00:00.000Z",
         updated_at: "2026-07-28T09:00:00.000Z",
         accepted_at: "2026-07-28T08:30:00.000Z",
+        consented_at: "2026-07-28T08:25:00.000Z",
         consented_fields: ["role", "employment_dates"],
         consented_evidence_scope: ["offer_letter", "payslip"],
         employment_claim: {
@@ -507,6 +508,7 @@ describe("verification review adapter", () => {
       publicId: "aaaaaaa1-1111-1111-1111-111111111111",
     });
     expect(detail?.consent.fields).toEqual(["role", "employment_dates"]);
+    expect(detail?.consent.grantedAt).toBe("2026-07-28T08:25:00.000Z");
     expect(detail?.reviewCycles).toHaveLength(1);
     expect(detail?.routingContext).toMatchObject({
       workflowOwner: "Admin review",

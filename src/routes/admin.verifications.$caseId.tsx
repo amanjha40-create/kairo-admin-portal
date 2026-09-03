@@ -79,6 +79,7 @@ import {
   evaluateWorkflowEligibility,
   isTerminalStatus,
 } from "@/features/admin/workflow/eligibility";
+import { mapVerificationActionError } from "@/features/admin/workflow/action-errors";
 import {
   FIELD_CONFIRMATION_LABEL,
   type WorkflowAction,
@@ -204,6 +205,7 @@ function useProductionVerificationWorkflow(
       buildWorkflowCaseState(detail as never, {
         currentStatus: detail.summary.status,
         acknowledgedFlagIds,
+        usesCanonicalDispatchContract: true,
       }),
       opts,
     );
@@ -275,7 +277,11 @@ function useProductionVerificationWorkflow(
       await refresh();
     },
     async submitOutreach() {
-      await adapter.approveCase(caseId, "Approved for dispatch from the Admin Portal.");
+      try {
+        await adapter.approveCase(caseId, "Approved for dispatch from the Admin Portal.");
+      } catch (error) {
+        throw mapVerificationActionError("approve_outreach", error);
+      }
       await refresh();
     },
     async submitDirectConfirmation(payload) {

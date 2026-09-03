@@ -76,7 +76,12 @@ export const TRANSITION_RULES: WorkflowTransitionRule[] = [
   {
     action: "cancel",
     fromStatuses: [
+      "draft",
+      "pending_subject_acceptance",
+      "accepted",
+      "pending_subject_submission",
       "pending_admin_review",
+      "awaiting_subject_corrections",
       "pending_admin_re_review",
       "approved_for_organization_verification",
       "pending_organization_resolution",
@@ -111,6 +116,9 @@ export const TRANSITION_RULES: WorkflowTransitionRule[] = [
 /** Case state the engine consumes. Includes any session overrides. */
 export interface WorkflowCaseState {
   currentStatus: VerificationStatus;
+  usesCanonicalDispatchContract: boolean;
+  hasAuthoritativeConsent: boolean;
+  hasCurrentContact: boolean;
   hasEligibleContact: boolean;
   hasOpenCriticalFlag: boolean;
   hasOpenHighFlag: boolean;
@@ -129,6 +137,7 @@ export function buildWorkflowCaseState(
     currentStatus?: VerificationStatus;
     acknowledgedFlagIds?: Set<string>;
     hasOutstandingCorrectionOverride?: boolean;
+    usesCanonicalDispatchContract?: boolean;
   } = {},
 ): WorkflowCaseState {
   const ack = overrides.acknowledgedFlagIds ?? new Set<string>();
@@ -141,8 +150,9 @@ export function buildWorkflowCaseState(
   const hasOpenHighFlag = openFlags.some((f) => f.severity === "high");
   const hasOpenDocumentMismatch = openFlags.some((f) => f.flag === "document_mismatch");
   const hasOpenPossibleDuplicate = openFlags.some((f) => f.flag === "possible_duplicate");
-  const hasEligibleContact = detail.contacts.some(
-    (c) => c.outreachEligible && c.internalApprovalStatus === "approved",
+  const currentContact = detail.contacts[0];
+  const hasEligibleContact = Boolean(
+    currentContact?.outreachEligible && currentContact.internalApprovalStatus === "approved",
   );
   const outstandingCorrection =
     overrides.hasOutstandingCorrectionOverride ??
@@ -150,6 +160,12 @@ export function buildWorkflowCaseState(
 
   return {
     currentStatus: overrides.currentStatus ?? detail.summary.status,
+    usesCanonicalDispatchContract: overrides.usesCanonicalDispatchContract ?? false,
+    hasAuthoritativeConsent: Boolean(
+      detail.consent?.grantedAt &&
+      (detail.consent.fields.length > 0 || detail.consent.evidenceScope.length > 0),
+    ),
+    hasCurrentContact: Boolean(currentContact),
     hasEligibleContact,
     hasOpenCriticalFlag,
     hasOpenHighFlag,
@@ -227,30 +243,40 @@ export function evaluateWorkflowEligibility(
         warnings.push("A correction request is already outstanding on this case.");
       }
       break;
-    case "approve_outreach":
-      if (!state.hasEligibleContact) {
-        blockingReasons.push("At least one approved, outreach-eligible contact is required.");
-      }
-      if (state.hasOpenCriticalFlag) {
-        blockingReasons.push("Open critical risk flag blocks dispatch. Resolve it first.");
-      }
-      if (state.outstandingCorrection) {
+    case "approve_outreach": {
+      if (state.usesCanonicalDispatchContract && !state.hasAuthoritativeConsent) {
         blockingReasons.push(
-          "Cannot approve for dispatch while a candidate correction is outstanding.",
+          "Authoritative candidate consent is missing. Ask the candidate to resubmit the request with consented fields or evidence before approving for dispatch.",
         );
       }
+      const contactIsRequired =
+        detail.summary.verificationType === "employment" || state.hasCurrentContact;
+      if (contactIsRequired && !state.hasEligibleContact) {
+        blockingReasons.push(
+          "Approve the current verifier contact before dispatching this request.",
+        );
+      }
+      // These conditions are useful reviewer signals, but the backend does not
+      // define them as categorical dispatch blockers.
+      if (state.hasOpenCriticalFlag) {
+        warnings.push("An open critical risk flag is present. Review it before dispatch.");
+      }
+      if (state.outstandingCorrection) {
+        warnings.push("A candidate correction is still recorded as outstanding.");
+      }
       if (state.evidenceCount === 0) {
-        blockingReasons.push("Required evidence has not been uploaded.");
+        warnings.push("No evidence is attached to this case.");
       }
       if (!state.organizationResolved) {
         warnings.push(
-          "Organization is not resolved yet. The backend may move this case into organization resolution after dispatch approval.",
+          "Organization is not resolved yet. Approval will move this case into organization resolution without sending outreach.",
         );
       }
       if (state.hasOpenPossibleDuplicate) {
         warnings.push("Possible duplicate flag is open. Confirm this is not a duplicate case.");
       }
       break;
+    }
     case "verify":
     case "direct_confirmation":
       if (state.hasOpenCriticalFlag) {
@@ -299,13 +325,19 @@ export function evaluateWorkflowEligibility(
   }
 
   const allowed = blockingReasons.length === 0;
+  const nextStatusOnSuccess =
+    action === "approve_outreach" && state.usesCanonicalDispatchContract
+      ? state.organizationResolved
+        ? "pending_organization_acceptance"
+        : "pending_organization_resolution"
+      : nextStatusFor(action, state.currentStatus);
   return {
     action,
     allowed,
     blockingReasons,
     warnings,
     requiredPermission,
-    nextStatusOnSuccess: nextStatusFor(action, state.currentStatus),
+    nextStatusOnSuccess,
     irrelevant,
   };
 }

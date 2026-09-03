@@ -146,6 +146,7 @@ export interface LinkedVerificationRecord {
 export interface CandidateConsentSummary {
   fields: string[];
   evidenceScope: string[];
+  grantedAt?: string | null;
   candidateResponse?: string | null;
   submittedAt?: string | null;
 }
@@ -539,6 +540,7 @@ interface BackendVerificationRequestResponse {
   candidate_response?: string | null;
   candidate_response_submitted_at?: string | null;
   accepted_at?: string | null;
+  consented_at?: string | null;
   consented_fields?: string[];
   consented_evidence_scope?: string[];
   target_organization_metadata?: Record<string, unknown>;
@@ -1437,6 +1439,7 @@ function mapDetailResponse(
     consent: {
       fields: detail.request.consented_fields ?? [],
       evidenceScope: detail.request.consented_evidence_scope ?? [],
+      grantedAt: detail.request.consented_at ?? null,
       candidateResponse: detail.request.candidate_response,
       submittedAt: detail.request.candidate_response_submitted_at,
     },
