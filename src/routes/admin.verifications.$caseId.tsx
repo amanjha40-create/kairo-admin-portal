@@ -21,6 +21,7 @@ import {
   X,
   MessageSquare,
   Info,
+  PhoneCall,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OutreachWorkspace } from "@/features/admin/components/outreach-workspace";
@@ -88,6 +89,7 @@ import { ROLE_LABEL, hasPermission } from "@/features/admin/workflow/permissions
 import {
   CancelDialog,
   CorrectionDialog,
+  DirectConfirmationDialog,
   OutreachDialog,
   VerifyDialog,
   RejectDialog,
@@ -276,6 +278,10 @@ function useProductionVerificationWorkflow(
       await adapter.approveCase(caseId, "Approved for dispatch from the Admin Portal.");
       await refresh();
     },
+    async submitDirectConfirmation(payload) {
+      await adapter.directConfirm(caseId, payload);
+      await refresh();
+    },
     async submitVerify(payload) {
       await adapter.finalizeCase(caseId, {
         outcome: "verified",
@@ -342,6 +348,31 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
         queryKey: verificationReviewKeys.list("production"),
       }),
     ]);
+  }
+
+  async function openEvidence(evidenceId: string) {
+    const evidenceWindow = window.open("about:blank", "_blank");
+    if (evidenceWindow) {
+      evidenceWindow.opener = null;
+    }
+    try {
+      const url = await adapter.getEvidenceDownloadUrl(caseId, evidenceId);
+      if (!url) {
+        evidenceWindow?.close();
+        toast.error("Evidence download is unavailable");
+        return;
+      }
+      if (evidenceWindow) {
+        evidenceWindow.location.replace(url);
+      } else {
+        window.location.assign(url);
+      }
+    } catch (error) {
+      evidenceWindow?.close();
+      toast.error("Evidence could not be opened", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   }
 
   const actor = useMemo(
@@ -614,7 +645,10 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
             title="Evidence"
             description={`${detail.evidence.length} document${detail.evidence.length === 1 ? "" : "s"} attached to this case.`}
           >
-            <EvidencePanel items={detail.evidence} />
+            <EvidencePanel
+              items={detail.evidence}
+              onOpenEvidence={appEnv.adminDemoMode ? undefined : openEvidence}
+            />
           </WorkspaceSection>
 
           {appEnv.adminDemoMode ? (
@@ -705,6 +739,7 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
           <DecisionPreparationPanel
             detail={detail}
             workflow={workflow}
+            canDirectConfirm={hasPermission(admin?.permissions ?? [], "verification.verify")}
             onOpen={(a) => setDialog(a)}
           />
         </aside>
@@ -722,6 +757,13 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
         onOpenChange={(o) => !o && setDialog(null)}
         detail={detail}
         workflow={workflow}
+      />
+      <DirectConfirmationDialog
+        open={dialog === "direct_confirmation"}
+        onOpenChange={(o) => !o && setDialog(null)}
+        detail={detail}
+        workflow={workflow}
+        onRouteToCorrection={() => setDialog("request_correction")}
       />
       <VerifyDialog
         open={dialog === "verify"}
@@ -1332,11 +1374,37 @@ function ProductionVerifierSection({
               {contact.role} · {contact.organization}
             </p>
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              {contact.emailMasked}
+              {contact.email ?? contact.emailMasked}
             </p>
+            {contact.phoneMasked ? (
+              <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                {contact.phoneMasked}
+              </p>
+            ) : null}
             <p className="mt-1 text-[11px] text-muted-foreground">
               Review state: {CONTACT_STATE_LABEL[contact.state]}
             </p>
+            {contact.contactType ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Contact type: {contact.contactType.replace(/_/g, " ")}
+              </p>
+            ) : null}
+            {contact.candidateNote ? (
+              <div className="mt-2 rounded border border-border bg-muted/30 p-2">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Candidate-provided note
+                </p>
+                <p className="mt-1 text-xs text-foreground">{contact.candidateNote}</p>
+              </div>
+            ) : null}
+            {contact.reviewNotes ? (
+              <div className="mt-2 rounded border border-border bg-muted/30 p-2">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Contact review note
+                </p>
+                <p className="mt-1 text-xs text-foreground">{contact.reviewNotes}</p>
+              </div>
+            ) : null}
           </div>
         ) : (
           <EmptyState
@@ -1655,41 +1723,61 @@ function CandidateSummaryPanel({ detail }: { detail: VerificationCaseDetail }) {
         <div>
           <p className="text-sm font-medium text-foreground">{c.name}</p>
           <p className="text-[11px] text-muted-foreground">{c.email}</p>
-          <p className="font-mono text-[11px] text-muted-foreground">{c.phoneMasked}</p>
+          {c.phoneMasked ? (
+            <p className="font-mono text-[11px] text-muted-foreground">{c.phoneMasked}</p>
+          ) : null}
         </div>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-          <StatusRow
-            label="Profile"
-            value={<span className="text-foreground">{c.profileType}</span>}
-          />
-          <StatusRow
-            label="Signed up"
-            value={<span className="text-foreground">{formatRelativeTime(c.signupAt)}</span>}
-          />
-          <StatusRow
-            label="Trust score"
-            value={<span className="text-foreground tabular-nums">{c.trustScore}</span>}
-          />
-          <StatusRow
-            label="Passport"
-            value={
-              <span className="text-foreground capitalize">
-                {c.trustPassportStatus.replace(/_/g, " ")}
-              </span>
-            }
-          />
-          <StatusRow
-            label="Records"
-            value={<span className="text-foreground tabular-nums">{c.employmentRecordCount}</span>}
-          />
-          <StatusRow
-            label="Prior verifications"
-            value={
-              <span className="text-foreground tabular-nums">{c.previousVerificationCount}</span>
-            }
-          />
-        </dl>
-        {c.riskFlags.length > 0 ? (
+        {c.profileType || c.signupAt || c.trustScore !== undefined || c.trustPassportStatus ? (
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            {c.profileType ? (
+              <StatusRow
+                label="Profile"
+                value={<span className="text-foreground">{c.profileType}</span>}
+              />
+            ) : null}
+            {c.signupAt ? (
+              <StatusRow
+                label="Signed up"
+                value={<span className="text-foreground">{formatRelativeTime(c.signupAt)}</span>}
+              />
+            ) : null}
+            {c.trustScore !== undefined ? (
+              <StatusRow
+                label="Trust score"
+                value={<span className="text-foreground tabular-nums">{c.trustScore}</span>}
+              />
+            ) : null}
+            {c.trustPassportStatus ? (
+              <StatusRow
+                label="Passport"
+                value={
+                  <span className="text-foreground capitalize">
+                    {c.trustPassportStatus.replace(/_/g, " ")}
+                  </span>
+                }
+              />
+            ) : null}
+            {c.employmentRecordCount !== undefined ? (
+              <StatusRow
+                label="Records"
+                value={
+                  <span className="text-foreground tabular-nums">{c.employmentRecordCount}</span>
+                }
+              />
+            ) : null}
+            {c.previousVerificationCount !== undefined ? (
+              <StatusRow
+                label="Prior verifications"
+                value={
+                  <span className="text-foreground tabular-nums">
+                    {c.previousVerificationCount}
+                  </span>
+                }
+              />
+            ) : null}
+          </dl>
+        ) : null}
+        {c.riskFlags && c.riskFlags.length > 0 ? (
           <div className="rounded bg-amber-50 p-2 text-[11px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
             <p className="font-medium">Risk flags</p>
             <ul className="mt-0.5 list-inside list-disc">
@@ -1793,10 +1881,12 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 function DecisionPreparationPanel({
   detail,
   workflow,
+  canDirectConfirm,
   onOpen,
 }: {
   detail: VerificationCaseDetail;
   workflow: UseVerificationWorkflowResult;
+  canDirectConfirm: boolean;
   onOpen: (a: WorkflowAction) => void;
 }) {
   const evidenceReviewed = detail.evidence.filter((e) => e.reviewStatus === "reviewed").length;
@@ -1862,6 +1952,15 @@ function DecisionPreparationPanel({
   }[] = [
     { action: "request_correction", label: "Request Correction", icon: Wrench },
     { action: "approve_outreach", label: "Approve for Dispatch", icon: Shield },
+    ...(canDirectConfirm
+      ? [
+          {
+            action: "direct_confirmation" as const,
+            label: "Verify via Direct Confirmation",
+            icon: PhoneCall,
+          },
+        ]
+      : []),
     { action: "verify", label: "Finalize Verified", icon: CheckCircle2 },
     { action: "reject", label: "Reject", icon: X, destructive: true },
     { action: "unable_to_verify", label: "Finalize Unable to Verify", icon: AlertTriangle },

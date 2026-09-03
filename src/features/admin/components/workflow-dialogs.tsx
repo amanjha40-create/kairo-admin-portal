@@ -23,6 +23,8 @@ import {
   VERIFICATION_BASES,
   VERIFICATION_BASIS_LABEL,
   type CorrectionReason,
+  type DirectConfirmationMethod,
+  type DirectConfirmationOutcome,
   type FieldConfirmation,
   type RejectionReason,
   type UnableReason,
@@ -40,6 +42,7 @@ import {
   clarificationRequestSchema,
   clarificationResponseSchema,
   correctionSchema,
+  directConfirmationSchema,
   outreachSchema,
   rejectSchema,
   unableSchema,
@@ -383,7 +386,7 @@ export function OutreachDialog({
                 {backendContact.name} · {backendContact.role}
               </p>
               <p className="font-mono text-[11px] text-muted-foreground">
-                {backendContact.emailMasked}
+                {backendContact.email ?? backendContact.emailMasked}
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {CONTACT_STATE_LABEL[backendContact.state]} ·{" "}
@@ -425,7 +428,7 @@ export function OutreachDialog({
                         {c.name} · {c.role}
                       </span>
                       <span className="block font-mono text-[11px] text-muted-foreground">
-                        {c.emailMasked}
+                        {c.email ?? c.emailMasked}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
                         {CONTACT_STATE_LABEL[c.state]} · {(c.confidence * 100).toFixed(0)}%
@@ -463,6 +466,178 @@ export function OutreachDialog({
           </Field>
         </>
       )}
+    </WorkflowActionDialog>
+  );
+}
+
+// =====================================================================
+// 3. Direct confirmation
+// =====================================================================
+
+const DIRECT_CONFIRMATION_METHOD_LABEL: Record<DirectConfirmationMethod, string> = {
+  phone: "Phone",
+  email: "Email",
+  video_call: "Video call",
+  in_person: "In person",
+  other: "Other",
+};
+
+export function DirectConfirmationDialog({
+  open,
+  onOpenChange,
+  detail,
+  workflow,
+  onRouteToCorrection,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  detail: VerificationCaseDetail;
+  workflow: UseVerificationWorkflowResult;
+  onRouteToCorrection: () => void;
+}) {
+  const eligibility = workflow.getEligibility("direct_confirmation");
+  const contact = detail.contacts[0];
+  const [method, setMethod] = useState<DirectConfirmationMethod>(
+    contact?.email ? "email" : "phone",
+  );
+  const [confirmedBy, setConfirmedBy] = useState(contact?.name ?? "");
+  const [verifierRole, setVerifierRole] = useState(contact?.role ?? "");
+  const [contactDetailUsed, setContactDetailUsed] = useState(contact?.email ?? "");
+  const [outcome, setOutcome] = useState<DirectConfirmationOutcome>("details_confirmed");
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<ZodIssueMap>({});
+
+  function reset() {
+    setMethod(contact?.email ? "email" : "phone");
+    setConfirmedBy(contact?.name ?? "");
+    setVerifierRole(contact?.role ?? "");
+    setContactDetailUsed(contact?.email ?? "");
+    setOutcome("details_confirmed");
+    setNote("");
+    setErrors({});
+  }
+
+  return (
+    <WorkflowActionDialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) reset();
+      }}
+      title="Verify via Direct Confirmation"
+      consequenceSummary="Records a privileged manual confirmation and marks the linked canonical record Verified."
+      eligibility={eligibility}
+      submitLabel={
+        outcome === "details_confirmed_with_discrepancy"
+          ? "Continue to Request Correction"
+          : appEnv.adminDemoMode
+            ? "Verify via direct confirmation (session-only)"
+            : "Verify via direct confirmation"
+      }
+      candidateImpactNote="Material discrepancies must use the existing correction workflow and cannot produce a clean Verified outcome."
+      onSubmit={async () => {
+        const parsed = directConfirmationSchema.safeParse({
+          confirmationMethod: method,
+          confirmedBy,
+          verifierRole,
+          contactDetailUsed,
+          confirmationOutcome: outcome,
+          internalNote: note,
+        });
+        if (!parsed.success) {
+          setErrors(issuesFrom(parsed.error));
+          return;
+        }
+        if (parsed.data.confirmationOutcome === "details_confirmed_with_discrepancy") {
+          onOpenChange(false);
+          reset();
+          onRouteToCorrection();
+          return;
+        }
+        await workflow.submitDirectConfirmation(parsed.data);
+        toast.success("Verified via direct confirmation", {
+          description: appEnv.adminDemoMode
+            ? "Recorded for this Demo Mode session only."
+            : "The canonical backend recorded the verification and immutable audit event.",
+        });
+        onOpenChange(false);
+        reset();
+      }}
+    >
+      <Field label="Verification method" required error={errors.confirmationMethod}>
+        <select
+          value={method}
+          onChange={(event) => setMethod(event.target.value as DirectConfirmationMethod)}
+          className={inputCls}
+        >
+          {Object.entries(DIRECT_CONFIRMATION_METHOD_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Confirmed by" htmlFor="direct-confirmed-by" required error={errors.confirmedBy}>
+        <input
+          id="direct-confirmed-by"
+          value={confirmedBy}
+          onChange={(event) => setConfirmedBy(event.target.value)}
+          className={inputCls}
+          maxLength={255}
+        />
+      </Field>
+      <Field label="Role / office" htmlFor="direct-role" required error={errors.verifierRole}>
+        <input
+          id="direct-role"
+          value={verifierRole}
+          onChange={(event) => setVerifierRole(event.target.value)}
+          className={inputCls}
+          maxLength={255}
+        />
+      </Field>
+      <Field
+        label="Contact detail used"
+        htmlFor="direct-contact"
+        required
+        error={errors.contactDetailUsed}
+        hint="Record the exact phone number or email used for this confirmation."
+      >
+        <input
+          id="direct-contact"
+          value={contactDetailUsed}
+          onChange={(event) => setContactDetailUsed(event.target.value)}
+          className={inputCls}
+          maxLength={320}
+        />
+      </Field>
+      <Field label="Confirmation outcome" required error={errors.confirmationOutcome}>
+        <select
+          value={outcome}
+          onChange={(event) => setOutcome(event.target.value as DirectConfirmationOutcome)}
+          className={inputCls}
+        >
+          <option value="details_confirmed">Details confirmed</option>
+          <option value="details_confirmed_with_discrepancy">
+            Details confirmed with discrepancy
+          </option>
+        </select>
+      </Field>
+      <Field
+        label="Internal verification note"
+        htmlFor="direct-note"
+        required
+        error={errors.internalNote}
+        hint="Explain what was confirmed, by whom, and through which channel."
+      >
+        <textarea
+          id="direct-note"
+          rows={5}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          className={textareaCls}
+          maxLength={5000}
+        />
+      </Field>
     </WorkflowActionDialog>
   );
 }

@@ -76,7 +76,13 @@ const COMPARISON_META: Record<ComparisonResult, { label: string; className: stri
   },
 };
 
-export function EvidencePanel({ items }: { items: EvidenceItem[] }) {
+export function EvidencePanel({
+  items,
+  onOpenEvidence,
+}: {
+  items: EvidenceItem[];
+  onOpenEvidence?: (evidenceId: string) => Promise<void>;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
   const open = items.find((i) => i.id === openId) ?? null;
 
@@ -105,7 +111,7 @@ export function EvidencePanel({ items }: { items: EvidenceItem[] }) {
           className="w-full overflow-y-auto sm:max-w-xl"
           aria-describedby={undefined}
         >
-          {open ? <EvidencePreview item={open} /> : null}
+          {open ? <EvidencePreview item={open} onOpenEvidence={onOpenEvidence} /> : null}
         </SheetContent>
       </Sheet>
     </>
@@ -145,7 +151,9 @@ function EvidenceCard({ item, onOpen }: { item: EvidenceItem; onOpen: () => void
             />
             {proc.label}
           </span>
-          <span>{formatFileSize(item.fileSizeBytes)}</span>
+          {item.fileSizeBytes !== undefined ? (
+            <span>{formatFileSize(item.fileSizeBytes)}</span>
+          ) : null}
           {item.pageCount ? <span>{item.pageCount} pages</span> : null}
           <span>Uploaded {formatRelativeTime(item.uploadedAt)}</span>
         </div>
@@ -160,7 +168,13 @@ function EvidenceCard({ item, onOpen }: { item: EvidenceItem; onOpen: () => void
   );
 }
 
-function EvidencePreview({ item }: { item: EvidenceItem }) {
+function EvidencePreview({
+  item,
+  onOpenEvidence,
+}: {
+  item: EvidenceItem;
+  onOpenEvidence?: (evidenceId: string) => Promise<void>;
+}) {
   return (
     <>
       <SheetHeader>
@@ -171,26 +185,30 @@ function EvidencePreview({ item }: { item: EvidenceItem }) {
       </SheetHeader>
 
       <div className="mt-4 flex flex-col gap-4">
-        {/* Mocked document canvas */}
-        <div
-          role="img"
-          aria-label="Mocked document preview"
-          className="relative flex aspect-[4/5] items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted/40"
-        >
-          <div className="text-center">
-            <FileText aria-hidden className="mx-auto size-8 text-muted-foreground" />
-            <p className="mt-2 text-xs font-medium text-foreground">Mock preview</p>
-            <p className="mt-1 max-w-[220px] text-[11px] text-muted-foreground">
-              Real document rendering is not enabled in this build.
-            </p>
+        {onOpenEvidence ? (
+          <button
+            type="button"
+            onClick={() => void onOpenEvidence(item.id)}
+            className="inline-flex h-9 items-center justify-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+          >
+            Open authorized evidence
+          </button>
+        ) : (
+          <div className="flex aspect-[4/5] items-center justify-center rounded-md border border-dashed border-border bg-muted/40 text-center">
+            <div>
+              <FileText aria-hidden className="mx-auto size-8 text-muted-foreground" />
+              <p className="mt-2 text-xs font-medium text-foreground">Preview unavailable</p>
+            </div>
           </div>
-          <span className="absolute left-2 top-2 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-inset ring-border">
-            MOCK
-          </span>
-        </div>
+        )}
 
         <dl className="grid grid-cols-2 gap-2 text-xs">
-          <MetaRow label="File size" value={formatFileSize(item.fileSizeBytes)} />
+          <MetaRow
+            label="File size"
+            value={
+              item.fileSizeBytes !== undefined ? formatFileSize(item.fileSizeBytes) : "Unavailable"
+            }
+          />
           <MetaRow label="Pages" value={item.pageCount ? String(item.pageCount) : "—"} />
           <MetaRow label="Uploaded" value={formatRelativeTime(item.uploadedAt)} />
           <MetaRow label="Source" value={item.source.replace(/_/g, " ")} />

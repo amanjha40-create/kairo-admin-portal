@@ -12,6 +12,7 @@ import type { VerificationStatus } from "../data/types";
 export type WorkflowAction =
   | "request_correction"
   | "approve_outreach"
+  | "direct_confirmation"
   | "verify"
   | "reject"
   | "unable_to_verify"
@@ -23,6 +24,7 @@ export type WorkflowAction =
 export const WORKFLOW_ACTION_LABEL: Record<WorkflowAction, string> = {
   request_correction: "Request Correction",
   approve_outreach: "Approve for Dispatch",
+  direct_confirmation: "Verify via Direct Confirmation",
   verify: "Verify",
   reject: "Reject",
   unable_to_verify: "Unable to Verify",
@@ -39,6 +41,7 @@ export const WORKFLOW_ACTION_LABEL: Record<WorkflowAction, string> = {
 export const WORKFLOW_ACTION_TERMINAL: Record<WorkflowAction, boolean> = {
   request_correction: false,
   approve_outreach: false,
+  direct_confirmation: true,
   verify: true,
   reject: true,
   unable_to_verify: true,
@@ -134,6 +137,19 @@ export interface WorkflowTransitionRule {
   fromStatuses: VerificationStatus[];
   toStatus: VerificationStatus;
   requiredPermission: WorkflowPermission;
+}
+
+export type DirectConfirmationMethod = "phone" | "email" | "video_call" | "in_person" | "other";
+
+export type DirectConfirmationOutcome = "details_confirmed" | "details_confirmed_with_discrepancy";
+
+export interface DirectConfirmationActionPayload {
+  confirmationMethod: DirectConfirmationMethod;
+  confirmedBy: string;
+  verifierRole: string;
+  contactDetailUsed: string;
+  confirmationOutcome: DirectConfirmationOutcome;
+  internalNote: string;
 }
 
 // ---------------------------------------------------------------------

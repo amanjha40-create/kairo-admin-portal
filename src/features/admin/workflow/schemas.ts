@@ -4,6 +4,15 @@
  * only via disabled submit buttons.
  */
 import { z } from "zod";
+
+export const directConfirmationSchema = z.object({
+  confirmationMethod: z.enum(["phone", "email", "video_call", "in_person", "other"]),
+  confirmedBy: z.string().trim().min(1, "Enter the confirming contact's name.").max(255),
+  verifierRole: z.string().trim().min(1, "Enter the confirming contact's role or office.").max(255),
+  contactDetailUsed: z.string().trim().min(1, "Enter the phone number or email used.").max(320),
+  confirmationOutcome: z.enum(["details_confirmed", "details_confirmed_with_discrepancy"]),
+  internalNote: z.string().trim().min(1, "Record what was confirmed and by whom.").max(5000),
+});
 import { CORRECTION_REASONS, REJECTION_REASONS, UNABLE_REASONS, VERIFICATION_BASES } from "./types";
 
 export const correctionSchema = z.object({

@@ -488,6 +488,20 @@ describe("verification review adapter", () => {
       filename: "employment-letter.pdf",
       reviewStatus: "reviewed",
     });
+    expect(detail?.contacts[0]).toMatchObject({
+      email: "hr@kairo.example",
+      emailMasked: "hr@kairo.example",
+      contactType: "hr",
+    });
+    expect(detail?.candidate).not.toHaveProperty("trustScore");
+    expect(detail?.candidate).not.toHaveProperty("phoneMasked");
+    expect(detail?.claim.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Candidate name", value: "Aman Jha" }),
+        expect.objectContaining({ label: "Verification type", value: "Employment" }),
+        expect.objectContaining({ label: "Role / title", value: "Senior Product Engineer" }),
+      ]),
+    );
     expect(detail?.linkedRecord).toMatchObject({
       type: "employment",
       publicId: "aaaaaaa1-1111-1111-1111-111111111111",
@@ -609,6 +623,14 @@ describe("verification review adapter", () => {
       outcome: "verified",
       decisionSummary: "Verifier confirmed the submitted claim.",
     });
+    await adapter.directConfirm("case-1", {
+      confirmationMethod: "email",
+      confirmedBy: "HR Team",
+      verifierRole: "HR Manager",
+      contactDetailUsed: "hr@kairo.example",
+      confirmationOutcome: "details_confirmed",
+      internalNote: "Confirmed title and employment dates directly by email.",
+    });
     await adapter.returnToVerifier("case-1", "Verifier must confirm the end date.");
     await adapter.cancelCase("case-1", "Request cancelled by admin review.");
     await adapter.recordClarificationResponse("case-1", "Updated role attached.");
@@ -626,6 +648,7 @@ describe("verification review adapter", () => {
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/reject",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/unable-to-verify",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/finalize",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/direct-confirmation",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/return-to-verifier",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/cancel",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/record-clarification-response",
@@ -647,13 +670,90 @@ describe("verification review adapter", () => {
     });
     expect(requests[7]).toMatchObject({
       body: {
-        decision_summary: "Verifier must confirm the end date.",
+        confirmation_method: "email",
+        confirmed_by: "HR Team",
+        verifier_role: "HR Manager",
+        contact_detail_used: "hr@kairo.example",
+        confirmation_outcome: "details_confirmed",
+        internal_note: "Confirmed title and employment dates directly by email.",
       },
     });
     expect(requests[8]).toMatchObject({
       body: {
+        decision_summary: "Verifier must confirm the end date.",
+      },
+    });
+    expect(requests[9]).toMatchObject({
+      body: {
         decision_summary: "Request cancelled by admin review.",
       },
+    });
+  });
+
+  it("loads every timeline page once and preserves direct-confirmation history", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const timelineRequests: string[] = [];
+
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/timeline")) {
+        timelineRequests.push(url);
+        const page = url.includes("page=2") ? 2 : 1;
+        return jsonResponse({
+          timeline: {
+            items: [
+              {
+                public_id: `event-${page}`,
+                event_type:
+                  page === 2
+                    ? "verification_request_manual_direct_confirmation"
+                    : "verification_request_created",
+                event_source: page === 2 ? "admin" : "candidate",
+                actor_display_name: page === 2 ? "Admin Reviewer" : null,
+                previous_status: page === 2 ? "in_progress" : null,
+                new_status: page === 2 ? "verified" : "pending_admin_review",
+                metadata:
+                  page === 2
+                    ? {
+                        confirmation_method: "phone",
+                        confirmed_by: "Pat Verifier",
+                      }
+                    : {},
+                created_at: `2026-07-28T0${page}:00:00.000Z`,
+              },
+            ],
+            total: 2,
+            page,
+            page_size: 100,
+            total_pages: 2,
+          },
+        });
+      }
+      if (url.includes("/api/v1/admin/verification-requests/")) {
+        return jsonResponse(detailPayload());
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+    expect(timelineRequests).toEqual([
+      "https://api.kairoid.com/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111/timeline?page=1&page_size=100",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111/timeline?page=2&page_size=100",
+    ]);
+    expect(detail?.timeline).toHaveLength(2);
+    expect(detail?.timeline[1]).toMatchObject({
+      actor: "Admin Reviewer",
+      description: "Verified via direct confirmation (Phone) with Pat Verifier.",
     });
   });
 

@@ -241,7 +241,7 @@ function ContactDirectory({
                     ) : null}
                   </div>
                   <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                    {c.emailMasked}
+                    {c.email ?? c.emailMasked}
                     {c.phoneMasked ? ` · ${c.phoneMasked}` : ""}
                   </div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
@@ -378,7 +378,7 @@ function OutreachPreparation({
               ? [{ value: "", label: "No approved contact available" }]
               : eligibleContacts.map((c) => ({
                   value: c.id,
-                  label: `${c.name} — ${c.emailMasked}`,
+                  label: `${c.name} — ${c.email ?? c.emailMasked}`,
                 }))
           }
         />
@@ -764,7 +764,10 @@ function FailedOutreachForm({
           onChange={setAlt}
           options={[
             { value: "", label: "None" },
-            ...contacts.map((c) => ({ value: c.id, label: `${c.name} — ${c.emailMasked}` })),
+            ...contacts.map((c) => ({
+              value: c.id,
+              label: `${c.name} — ${c.email ?? c.emailMasked}`,
+            })),
           ]}
         />
       </div>

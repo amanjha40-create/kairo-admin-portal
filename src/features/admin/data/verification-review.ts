@@ -237,7 +237,7 @@ export interface EvidenceItem {
   filename: string;
   uploadedAt: string;
   source: "candidate_upload" | "verifier_upload" | "admin_upload";
-  fileSizeBytes: number;
+  fileSizeBytes?: number;
   pageCount?: number;
   processingStatus: EvidenceProcessingState;
   reviewStatus: EvidenceReviewState;
@@ -316,7 +316,11 @@ export interface VerificationContact {
   role: string;
   organization: string;
   emailMasked: string;
+  email?: string;
   phoneMasked?: string;
+  contactType?: string;
+  candidateNote?: string;
+  reviewNotes?: string;
   source: ContactSource;
   state: ContactState;
   confidence: number;
@@ -427,18 +431,18 @@ export interface CandidateCaseSummary {
   candidateId: string | null;
   name: string;
   email: string;
-  phoneMasked: string;
-  profileType: string;
-  signupAt: string;
-  onboardingState: string;
-  profileCompletionPct: number;
-  trustScore: number;
-  trustPassportStatus: "not_issued" | "provisional" | "issued" | "revoked";
-  employmentRecordCount: number;
-  previousVerificationCount: number;
-  lastActiveAt: string;
-  accountStatus: "active" | "suspended" | "closed";
-  riskFlags: string[];
+  phoneMasked?: string;
+  profileType?: string;
+  signupAt?: string;
+  onboardingState?: string;
+  profileCompletionPct?: number;
+  trustScore?: number;
+  trustPassportStatus?: "not_issued" | "provisional" | "issued" | "revoked";
+  employmentRecordCount?: number;
+  previousVerificationCount?: number;
+  lastActiveAt?: string;
+  accountStatus?: "active" | "suspended" | "closed";
+  riskFlags?: string[];
 }
 
 export type TimelineEventKind =
@@ -664,8 +668,13 @@ interface BackendAdminReviewDetailResponse {
     end_date?: string | null;
     work_location_country?: string | null;
     work_location_region?: string | null;
+    verification_method?: string | null;
     verification_status: string;
     submitted_at?: string | null;
+    reviewed_at?: string | null;
+    verified_at?: string | null;
+    assigned_reviewer_user_id?: string | null;
+    assigned_at?: string | null;
     created_at: string;
     updated_at: string;
   } | null;
@@ -719,10 +728,12 @@ interface BackendTimelineEvent {
   event_source: string;
   actor_user_id?: string | null;
   actor_display_name?: string | null;
+  actor_email?: string | null;
   previous_status?: string | null;
   new_status?: string | null;
   message?: string | null;
   metadata_payload?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -832,6 +843,17 @@ export interface VerificationReviewAdapter {
   finalizeCase: (
     caseId: string,
     payload: { outcome: "verified" | "rejected" | "unable_to_verify"; decisionSummary: string },
+  ) => Promise<void>;
+  directConfirm: (
+    caseId: string,
+    payload: {
+      confirmationMethod: "phone" | "email" | "video_call" | "in_person" | "other";
+      confirmedBy: string;
+      verifierRole: string;
+      contactDetailUsed: string;
+      confirmationOutcome: "details_confirmed" | "details_confirmed_with_discrepancy";
+      internalNote: string;
+    },
   ) => Promise<void>;
   reviewContact: (
     caseId: string,
@@ -947,6 +969,26 @@ async function fetchVerificationQueuePage(
   };
 }
 
+async function fetchFullTimeline(
+  api: ReturnType<typeof createAdminAuthenticatedApi>,
+  caseId: string,
+): Promise<BackendTimelineEvent[]> {
+  const items: BackendTimelineEvent[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await api.request<BackendTimelineResponse>(
+      `/api/v1/admin/verification-requests/${caseId}/timeline?page=${page}&page_size=100`,
+    );
+    items.push(...response.timeline.items);
+    totalPages = response.timeline.total_pages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return items;
+}
+
 export function createVerificationReviewAdapter(
   config: AppEnvConfig = appEnv,
   options: CreateVerificationReviewAdapterOptions = {},
@@ -980,6 +1022,7 @@ export function createVerificationReviewAdapter(
       async rejectCase() {},
       async markUnableToVerify() {},
       async finalizeCase() {},
+      async directConfirm() {},
       async reviewContact() {},
       async resolveOrganization() {},
       async resolveRegistry() {},
@@ -1002,9 +1045,7 @@ export function createVerificationReviewAdapter(
       const detail = await api.request<BackendAdminReviewDetailResponse>(
         `/api/v1/admin/verification-requests/${caseId}`,
       );
-      const timeline = await api.request<BackendTimelineResponse>(
-        `/api/v1/admin/verification-requests/${caseId}/timeline?page=1&page_size=100`,
-      );
+      const timelineItems = await fetchFullTimeline(api, caseId);
       const employerVerification = detail.employer_verification_public_id
         ? await api.request<BackendAdminEmployerVerificationResponse>(
             `/api/v1/admin/employer-verifications/${detail.employer_verification_public_id}`,
@@ -1012,7 +1053,7 @@ export function createVerificationReviewAdapter(
         : null;
       return mapDetailResponse(
         detail,
-        timeline.timeline.items,
+        timelineItems,
         employerVerification?.employer_verification ?? null,
       );
     },
@@ -1106,6 +1147,19 @@ export function createVerificationReviewAdapter(
         body: {
           outcome: payload.outcome,
           decision_summary: payload.decisionSummary,
+        },
+      });
+    },
+    async directConfirm(caseId, payload) {
+      await api.request(`/api/v1/admin/verification-requests/${caseId}/direct-confirmation`, {
+        method: "POST",
+        body: {
+          confirmation_method: payload.confirmationMethod,
+          confirmed_by: payload.confirmedBy,
+          verifier_role: payload.verifierRole,
+          contact_detail_used: payload.contactDetailUsed,
+          confirmation_outcome: payload.confirmationOutcome,
+          internal_note: payload.internalNote,
         },
       });
     },
@@ -1411,18 +1465,6 @@ function mapDetailResponse(
       candidateId: summary.candidateId,
       name: summary.candidateName,
       email: summary.candidateEmail,
-      phoneMasked: "Hidden",
-      profileType: summary.verificationType === "identity" ? "Individual" : "Professional",
-      signupAt: detail.request.created_at,
-      onboardingState: "Complete",
-      profileCompletionPct: 100,
-      trustScore: 0,
-      trustPassportStatus: "not_issued",
-      employmentRecordCount: detail.employment ? 1 : 0,
-      previousVerificationCount: 0,
-      lastActiveAt: detail.request.updated_at,
-      accountStatus: "active",
-      riskFlags: [],
     },
     evidence,
     organization: {
@@ -1465,14 +1507,20 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
       employment?.employer_legal_name ??
       detail.request.target_organization_name ??
       employmentClaim?.employer_name ??
-      "Organization pending";
-    const role = employment?.job_title ?? employmentClaim?.role ?? "Employment verification";
+      "Not supplied";
+    const role = employment?.job_title ?? employmentClaim?.role ?? "Not supplied";
     const fields: ClaimField[] = [
       {
         key: "candidate",
         label: "Candidate name",
         value: detail.request.subject_name,
         source: "candidate",
+      },
+      {
+        key: "verificationType",
+        label: "Verification type",
+        value: "Employment",
+        source: "kairo_derived",
       },
       {
         key: "org",
@@ -1487,6 +1535,45 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
         source: "candidate",
       },
     ];
+
+    if (employment?.id) {
+      fields.push({
+        key: "employmentRecordId",
+        label: "Employment record ID",
+        value: employment.id,
+        source: "candidate",
+      });
+    }
+    if (employment?.employer_trade_name && employment.employer_trade_name !== employerName) {
+      fields.push({
+        key: "tradeName",
+        label: "Employer trade name",
+        value: employment.employer_trade_name,
+        source: "candidate",
+      });
+    }
+    if (employment?.employment_type ?? employmentClaim?.employment_type) {
+      fields.push({
+        key: "employmentType",
+        label: "Employment type",
+        value: String(employment?.employment_type ?? employmentClaim?.employment_type),
+        source: "candidate",
+      });
+    }
+    const workLocation = [
+      employment?.work_location_region ?? employmentClaim?.work_location_region,
+      employment?.work_location_country ?? employmentClaim?.work_location_country,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    if (workLocation) {
+      fields.push({
+        key: "workLocation",
+        label: "Work location",
+        value: workLocation,
+        source: "candidate",
+      });
+    }
 
     if (employment?.start_date ?? employmentClaim?.start_date) {
       fields.push({
@@ -1504,6 +1591,22 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
         source: "candidate",
       });
     }
+    if (employment?.verification_status) {
+      fields.push({
+        key: "employmentStatus",
+        label: "Employment status",
+        value: employment.verification_status,
+        source: "candidate",
+      });
+    }
+    if (employment?.verification_method) {
+      fields.push({
+        key: "verificationMethod",
+        label: "Canonical verification method",
+        value: employment.verification_method,
+        source: "candidate",
+      });
+    }
 
     return {
       type: "employment",
@@ -1515,17 +1618,26 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
   }
 
   if (requestType === "education") {
+    const education = detail.education;
+    const educationClaim = detail.request.education_claim;
     const institutionName =
+      education?.institution_name ??
       detail.request.target_organization_name ??
-      detail.request.education_claim?.institution_name ??
-      "Institution pending";
-    const degree = detail.request.education_claim?.degree ?? "Education verification";
+      educationClaim?.institution_name ??
+      "Not supplied";
+    const degree = education?.degree ?? educationClaim?.degree ?? "Not supplied";
     const fields: ClaimField[] = [
       {
         key: "candidate",
         label: "Candidate name",
         value: detail.request.subject_name,
         source: "candidate",
+      },
+      {
+        key: "verificationType",
+        label: "Verification type",
+        value: "Education",
+        source: "kairo_derived",
       },
       {
         key: "institution",
@@ -1541,27 +1653,70 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
       },
     ];
 
-    if (detail.request.education_claim?.field_of_study) {
+    if (education?.id) {
+      fields.push({
+        key: "educationRecordId",
+        label: "Education record ID",
+        value: education.id,
+        source: "candidate",
+      });
+    }
+    if (education?.education_level) {
+      fields.push({
+        key: "educationLevel",
+        label: "Education level",
+        value: education.education_level,
+        source: "candidate",
+      });
+    }
+    if (education?.grade) {
+      fields.push({
+        key: "grade",
+        label: "Grade",
+        value: education.grade,
+        source: "candidate",
+      });
+    }
+
+    if (education?.field_of_study ?? educationClaim?.field_of_study) {
       fields.push({
         key: "fieldOfStudy",
         label: "Field of study",
-        value: String(detail.request.education_claim.field_of_study),
+        value: String(education?.field_of_study ?? educationClaim?.field_of_study),
         source: "candidate",
       });
     }
-    if (detail.request.education_claim?.start_date) {
+    if (education?.start_date ?? educationClaim?.start_date) {
       fields.push({
         key: "startDate",
-        label: "Start date",
-        value: String(detail.request.education_claim.start_date),
+        label: education?.start_date_precision
+          ? `Start date (${education.start_date_precision})`
+          : "Start date",
+        value: String(education?.start_date ?? educationClaim?.start_date),
         source: "candidate",
       });
     }
-    if (detail.request.education_claim?.end_date) {
+    if (education?.end_date ?? educationClaim?.end_date) {
       fields.push({
         key: "endDate",
-        label: "End date",
-        value: String(detail.request.education_claim.end_date),
+        label: education?.end_date_precision
+          ? `End date (${education.end_date_precision})`
+          : "End date",
+        value: String(education?.end_date ?? educationClaim?.end_date),
+        source: "candidate",
+      });
+    }
+    if (education) {
+      fields.push({
+        key: "currentlyStudying",
+        label: "Currently studying",
+        value: education.is_currently_studying ? "Yes" : "No",
+        source: "candidate",
+      });
+      fields.push({
+        key: "educationStatus",
+        label: "Education status",
+        value: education.verification_status,
         source: "candidate",
       });
     }
@@ -1599,10 +1754,10 @@ function mapEvidence(item: BackendAdminReviewEvidenceResponse, fields: ClaimFiel
     id: item.public_id,
     title: matchingField?.label ?? prettifyFieldKey(item.field_key),
     docType: mapEvidenceDocType(item.document_type ?? item.evidence_type),
-    filename: item.original_filename ?? `${item.public_id}.pdf`,
+    filename: item.original_filename ?? "Filename unavailable",
     uploadedAt: item.created_at,
     source: "candidate_upload",
-    fileSizeBytes: item.file_size ?? 0,
+    fileSizeBytes: item.file_size ?? undefined,
     processingStatus: mapProcessingStatus(item.upload_status),
     reviewStatus: mapEvidenceReviewStatus(item.status),
     extractionSummary: item.value ? JSON.stringify(item.value) : undefined,
@@ -1651,7 +1806,11 @@ function mapContact(
     name: contact.contact_name ?? "Verification contact",
     role: contact.contact_role ?? prettifyFieldKey(contact.contact_type),
     organization: organizationName,
-    emailMasked: maskEmail(contact.contact_email),
+    emailMasked: contact.contact_email,
+    email: contact.contact_email,
+    contactType: contact.contact_type,
+    candidateNote: contact.candidate_note ?? undefined,
+    reviewNotes: contact.review_notes ?? undefined,
     source: "candidate_provided",
     state,
     confidence: state === "approved" ? 1 : 0.7,
@@ -1663,16 +1822,17 @@ function mapContact(
 }
 
 function mapTimelineEvent(event: BackendTimelineEvent): CaseTimelineEvent {
+  const metadata = event.metadata ?? event.metadata_payload;
   return {
     id: event.public_id,
     kind: mapTimelineKind(event.event_type),
-    actor: event.actor_display_name ?? prettifyActorSource(event.event_source),
+    actor: event.actor_display_name ?? event.actor_email ?? prettifyActorSource(event.event_source),
     actorSource: mapActorSource(event.event_source),
     at: event.created_at,
     description:
       event.message ??
-      buildTimelineDescription(event.event_type, event.previous_status, event.new_status),
-    metadata: narrowTimelineMetadata(event.metadata_payload),
+      buildTimelineDescription(event.event_type, event.previous_status, event.new_status, metadata),
+    metadata: narrowTimelineMetadata(metadata),
   };
 }
 
@@ -2081,7 +2241,17 @@ function buildTimelineDescription(
   eventType: string,
   previousStatus?: string | null,
   nextStatus?: string | null,
+  metadata?: Record<string, unknown> | null,
 ): string {
+  if (eventType === "verification_request_manual_direct_confirmation") {
+    const method =
+      typeof metadata?.confirmation_method === "string"
+        ? prettifyFieldKey(metadata.confirmation_method)
+        : "Direct confirmation";
+    const confirmedBy =
+      typeof metadata?.confirmed_by === "string" ? ` with ${metadata.confirmed_by}` : "";
+    return `Verified via direct confirmation (${method})${confirmedBy}.`;
+  }
   if (previousStatus && nextStatus) {
     return `${prettifyFieldKey(eventType)}: ${prettifyFieldKey(previousStatus)} to ${prettifyFieldKey(nextStatus)}.`;
   }

@@ -23,6 +23,7 @@ import type {
   ClarificationRequestPayload,
   ClarificationResponsePayload,
   CorrectionActionPayload,
+  DirectConfirmationActionPayload,
   OutreachActionPayload,
   RejectActionPayload,
   SimpleDecisionPayload,
@@ -77,6 +78,7 @@ export interface UseVerificationWorkflowResult {
   // workflow actions
   submitCorrection: (p: CorrectionActionPayload) => void | Promise<void>;
   submitOutreach: (p: OutreachActionPayload, contactName: string) => void | Promise<void>;
+  submitDirectConfirmation: (p: DirectConfirmationActionPayload) => void | Promise<void>;
   submitVerify: (p: VerifyActionPayload) => void | Promise<void>;
   submitReject: (p: RejectActionPayload) => void | Promise<void>;
   submitUnable: (p: UnableActionPayload) => void | Promise<void>;
@@ -288,6 +290,30 @@ export function useVerificationWorkflow(
     [actor.name, actor.role, addNote, appendEvent, currentStatus],
   );
 
+  const submitDirectConfirmation = useCallback(
+    (p: DirectConfirmationActionPayload) => {
+      const previous = currentStatus;
+      setCurrentStatus("verified");
+      setSessionDecision({
+        id: uid("dec"),
+        kind: "verify",
+        reasonLabel: "Verified via direct confirmation",
+        basisLabel: p.confirmationMethod.replace(/_/g, " "),
+        decisionSummary: p.internalNote,
+        actorName: actor.name,
+        actorRole: actor.role,
+        at: new Date().toISOString(),
+      });
+      appendEvent({
+        kind: "decision_prepared",
+        actor: actor.name,
+        actorSource: "admin",
+        description: `Verified via direct confirmation (${p.confirmationMethod.replace(/_/g, " ")}) with ${p.confirmedBy}. Previous status: ${previous.replace(/_/g, " ")}.`,
+      });
+    },
+    [actor.name, actor.role, appendEvent, currentStatus],
+  );
+
   const submitReject = useCallback(
     (p: RejectActionPayload) => {
       const previous = currentStatus;
@@ -478,6 +504,7 @@ export function useVerificationWorkflow(
     selectSuggestion,
     submitCorrection,
     submitOutreach,
+    submitDirectConfirmation,
     submitVerify,
     submitReject,
     submitUnable,

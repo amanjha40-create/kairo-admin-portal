@@ -3,7 +3,7 @@ import { evaluateWorkflowEligibility, buildWorkflowCaseState } from "./eligibili
 import { permissionsForRole } from "./permissions";
 
 function createDetail(
-  status: "pending_admin_review" | "pending_admin_quality_review" | "verified",
+  status: "pending_admin_review" | "pending_admin_quality_review" | "in_progress" | "verified",
 ) {
   return {
     summary: { status },
@@ -47,6 +47,11 @@ describe("verification workflow eligibility", () => {
       irrelevant: false,
       nextStatusOnSuccess: "cancelled",
     });
+    expect(evaluateWorkflowEligibility(detail, "request_correction", actor, state)).toMatchObject({
+      allowed: true,
+      irrelevant: false,
+      nextStatusOnSuccess: "awaiting_subject_corrections",
+    });
   });
 
   it("marks final-review-only actions irrelevant before verifier work is complete", () => {
@@ -71,6 +76,60 @@ describe("verification workflow eligibility", () => {
     expect(verify.irrelevant).toBe(true);
     expect(returnToVerifier.allowed).toBe(false);
     expect(returnToVerifier.irrelevant).toBe(true);
+  });
+
+  it.each(["pending_admin_review", "in_progress", "pending_admin_quality_review"] as const)(
+    "allows privileged direct confirmation from %s",
+    (status) => {
+      const detail = createDetail(status);
+      const actor = {
+        name: "Admin Reviewer",
+        role: "Admin",
+        roleKey: "admin" as const,
+        permissions: permissionsForRole("admin"),
+      };
+
+      expect(
+        evaluateWorkflowEligibility(
+          detail,
+          "direct_confirmation",
+          actor,
+          buildWorkflowCaseState(detail),
+        ),
+      ).toMatchObject({ allowed: true, irrelevant: false, nextStatusOnSuccess: "verified" });
+    },
+  );
+
+  it("blocks direct confirmation for unauthorized and terminal cases", () => {
+    const reviewer = {
+      name: "Read Only Reviewer",
+      role: "Read only",
+      roleKey: "read_only" as const,
+      permissions: permissionsForRole("read_only"),
+    };
+    const active = createDetail("pending_admin_review");
+    const terminal = createDetail("verified");
+
+    expect(
+      evaluateWorkflowEligibility(
+        active,
+        "direct_confirmation",
+        reviewer,
+        buildWorkflowCaseState(active),
+      ).allowed,
+    ).toBe(false);
+    expect(
+      evaluateWorkflowEligibility(
+        terminal,
+        "direct_confirmation",
+        {
+          ...reviewer,
+          roleKey: "admin",
+          permissions: permissionsForRole("admin"),
+        },
+        buildWorkflowCaseState(terminal),
+      ),
+    ).toMatchObject({ allowed: false, irrelevant: true });
   });
 
   it("requires elevated permission for high-risk rejection reasons", () => {

@@ -138,7 +138,9 @@ export function ContactReviewDialog({
               <dt className="text-muted-foreground">Role</dt>
               <dd className="text-foreground">{mode.contact.role}</dd>
               <dt className="text-muted-foreground">Email</dt>
-              <dd className="font-mono text-foreground">{mode.contact.emailMasked}</dd>
+              <dd className="font-mono text-foreground">
+                {mode.contact.email ?? mode.contact.emailMasked}
+              </dd>
               <dt className="text-muted-foreground">Source</dt>
               <dd className="text-foreground">{CONTACT_SOURCE_LABEL[mode.contact.source]}</dd>
               <dt className="text-muted-foreground">Current state</dt>
