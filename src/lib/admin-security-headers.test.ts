@@ -9,6 +9,9 @@ describe("Admin security headers", () => {
     const policy = buildAdminContentSecurityPolicy("https://api.kairoid.com", "production");
 
     expect(policy).toContain("connect-src 'self' https://api.kairoid.com");
+    expect(policy).toContain("frame-src 'self' https://s3.amazonaws.com");
+    expect(policy).toContain("https://*.s3.us-east-1.amazonaws.com");
+    expect(policy).toContain("img-src 'self' data: blob: https://s3.amazonaws.com");
     expect(policy).not.toContain("staging-api.kairoid.com");
     expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).toContain("frame-ancestors 'none'");

@@ -350,13 +350,17 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
     ]);
   }
 
+  async function getEvidenceAccessUrl(evidenceId: string) {
+    return adapter.getEvidenceDownloadUrl(caseId, evidenceId);
+  }
+
   async function openEvidence(evidenceId: string) {
     const evidenceWindow = window.open("about:blank", "_blank");
     if (evidenceWindow) {
       evidenceWindow.opener = null;
     }
     try {
-      const url = await adapter.getEvidenceDownloadUrl(caseId, evidenceId);
+      const url = await getEvidenceAccessUrl(evidenceId);
       if (!url) {
         evidenceWindow?.close();
         toast.error("Evidence download is unavailable");
@@ -647,6 +651,7 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
           >
             <EvidencePanel
               items={detail.evidence}
+              onRequestEvidenceUrl={appEnv.adminDemoMode ? undefined : getEvidenceAccessUrl}
               onOpenEvidence={appEnv.adminDemoMode ? undefined : openEvidence}
             />
           </WorkspaceSection>

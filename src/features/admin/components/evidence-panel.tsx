@@ -1,5 +1,15 @@
-import { useState } from "react";
-import { FileText, AlertTriangle, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
+import { useEffect, useReducer, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  FileText,
+  ImageIcon,
+  Loader2,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -18,6 +28,13 @@ import {
   type ComparisonResult,
 } from "../runtime/verification-review";
 import { formatRelativeTime } from "../lib/format";
+import {
+  evidencePreviewReducer,
+  getEvidencePreviewKind,
+  isSafeEvidenceUrl,
+  type EvidencePreviewKind,
+  type EvidencePreviewState,
+} from "./evidence-preview";
 
 const PROCESSING_META: Record<
   EvidenceProcessingState,
@@ -78,9 +95,11 @@ const COMPARISON_META: Record<ComparisonResult, { label: string; className: stri
 
 export function EvidencePanel({
   items,
+  onRequestEvidenceUrl,
   onOpenEvidence,
 }: {
   items: EvidenceItem[];
+  onRequestEvidenceUrl?: (evidenceId: string) => Promise<string | null>;
   onOpenEvidence?: (evidenceId: string) => Promise<void>;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -108,10 +127,17 @@ export function EvidencePanel({
       <Sheet open={!!open} onOpenChange={(v) => (!v ? setOpenId(null) : null)}>
         <SheetContent
           side="right"
-          className="w-full overflow-y-auto sm:max-w-xl"
+          className="w-full overflow-y-auto sm:max-w-3xl"
           aria-describedby={undefined}
         >
-          {open ? <EvidencePreview item={open} onOpenEvidence={onOpenEvidence} /> : null}
+          {open ? (
+            <EvidencePreview
+              key={open.id}
+              item={open}
+              onRequestEvidenceUrl={onRequestEvidenceUrl}
+              onOpenEvidence={onOpenEvidence}
+            />
+          ) : null}
         </SheetContent>
       </Sheet>
     </>
@@ -168,13 +194,51 @@ function EvidenceCard({ item, onOpen }: { item: EvidenceItem; onOpen: () => void
   );
 }
 
-function EvidencePreview({
+export function EvidencePreview({
   item,
+  onRequestEvidenceUrl,
   onOpenEvidence,
 }: {
   item: EvidenceItem;
+  onRequestEvidenceUrl?: (evidenceId: string) => Promise<string | null>;
   onOpenEvidence?: (evidenceId: string) => Promise<void>;
 }) {
+  const kind = getEvidencePreviewKind(item);
+  const [retryCount, setRetryCount] = useState(0);
+  const [preview, dispatch] = useReducer(evidencePreviewReducer, {
+    status: "loading",
+    url: null,
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    if (kind === "unsupported" || !onRequestEvidenceUrl) {
+      dispatch({ type: "failed" });
+      return () => {
+        active = false;
+      };
+    }
+
+    dispatch({ type: "load" });
+    void onRequestEvidenceUrl(item.id)
+      .then((url) => {
+        if (!active) return;
+        if (!url || !isSafeEvidenceUrl(url)) {
+          dispatch({ type: "failed" });
+          return;
+        }
+        dispatch({ type: "url_received", url });
+      })
+      .catch(() => {
+        if (active) dispatch({ type: "failed" });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [item.id, kind, onRequestEvidenceUrl, retryCount]);
+
   return (
     <>
       <SheetHeader>
@@ -185,22 +249,14 @@ function EvidencePreview({
       </SheetHeader>
 
       <div className="mt-4 flex flex-col gap-4">
-        {onOpenEvidence ? (
-          <button
-            type="button"
-            onClick={() => void onOpenEvidence(item.id)}
-            className="inline-flex h-9 items-center justify-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
-          >
-            Open authorized evidence
-          </button>
-        ) : (
-          <div className="flex aspect-[4/5] items-center justify-center rounded-md border border-dashed border-border bg-muted/40 text-center">
-            <div>
-              <FileText aria-hidden className="mx-auto size-8 text-muted-foreground" />
-              <p className="mt-2 text-xs font-medium text-foreground">Preview unavailable</p>
-            </div>
-          </div>
-        )}
+        <EvidencePreviewCanvas
+          item={item}
+          kind={kind}
+          preview={preview}
+          onRendered={() => dispatch({ type: "rendered" })}
+          onFailed={() => dispatch({ type: "failed" })}
+          onRetry={() => setRetryCount((value) => value + 1)}
+        />
 
         <dl className="grid grid-cols-2 gap-2 text-xs">
           <MetaRow
@@ -215,6 +271,17 @@ function EvidencePreview({
           <MetaRow label="Processing" value={PROCESSING_META[item.processingStatus].label} />
           <MetaRow label="Review" value={REVIEW_META[item.reviewStatus].label} />
         </dl>
+
+        {onOpenEvidence ? (
+          <button
+            type="button"
+            onClick={() => void onOpenEvidence(item.id)}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            <ExternalLink aria-hidden className="size-3.5" />
+            Open in new tab
+          </button>
+        ) : null}
 
         {item.extraction ? (
           <div className="rounded-md border border-border bg-background p-3">
@@ -303,6 +370,111 @@ function EvidencePreview({
         ) : null}
       </div>
     </>
+  );
+}
+
+function EvidencePreviewCanvas({
+  item,
+  kind,
+  preview,
+  onRendered,
+  onFailed,
+  onRetry,
+}: {
+  item: EvidenceItem;
+  kind: EvidencePreviewKind;
+  preview: EvidencePreviewState;
+  onRendered: () => void;
+  onFailed: () => void;
+  onRetry: () => void;
+}) {
+  if (kind === "unsupported") {
+    return (
+      <PreviewFallback
+        icon={FileText}
+        title="Preview not supported"
+        description="This file type cannot be displayed inline. Open it in a new tab to inspect it."
+      />
+    );
+  }
+
+  if (preview.status === "error") {
+    return (
+      <PreviewFallback
+        icon={kind === "image" ? ImageIcon : FileText}
+        title="Preview unavailable"
+        description="The protected preview could not be loaded. Request a fresh link and try again."
+        action={
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            <RotateCcw aria-hidden className="size-3.5" />
+            Retry
+          </button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div
+      data-evidence-preview={kind}
+      className="relative flex min-h-[52vh] w-full items-center justify-center overflow-hidden rounded-md border border-border bg-muted/40"
+    >
+      {preview.url && kind === "pdf" ? (
+        <iframe
+          title={`Preview of ${item.filename}`}
+          src={preview.url}
+          className="h-[68vh] min-h-[520px] w-full bg-background"
+          onLoad={onRendered}
+          onError={onFailed}
+        />
+      ) : null}
+      {preview.url && kind === "image" ? (
+        <div className="max-h-[68vh] w-full overflow-auto p-3 text-center">
+          <img
+            src={preview.url}
+            alt={`Preview of ${item.filename}`}
+            className="mx-auto h-auto max-w-full object-contain"
+            onLoad={onRendered}
+            onError={onFailed}
+          />
+        </div>
+      ) : null}
+      {preview.status !== "ready" ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted/90 text-center">
+          <div>
+            <Loader2 aria-hidden className="mx-auto size-6 animate-spin text-muted-foreground" />
+            <p className="mt-2 text-xs font-medium text-foreground">Loading preview</p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PreviewFallback({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: typeof FileText;
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[52vh] items-center justify-center rounded-md border border-dashed border-border bg-muted/40 p-6 text-center">
+      <div>
+        <Icon aria-hidden className="mx-auto size-8 text-muted-foreground" />
+        <p className="mt-2 text-xs font-medium text-foreground">{title}</p>
+        <p className="mt-1 max-w-sm text-[11px] text-muted-foreground">{description}</p>
+        {action}
+      </div>
+    </div>
   );
 }
 

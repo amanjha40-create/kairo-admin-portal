@@ -1,4 +1,10 @@
 const NO_STORE = "private, no-store, max-age=0, must-revalidate";
+const PRIVATE_S3_MEDIA_SOURCES = [
+  "https://s3.amazonaws.com",
+  "https://*.s3.amazonaws.com",
+  "https://s3.us-east-1.amazonaws.com",
+  "https://*.s3.us-east-1.amazonaws.com",
+].join(" ");
 
 export function buildAdminContentSecurityPolicy(
   apiBaseUrl: string,
@@ -24,7 +30,8 @@ export function buildAdminContentSecurityPolicy(
     "frame-ancestors 'none'",
     "form-action 'self'",
     apiOrigin ? `connect-src 'self' ${apiOrigin}` : "connect-src 'self'",
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob: ${PRIVATE_S3_MEDIA_SOURCES}`,
+    `frame-src 'self' ${PRIVATE_S3_MEDIA_SOURCES}`,
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
     "script-src 'self' 'unsafe-inline'",

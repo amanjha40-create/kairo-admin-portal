@@ -234,6 +234,7 @@ export interface EvidenceItem {
   title: string;
   docType: EvidenceDocType;
   filename: string;
+  mimeType?: string;
   uploadedAt: string;
   source: "candidate_upload" | "verifier_upload" | "admin_upload";
   fileSizeBytes?: number;
@@ -1628,6 +1629,7 @@ function mapEvidence(item: BackendAdminReviewEvidenceResponse, fields: ClaimFiel
     title: matchingField?.label ?? prettifyFieldKey(item.field_key),
     docType: mapEvidenceDocType(item.document_type ?? item.evidence_type),
     filename: item.original_filename ?? "Filename unavailable",
+    mimeType: item.mime_type ?? undefined,
     uploadedAt: item.created_at,
     source: "candidate_upload",
     fileSizeBytes: item.file_size ?? undefined,
