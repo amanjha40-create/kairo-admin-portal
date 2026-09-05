@@ -7,6 +7,7 @@ import {
   getCandidateProfileRoute,
   verificationQueuePageQueryOptions,
 } from "./verification-review";
+import { createVerificationReviewAdapter as createProductionVerificationReviewAdapter } from "@/features/admin/runtime/verification-review.production";
 
 function createMemoryStore() {
   const map = new Map<string, string>();
@@ -529,6 +530,117 @@ describe("verification review adapter", () => {
     );
     expect(requests.some((url) => url.includes("/timeline?page=1&page_size=250"))).toBe(false);
   });
+
+  it.each([
+    ["data adapter", createVerificationReviewAdapter],
+    ["production runtime", createProductionVerificationReviewAdapter],
+  ])("maps a canonical current Employment duration through the %s", async (_label, factory) => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/timeline")) return jsonResponse(timelinePayload());
+      if (url.includes("/api/v1/admin/verification-requests/")) {
+        return jsonResponse({
+          ...detailPayload(),
+          employment: {
+            id: "aaaaaaa1-1111-1111-1111-111111111111",
+            subject_full_name: "Aman Jha",
+            employer_legal_name: "Kairo",
+            job_title: "Senior Product Engineer",
+            employment_type: "full_time",
+            start_date: "2021-04-15",
+            end_date: null,
+            verification_status: "draft",
+            created_at: "2026-07-28T08:00:00.000Z",
+            updated_at: "2026-07-28T09:00:00.000Z",
+          },
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const adapter = factory(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+    const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+    expect(detail?.claim.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "duration", value: "2021-04-15 - Present" }),
+        expect.objectContaining({ key: "currentlyWorking", value: "Yes" }),
+      ]),
+    );
+  });
+
+  it.each([
+    ["data adapter", createVerificationReviewAdapter],
+    ["production runtime", createProductionVerificationReviewAdapter],
+  ])(
+    "maps a precision-aware current Education duration through the %s",
+    async (_label, factory) => {
+      const storage = createMemoryStorage();
+      seedTokens(storage);
+      const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/timeline")) return jsonResponse(timelinePayload());
+        if (url.includes("/api/v1/admin/verification-requests/")) {
+          return jsonResponse({
+            ...detailPayload(),
+            request: {
+              ...queuePayload().items[0],
+              employment_id: null,
+              education_id: "eeeeeee1-1111-1111-1111-111111111111",
+              request_type: "education",
+              employment_claim: null,
+              education_claim: {
+                institution_name: "KDTU",
+                degree: "MBA",
+                start_date: "2022-01-01",
+                end_date: null,
+              },
+            },
+            employment: null,
+            education: {
+              id: "eeeeeee1-1111-1111-1111-111111111111",
+              user_id: "99999999-9999-9999-9999-999999999999",
+              institution_name: "KDTU",
+              degree: "MBA",
+              start_date: "2022-01-01",
+              start_date_precision: "year",
+              end_date: null,
+              end_date_precision: null,
+              is_currently_studying: true,
+              verification_status: "pending",
+              created_at: "2026-07-28T08:00:00.000Z",
+              updated_at: "2026-07-28T09:00:00.000Z",
+            },
+          });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      const adapter = factory(createProductionConfig(), {
+        production: {
+          storage,
+          fetchImpl,
+          now: () => new Date("2026-07-28T12:00:00.000Z"),
+        },
+      });
+      const detail = await adapter.getCaseDetail("11111111-1111-1111-1111-111111111111");
+
+      expect(detail?.claim.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "duration", value: "2022 - Present" }),
+          expect.objectContaining({ key: "currentlyStudying", value: "Yes" }),
+        ]),
+      );
+    },
+  );
 
   it("builds the exact candidate profile route from the canonical public id", () => {
     expect(getCandidateProfileRoute("99999999-9999-9999-9999-999999999999")).toEqual({

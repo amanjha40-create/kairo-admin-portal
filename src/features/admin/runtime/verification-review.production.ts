@@ -8,6 +8,7 @@ import {
   getWorkflowOwnerLabel,
   isVerificationStatus,
 } from "@/features/admin/lib/verification-status";
+import { formatClaimDuration } from "@/features/admin/lib/claim-duration";
 
 export type VerificationType =
   "employment" | "education" | "certification" | "identity" | "platform" | "reference" | "unknown";
@@ -1452,22 +1453,26 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
       });
     }
 
-    if (employment?.start_date ?? employmentClaim?.start_date) {
-      fields.push({
-        key: "startDate",
-        label: "Start date",
-        value: String(employment?.start_date ?? employmentClaim?.start_date),
-        source: "candidate",
-      });
-    }
-    if (employment?.end_date ?? employmentClaim?.end_date) {
-      fields.push({
-        key: "endDate",
-        label: "End date",
-        value: String(employment?.end_date ?? employmentClaim?.end_date),
-        source: "candidate",
-      });
-    }
+    const employmentStartDate = employment?.start_date ?? employmentClaim?.start_date ?? null;
+    const employmentEndDate = employment?.end_date ?? employmentClaim?.end_date ?? null;
+    const hasEmploymentPeriod = Boolean(employmentStartDate || employmentEndDate);
+    const isCurrentlyWorking = Boolean(employmentStartDate && !employmentEndDate);
+    fields.push({
+      key: "duration",
+      label: "Duration",
+      value: formatClaimDuration({
+        startDate: employmentStartDate,
+        endDate: employmentEndDate,
+        isCurrent: isCurrentlyWorking,
+      }),
+      source: "candidate",
+    });
+    fields.push({
+      key: "currentlyWorking",
+      label: "Currently working here",
+      value: hasEmploymentPeriod ? (isCurrentlyWorking ? "Yes" : "No") : "Unavailable",
+      source: "candidate",
+    });
     if (employment?.verification_status) {
       fields.push({
         key: "employmentStatus",
@@ -1563,26 +1568,20 @@ function mapClaim(detail: BackendAdminReviewDetailResponse): VerificationClaim {
         source: "candidate",
       });
     }
-    if (education?.start_date ?? educationClaim?.start_date) {
-      fields.push({
-        key: "startDate",
-        label: education?.start_date_precision
-          ? `Start date (${education.start_date_precision})`
-          : "Start date",
-        value: String(education?.start_date ?? educationClaim?.start_date),
-        source: "candidate",
-      });
-    }
-    if (education?.end_date ?? educationClaim?.end_date) {
-      fields.push({
-        key: "endDate",
-        label: education?.end_date_precision
-          ? `End date (${education.end_date_precision})`
-          : "End date",
-        value: String(education?.end_date ?? educationClaim?.end_date),
-        source: "candidate",
-      });
-    }
+    const educationStartDate = education?.start_date ?? educationClaim?.start_date ?? null;
+    const educationEndDate = education?.end_date ?? educationClaim?.end_date ?? null;
+    fields.push({
+      key: "duration",
+      label: "Duration",
+      value: formatClaimDuration({
+        startDate: educationStartDate,
+        startDatePrecision: education?.start_date_precision,
+        endDate: educationEndDate,
+        endDatePrecision: education?.end_date_precision,
+        isCurrent: education?.is_currently_studying ?? false,
+      }),
+      source: "candidate",
+    });
     if (education) {
       fields.push({
         key: "currentlyStudying",
