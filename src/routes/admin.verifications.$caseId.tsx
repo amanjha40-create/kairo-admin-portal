@@ -24,7 +24,18 @@ import {
   PhoneCall,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { OutreachWorkspace } from "@/features/admin/components/outreach-workspace";
+import { CanonicalOrganizationDialog } from "@/features/admin/components/canonical-organization-dialog";
 import { OrganizationResolutionPanel } from "@/features/admin/components/organization-resolution-panel";
 import { useOutreachSession } from "@/features/admin/workflow/use-outreach-session";
 
@@ -47,6 +58,11 @@ import { formatAge, formatRelativeTime } from "@/features/admin/lib/format";
 import { AdminRegistryDetailLink } from "@/features/admin/lib/admin-registry-detail-link";
 import { getVerificationRegistryLinkModel } from "@/features/admin/lib/admin-registry-route";
 import { buildTrustSafetyCreateHref } from "@/features/admin/lib/trust-safety";
+import {
+  PENDING_ORGANIZATION_RESOLUTION_COPY,
+  buildCanonicalOrganizationDraft,
+  getAdminApprovalActionLabel,
+} from "@/features/admin/lib/organization-resolution";
 import {
   ALL_ASSIGNEES,
   ATTENTION_FLAG_LABEL,
@@ -1119,22 +1135,38 @@ function ProductionOrganizationSection({
   const [search, setSearch] = useState(detail.organization.candidateEntered);
   const [results, setResults] = useState<OrganizationSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [registryNote, setRegistryNote] = useState("");
-  const [registryDraft, setRegistryDraft] = useState(() => ({
-    legalName: detail.organization.candidateEntered,
-    displayName: detail.organization.candidateEntered,
-    organizationType: detail.summary.verificationType === "education" ? "institution" : "employer",
-    country: "",
-    stateProvince: "",
-    website: "",
-  }));
+  const [hasSearched, setHasSearched] = useState(false);
+  const [selectedOrganization, setSelectedOrganization] = useState<OrganizationSearchResult | null>(
+    null,
+  );
+  const [isMutating, setIsMutating] = useState(false);
+  const [creationOpen, setCreationOpen] = useState(false);
+  const [canonicalDraft, setCanonicalDraft] = useState(() =>
+    buildCanonicalOrganizationDraft({
+      candidateEnteredName: detail.organization.candidateEntered,
+      verificationType: detail.summary.verificationType,
+      registryRecordId: detail.routingContext.registryRecordId,
+      registryName: detail.routingContext.registryName,
+      registryCountry: detail.routingContext.registryCountry,
+      registryStateProvince: detail.routingContext.registryStateProvince,
+      registryWebsite: detail.routingContext.registryWebsite,
+      registryPrimaryDomain: detail.routingContext.registryPrimaryDomain,
+    }),
+  );
+  const continuesOutreach = [
+    "approved_for_organization_verification",
+    "pending_organization_resolution",
+  ].includes(detail.summary.status);
+  const resolutionComplete = detail.organization.state === "resolved";
 
   async function runSearch() {
     if (!search.trim()) return;
     setIsSearching(true);
     try {
       setResults(await adapter.searchOrganizations(search.trim()));
+      setHasSearched(true);
     } catch (error) {
+      setHasSearched(false);
       toast.error("Organization search failed", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
@@ -1144,59 +1176,59 @@ function ProductionOrganizationSection({
   }
 
   async function resolve(result: OrganizationSearchResult) {
+    if (isMutating) return;
+    setIsMutating(true);
     try {
       await adapter.resolveOrganization(caseId, result.id);
-      if (result.registryRecordId) {
-        await adapter.resolveRegistry(caseId, result.registryRecordId);
-      } else {
-        await adapter.deferRegistryResolution(
-          caseId,
-          registryNote.trim() || "No registry record was available on the selected organization.",
-        );
-      }
       toast.success("Organization resolved", {
-        description: result.registryRecordId
-          ? "Organization and registry links were saved to the backend."
-          : "Organization was saved and registry resolution was deferred.",
+        description: continuesOutreach
+          ? "The canonical organization was attached and verifier outreach continued."
+          : "The canonical organization was attached. Admin approval is still required for outreach.",
       });
+      setSelectedOrganization(null);
       await onRefresh();
     } catch (error) {
       toast.error("Organization resolution failed", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
+    } finally {
+      setIsMutating(false);
     }
   }
 
-  async function createRegistryRecord() {
-    if (
-      !registryDraft.legalName.trim() ||
-      !registryDraft.organizationType.trim() ||
-      !registryDraft.country.trim()
-    ) {
-      toast.error("Registry record is incomplete", {
-        description: "Legal name, organization type, and country are required by the backend.",
+  async function createCanonicalOrganization() {
+    if (isMutating) return;
+    if (!canonicalDraft.name.trim() || !/^[A-Za-z]{2}$/.test(canonicalDraft.country.trim())) {
+      toast.error("Canonical organization is incomplete", {
+        description: "Canonical name and a two-letter country code are required.",
       });
       return;
     }
 
+    setIsMutating(true);
     try {
-      await adapter.createRegistryRecord(caseId, {
-        legalName: registryDraft.legalName.trim(),
-        displayName: registryDraft.displayName.trim() || undefined,
-        organizationType: registryDraft.organizationType.trim(),
-        country: registryDraft.country.trim().toUpperCase(),
-        stateProvince: registryDraft.stateProvince.trim() || undefined,
-        website: registryDraft.website.trim() || undefined,
-        note: registryNote.trim() || undefined,
+      await adapter.createCanonicalOrganization(caseId, {
+        name: canonicalDraft.name.trim(),
+        organizationType: canonicalDraft.organizationType,
+        country: canonicalDraft.country.trim().toUpperCase(),
+        stateProvince: canonicalDraft.stateProvince.trim() || undefined,
+        website: canonicalDraft.website.trim() || undefined,
+        domain: canonicalDraft.domain.trim() || undefined,
+        registryRecordId: canonicalDraft.registryRecordId,
       });
-      toast.success("Registry record created", {
-        description: "The backend created and linked a registry record for this request.",
+      toast.success("Canonical organization created", {
+        description: continuesOutreach
+          ? "The organization was attached and verifier outreach continued."
+          : "The organization was attached. Admin approval is still required for outreach.",
       });
+      setCreationOpen(false);
       await onRefresh();
     } catch (error) {
-      toast.error("Registry record creation failed", {
+      toast.error("Canonical organization creation failed", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
+    } finally {
+      setIsMutating(false);
     }
   }
 
@@ -1207,6 +1239,17 @@ function ProductionOrganizationSection({
       description="Search backend organizations and save the canonical match for this request."
     >
       <div className="space-y-3 text-xs">
+        {detail.summary.status === "pending_organization_resolution" ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-950">
+            <p className="font-semibold">{PENDING_ORGANIZATION_RESOLUTION_COPY.title}</p>
+            <p className="mt-1">{PENDING_ORGANIZATION_RESOLUTION_COPY.description}</p>
+            <p className="mt-2 font-medium">{PENDING_ORGANIZATION_RESOLUTION_COPY.action}</p>
+          </div>
+        ) : !resolutionComplete ? (
+          <div className="rounded-md border border-border bg-muted/40 p-3 text-muted-foreground">
+            No outreach will be sent until a canonical organization is resolved.
+          </div>
+        ) : null}
         <div>
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
             Candidate entered
@@ -1231,87 +1274,29 @@ function ProductionOrganizationSection({
           <button
             type="button"
             onClick={() => void runSearch()}
+            disabled={isSearching || isMutating || resolutionComplete}
             className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent"
           >
             {isSearching ? "Searching..." : "Search"}
           </button>
         </div>
-        <textarea
-          value={registryNote}
-          onChange={(event) => setRegistryNote(event.target.value)}
-          rows={2}
-          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
-          placeholder="Optional note if registry resolution needs to be deferred."
-        />
-        {results.length === 0 ? (
-          <div className="space-y-3">
+        {!hasSearched ? (
+          <p className="text-[11px] text-muted-foreground">
+            Search the canonical organization directory by name, alias, domain, or identifier.
+          </p>
+        ) : results.length === 0 ? (
+          <div className="space-y-2 rounded-md border border-dashed border-border p-3">
             <p className="text-[11px] text-muted-foreground">
-              Search results will appear here. If no canonical match exists, you can create and
-              resolve a registry record directly against the backend.
+              No canonical organization matched this search. Review the Registry-backed details
+              before creating a new canonical organization.
             </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
-                value={registryDraft.legalName}
-                onChange={(event) =>
-                  setRegistryDraft((current) => ({ ...current, legalName: event.target.value }))
-                }
-                placeholder="Legal name"
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              />
-              <input
-                value={registryDraft.displayName}
-                onChange={(event) =>
-                  setRegistryDraft((current) => ({ ...current, displayName: event.target.value }))
-                }
-                placeholder="Display name"
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              />
-              <input
-                value={registryDraft.organizationType}
-                onChange={(event) =>
-                  setRegistryDraft((current) => ({
-                    ...current,
-                    organizationType: event.target.value,
-                  }))
-                }
-                placeholder="Organization type"
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              />
-              <input
-                value={registryDraft.country}
-                onChange={(event) =>
-                  setRegistryDraft((current) => ({ ...current, country: event.target.value }))
-                }
-                placeholder="Country code"
-                maxLength={2}
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs uppercase text-foreground"
-              />
-              <input
-                value={registryDraft.stateProvince}
-                onChange={(event) =>
-                  setRegistryDraft((current) => ({
-                    ...current,
-                    stateProvince: event.target.value,
-                  }))
-                }
-                placeholder="State / province"
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              />
-              <input
-                value={registryDraft.website}
-                onChange={(event) =>
-                  setRegistryDraft((current) => ({ ...current, website: event.target.value }))
-                }
-                placeholder="Website"
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              />
-            </div>
             <button
               type="button"
-              onClick={() => void createRegistryRecord()}
+              onClick={() => setCreationOpen(true)}
+              disabled={isMutating || resolutionComplete}
               className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent"
             >
-              Create registry record
+              Create canonical organization
             </button>
           </div>
         ) : (
@@ -1324,13 +1309,19 @@ function ProductionOrganizationSection({
                     <p className="text-[11px] text-muted-foreground">
                       {result.organizationType} · Registry {result.registryResolutionStatus}
                     </p>
+                    {result.domain || result.location ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {[result.domain, result.location].filter(Boolean).join(" · ")}
+                      </p>
+                    ) : null}
                   </div>
                   <button
                     type="button"
-                    onClick={() => void resolve(result)}
+                    onClick={() => setSelectedOrganization(result)}
+                    disabled={isMutating || resolutionComplete}
                     className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground hover:bg-accent"
                   >
-                    Resolve
+                    Select organization
                   </button>
                 </div>
               </li>
@@ -1338,6 +1329,47 @@ function ProductionOrganizationSection({
           </ul>
         )}
       </div>
+      <CanonicalOrganizationDialog
+        open={creationOpen}
+        draft={canonicalDraft}
+        continuesOutreach={continuesOutreach}
+        isSubmitting={isMutating}
+        onOpenChange={setCreationOpen}
+        onDraftChange={setCanonicalDraft}
+        onConfirm={createCanonicalOrganization}
+      />
+      <AlertDialog
+        open={selectedOrganization !== null}
+        onOpenChange={(open) => !open && setSelectedOrganization(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Select canonical organization?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedOrganization?.name} will be attached to this verification request.
+              {continuesOutreach
+                ? " The backend will then send the verifier invitation through the canonical outreach flow."
+                : " Outreach will remain pending until Admin approval."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isMutating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isMutating || !selectedOrganization}
+              onClick={(event) => {
+                event.preventDefault();
+                if (selectedOrganization) void resolve(selectedOrganization);
+              }}
+            >
+              {isMutating
+                ? "Resolving..."
+                : continuesOutreach
+                  ? "Resolve and send verifier invitation"
+                  : "Select organization"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </WorkspaceSection>
   );
 }
@@ -1962,7 +1994,13 @@ function DecisionPreparationPanel({
     destructive?: boolean;
   }[] = [
     { action: "request_correction", label: "Request Correction", icon: Wrench },
-    { action: "approve_outreach", label: "Approve for Dispatch", icon: Shield },
+    {
+      action: "approve_outreach",
+      label: appEnv.adminDemoMode
+        ? "Approve for Dispatch"
+        : getAdminApprovalActionLabel(detail.organization.state === "resolved"),
+      icon: Shield,
+    },
     ...(canDirectConfirm
       ? [
           {

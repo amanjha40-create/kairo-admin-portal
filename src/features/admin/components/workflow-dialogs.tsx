@@ -278,6 +278,8 @@ export function OutreachDialog({
 }) {
   const eligibility = workflow.getEligibility("approve_outreach");
   const isCanonicalProductionMode = !appEnv.adminDemoMode;
+  const requiresOrganizationResolution =
+    isCanonicalProductionMode && detail.organization.state !== "resolved";
   const approvedContacts = detail.contacts.filter(
     (c) => c.outreachEligible && c.internalApprovalStatus === "approved",
   );
@@ -292,16 +294,30 @@ export function OutreachDialog({
     <WorkflowActionDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Approve for Dispatch"
-      consequenceSummary="Approves the request for backend dispatch into verifier outreach or organization resolution."
+      title={
+        requiresOrganizationResolution
+          ? "Approve review and continue to organization resolution"
+          : "Approve for Dispatch"
+      }
+      consequenceSummary={
+        requiresOrganizationResolution
+          ? "Approves the Admin review and moves the request to canonical organization resolution. No outreach will be sent until a canonical organization is resolved."
+          : "Approves the request for backend dispatch into verifier outreach."
+      }
       eligibility={eligibility}
       submitLabel={
-        appEnv.adminDemoMode ? "Approve for dispatch (session-only)" : "Approve for dispatch"
+        appEnv.adminDemoMode
+          ? "Approve for dispatch (session-only)"
+          : requiresOrganizationResolution
+            ? "Approve review and continue"
+            : "Approve for dispatch"
       }
       candidateImpactNote={
         appEnv.adminDemoMode
           ? "Dispatch approved in this session. No email has been sent."
-          : "The backend will advance the request using the deployed verification workflow."
+          : requiresOrganizationResolution
+            ? "Outreach has not started and will remain blocked until a canonical organization is resolved."
+            : "The backend will advance the request using the deployed verification workflow."
       }
       onSubmit={async () => {
         if (isCanonicalProductionMode) {
@@ -313,9 +329,14 @@ export function OutreachDialog({
             buildCanonicalProductionOutreachPayload(backendContact.id),
             backendContact.name,
           );
-          toast.success("Approved for dispatch", {
-            description: "The backend will move the request into the next verification stage.",
-          });
+          toast.success(
+            requiresOrganizationResolution ? "Admin review approved" : "Approved for dispatch",
+            {
+              description: requiresOrganizationResolution
+                ? "Canonical organization resolution is required before outreach can start."
+                : "The backend will move the request into verifier outreach.",
+            },
+          );
           onOpenChange(false);
           return;
         }

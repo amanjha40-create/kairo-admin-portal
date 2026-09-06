@@ -45,6 +45,19 @@ export interface OrganizationSearchResult {
   organizationType: string;
   registryRecordId?: string | null;
   registryResolutionStatus: string;
+  domain?: string | null;
+  website?: string | null;
+  location?: string | null;
+}
+
+export interface CanonicalOrganizationCreatePayload {
+  name: string;
+  organizationType: "employer" | "university";
+  country: string;
+  stateProvince?: string;
+  website?: string;
+  domain?: string;
+  registryRecordId?: string;
 }
 
 export interface VerificationCase {
@@ -171,6 +184,11 @@ export interface VerificationRoutingContext {
   registryResolutionStatus?: string | null;
   registryRecordId?: string | null;
   registryName?: string | null;
+  registryOrganizationType?: string | null;
+  registryCountry?: string | null;
+  registryStateProvince?: string | null;
+  registryWebsite?: string | null;
+  registryPrimaryDomain?: string | null;
 }
 
 export type EvidenceDocType =
@@ -722,6 +740,11 @@ interface BackendAdminReviewDetailResponse {
     resolution_method?: string | null;
     resolution_confidence?: number | null;
     resolution_metadata: Record<string, unknown>;
+    organization_type?: string | null;
+    country?: string | null;
+    state_province?: string | null;
+    website?: string | null;
+    primary_domain?: string | null;
   };
 }
 
@@ -785,6 +808,9 @@ interface BackendAdminOrganizationSearchItem {
   verification_capabilities: string[];
   registry_record_public_id?: string | null;
   registry_resolution_status: string;
+  domain?: string | null;
+  website?: string | null;
+  location?: string | null;
 }
 
 interface BackendAdminOrganizationSearchPage {
@@ -863,6 +889,10 @@ export interface VerificationReviewAdapter {
     payload: { reviewStatus: "approved" | "changes_requested"; reviewNotes?: string },
   ) => Promise<void>;
   resolveOrganization: (caseId: string, organizationPublicId: string) => Promise<void>;
+  createCanonicalOrganization: (
+    caseId: string,
+    payload: CanonicalOrganizationCreatePayload,
+  ) => Promise<void>;
   resolveRegistry: (caseId: string, registryRecordPublicId: string) => Promise<void>;
   createRegistryRecord: (
     caseId: string,
@@ -1028,6 +1058,7 @@ export function createVerificationReviewAdapter(
       async directConfirm() {},
       async reviewContact() {},
       async resolveOrganization() {},
+      async createCanonicalOrganization() {},
       async resolveRegistry() {},
       async createRegistryRecord() {},
       async deferRegistryResolution() {},
@@ -1090,6 +1121,9 @@ export function createVerificationReviewAdapter(
         organizationType: item.organization_type,
         registryRecordId: item.registry_record_public_id ?? null,
         registryResolutionStatus: item.registry_resolution_status,
+        domain: item.domain ?? null,
+        website: item.website ?? null,
+        location: item.location ?? null,
       }));
     },
     async assignCase(caseId, assigneeUserId) {
@@ -1183,6 +1217,23 @@ export function createVerificationReviewAdapter(
         method: "POST",
         body: { organization_public_id: organizationPublicId },
       });
+    },
+    async createCanonicalOrganization(caseId, payload) {
+      await api.request(
+        `/api/v1/admin/verification-requests/${caseId}/create-canonical-organization`,
+        {
+          method: "POST",
+          body: {
+            name: payload.name,
+            organization_type: payload.organizationType,
+            country: payload.country,
+            state_province: payload.stateProvince?.trim() || null,
+            website: payload.website?.trim() || null,
+            domain: payload.domain?.trim() || null,
+            registry_record_public_id: payload.registryRecordId ?? null,
+          },
+        },
+      );
     },
     async resolveRegistry(caseId, registryRecordPublicId) {
       await api.request<BackendTrustRegistryResolutionResponse>(
@@ -1464,6 +1515,11 @@ function mapDetailResponse(
         detail.registry_resolution?.status ?? detail.request.registry_resolution_status ?? null,
       registryRecordId: detail.registry_resolution?.registry_record_public_id ?? null,
       registryName: detail.registry_resolution?.registry_name ?? null,
+      registryOrganizationType: detail.registry_resolution?.organization_type ?? null,
+      registryCountry: detail.registry_resolution?.country ?? null,
+      registryStateProvince: detail.registry_resolution?.state_province ?? null,
+      registryWebsite: detail.registry_resolution?.website ?? null,
+      registryPrimaryDomain: detail.registry_resolution?.primary_domain ?? null,
     },
     candidate: {
       candidateId: summary.candidateId,

@@ -229,6 +229,11 @@ function detailPayload() {
       registry_record_public_id: "88888888-8888-8888-8888-888888888888",
       registry_name: "Kairo Canonical",
       resolution_confidence: 97,
+      organization_type: "employer",
+      country: "IN",
+      state_province: "Karnataka",
+      website: "https://kairo.example",
+      primary_domain: "kairo.example",
       resolution_metadata: {
         routing_confidence: 97,
       },
@@ -515,6 +520,11 @@ describe("verification review adapter", () => {
       registryResolutionStatus: "resolved",
       registryRecordId: "88888888-8888-8888-8888-888888888888",
       registryName: "Kairo Canonical",
+      registryOrganizationType: "employer",
+      registryCountry: "IN",
+      registryStateProvince: "Karnataka",
+      registryWebsite: "https://kairo.example",
+      registryPrimaryDomain: "kairo.example",
       routingConfidence: 97,
     });
     expect(detail?.statusMeta.stage).toBe("Employment");
@@ -641,6 +651,15 @@ describe("verification review adapter", () => {
       organizationType: "employer",
       country: "IN",
     });
+    await adapter.createCanonicalOrganization("case-1", {
+      name: "Kairo Labs Private Limited",
+      organizationType: "employer",
+      country: "IN",
+      stateProvince: "Karnataka",
+      website: "https://kairo.example",
+      domain: "kairo.example",
+      registryRecordId: "registry-1",
+    });
 
     expect(requests.map((request) => request.url)).toEqual([
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/priority",
@@ -655,6 +674,7 @@ describe("verification review adapter", () => {
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/cancel",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/record-clarification-response",
       "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/create-registry-record",
+      "https://api.kairoid.com/api/v1/admin/verification-requests/case-1/create-canonical-organization",
     ]);
     expect(requests[1]).toMatchObject({
       body: {
@@ -690,6 +710,62 @@ describe("verification review adapter", () => {
         decision_summary: "Request cancelled by admin review.",
       },
     });
+    expect(requests[12]).toMatchObject({
+      body: {
+        name: "Kairo Labs Private Limited",
+        organization_type: "employer",
+        country: "IN",
+        state_province: "Karnataka",
+        website: "https://kairo.example",
+        domain: "kairo.example",
+        registry_record_public_id: "registry-1",
+      },
+    });
+  });
+
+  it("searches canonical organizations by the backend directory contract", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const fetchImpl = vi.fn(async (_input: URL | RequestInfo) =>
+      jsonResponse({
+        items: [
+          {
+            public_id: "organization-1",
+            name: "Canonical Employer",
+            organization_type: "employer",
+            verification_capabilities: ["employment"],
+            registry_record_public_id: "registry-1",
+            registry_resolution_status: "resolved",
+            domain: "employer.example",
+            website: "https://employer.example",
+            location: "Karnataka, IN",
+          },
+        ],
+      }),
+    );
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00.000Z"),
+      },
+    });
+
+    await expect(adapter.searchOrganizations("Canonical Employer")).resolves.toEqual([
+      {
+        id: "organization-1",
+        name: "Canonical Employer",
+        organizationType: "employer",
+        registryRecordId: "registry-1",
+        registryResolutionStatus: "resolved",
+        domain: "employer.example",
+        website: "https://employer.example",
+        location: "Karnataka, IN",
+      },
+    ]);
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe(
+      "https://api.kairoid.com/api/v1/admin/organizations/search?search=Canonical%20Employer&page_size=20",
+    );
   });
 
   it("loads every timeline page once and preserves direct-confirmation history", async () => {
