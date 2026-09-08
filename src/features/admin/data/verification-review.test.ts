@@ -296,6 +296,25 @@ describe("verification review adapter", () => {
     expect(requests.some((url) => url.includes("status="))).toBe(false);
   });
 
+  it("renders a deleted Candidate email as Unavailable without a search crash", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const payload = queuePayload();
+    payload.items[0].subject_email = null;
+    const fetchImpl = vi.fn(async () => jsonResponse(payload));
+    const adapter = createVerificationReviewAdapter(createProductionConfig(), {
+      production: { storage, fetchImpl, now: () => new Date("2026-07-28T12:00:00.000Z") },
+    });
+
+    const [searched] = await adapter.listCases({ search: "deleted" });
+
+    expect(searched.candidateEmail).toBe("Unavailable");
+    expect(searched.candidateId).toBe("");
+    const [unfiltered] = await adapter.listCases();
+    expect(unfiltered.candidateEmail).toBe("Unavailable");
+    expect(unfiltered.candidateId).toBe("");
+  });
+
   it("requests terminal statuses explicitly for the completed queue", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);

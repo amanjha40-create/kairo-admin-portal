@@ -519,7 +519,7 @@ interface BackendVerificationRequestResponse {
   organization_public_id?: string | null;
   trust_invitation_public_id?: string | null;
   subject_name: string;
-  subject_email: string;
+  subject_email: string | null;
   target_organization_name?: string | null;
   target_organization_email?: string | null;
   request_type: string;
@@ -1270,14 +1270,16 @@ function mapQueueItemToCase(item: BackendVerificationRequestResponse): Verificat
     item.education_claim?.degree ??
     VERIFICATION_TYPE_LABEL[verificationType];
   const status = mapBackendStatus(item.status);
+  const candidateEmail = item.subject_email ?? "Unavailable";
+  const candidateId = item.subject_email?.toLowerCase() ?? "";
 
   return {
     id: item.public_id,
     reference: buildCaseReference(item.public_id),
-    candidateId: item.subject_email.toLowerCase(),
+    candidateId,
     candidateName: item.subject_name,
-    candidateEmail: item.subject_email,
-    candidateAvatarInitials: initialsFor(item.subject_name, item.subject_email),
+    candidateEmail,
+    candidateAvatarInitials: initialsFor(item.subject_name, candidateEmail),
     organizationId:
       item.organization_public_id ?? item.organization_summary?.public_id ?? item.public_id,
     organizationName,
