@@ -366,7 +366,11 @@ function SidebarInner({
 
 function BrandMark() {
   return (
-    <Link to="/admin" aria-label="Kairo Operations — Overview" className="flex items-center gap-2">
+    <Link
+      to="/admin"
+      aria-label="KairoID Operations — Overview"
+      className="flex items-center gap-2"
+    >
       <KairoLogo width={128} />
     </Link>
   );
@@ -376,7 +380,7 @@ function BrandMarkCompact() {
   return (
     <Link
       to="/admin"
-      aria-label="Kairo Operations — Overview"
+      aria-label="KairoID Operations — Overview"
       className="flex size-9 items-center justify-center"
     >
       <KairoLogo width={32} showWordmark={false} />

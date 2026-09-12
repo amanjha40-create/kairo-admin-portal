@@ -15,7 +15,7 @@ export const Route = createFileRoute("/admin/notifications/$notificationId")({
   loader: ({ params }) => ({ notificationId: params.notificationId }),
   head: () => ({
     meta: [
-      { title: "Notification detail — Kairo Admin" },
+      { title: "Notification detail — KairoID Admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

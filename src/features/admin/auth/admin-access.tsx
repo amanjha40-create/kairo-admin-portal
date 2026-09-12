@@ -142,7 +142,7 @@ export function AdminAccessDenied() {
     <CenteredState
       icon={<ShieldOff aria-hidden className="size-5" />}
       title="Access denied"
-      description="Your account does not have permission to access the Kairo Admin Portal."
+      description="Your account does not have permission to access the KairoID Admin Portal."
       tone="destructive"
     />
   );

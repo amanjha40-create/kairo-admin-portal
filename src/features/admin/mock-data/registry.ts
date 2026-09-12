@@ -1,5 +1,5 @@
 /**
- * Kairo Admin — Registry mock data.
+ * KairoID Admin — Registry mock data.
  *
  * Deterministic seed data for the Organization Registry used by both the
  * `/admin/registry` list page and each Case Workspace's organization
@@ -394,7 +394,7 @@ const SEEDS: OrgSeed[] = [
   },
   {
     id: "org-25",
-    name: "Kairo Verified ID",
+    name: "KairoID Verified ID",
     state: "verified",
     orgType: "platform",
     country: "Netherlands",
@@ -635,7 +635,7 @@ function toOrg(seed: OrgSeed): RegistryOrganization {
     employeesRange: seed.employees,
     description:
       seed.description ??
-      `${seed.name} is a ${REGISTRY_ORG_TYPE_LABEL[seed.orgType].toLowerCase()} used by Kairo for verification lookups.`,
+      `${seed.name} is a ${REGISTRY_ORG_TYPE_LABEL[seed.orgType].toLowerCase()} used by KairoID for verification lookups.`,
     createdAt: ago(400),
     updatedAt: ago(Math.max(1, 30 - (Number(seed.id.replace(/\D/g, "")) % 30))),
     createdBy: "System",

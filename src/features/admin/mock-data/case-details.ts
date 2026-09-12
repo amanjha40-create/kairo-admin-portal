@@ -36,7 +36,7 @@ export type ClaimFieldSource = "candidate" | "kairo_derived" | "verifier_confirm
 
 export const CLAIM_SOURCE_LABEL: Record<ClaimFieldSource, string> = {
   candidate: "Provided by candidate",
-  kairo_derived: "Matched by Kairo",
+  kairo_derived: "Matched by KairoID",
   verifier_confirmed: "Confirmed by verifier",
 };
 
@@ -1051,7 +1051,7 @@ function buildTimeline(c: VerificationCase): CaseTimelineEvent[] {
     {
       id: `${c.id}-tl-3`,
       kind: "processing_result",
-      actor: "Kairo Extraction",
+      actor: "KairoID Extraction",
       actorSource: "system",
       at: c.submittedAt,
       description: "Automatic document processing completed.",
@@ -1059,7 +1059,7 @@ function buildTimeline(c: VerificationCase): CaseTimelineEvent[] {
     {
       id: `${c.id}-tl-4`,
       kind: "organization_match",
-      actor: "Kairo Registry",
+      actor: "KairoID Registry",
       actorSource: "integration",
       at: c.submittedAt,
       description:

@@ -198,11 +198,11 @@ describe("trust safety production adapter", () => {
             evidence: [{ id: "doc-1" }, { id: "doc-2" }],
             organization_resolution: {
               organization_public_id: "88888888-8888-8888-8888-888888888888",
-              organization_name: "Kairo Labs",
+              organization_name: "KairoID Labs",
             },
             registry_resolution: {
               registry_record_public_id: "99999999-9999-9999-9999-999999999999",
-              registry_name: "Kairo Labs Registry",
+              registry_name: "KairoID Labs Registry",
             },
           },
           verification_timeline: {

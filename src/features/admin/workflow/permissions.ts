@@ -1,5 +1,5 @@
 /**
- * Role → permission mapping for the Kairo Admin verification workflow.
+ * Role → permission mapping for the KairoID Admin verification workflow.
  *
  * Kept intentionally simple: each role expands into a fixed permission set.
  * Real production authz will live server-side; this mirrors the shape so

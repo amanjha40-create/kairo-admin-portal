@@ -96,7 +96,7 @@ describe("overview data adapter", () => {
             {
               public_id: "11111111-1111-1111-1111-111111111111",
               subject_name: "Aman Jha",
-              organization_name: "Kairo",
+              organization_name: "KairoID",
               status: "pending_admin_review",
               priority: "high",
               created_at: "2026-07-28T08:00:00.000Z",

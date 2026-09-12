@@ -15,8 +15,8 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/admin/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Kairo Operations" },
-      { name: "description", content: "Secure sign-in for authorised Kairo operators." },
+      { title: "Sign in — KairoID Operations" },
+      { name: "description", content: "Secure sign-in for authorised KairoID operators." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -49,7 +49,7 @@ function AdminLoginPage() {
     e.preventDefault();
     setFormError(null);
     const errs: typeof fieldErrors = {};
-    if (!email.trim()) errs.email = "Enter your Kairo email.";
+    if (!email.trim()) errs.email = "Enter your KairoID email.";
     else if (!emailValid) errs.email = "Enter a valid email address.";
     if (!password) errs.password = "Enter your password.";
     setFieldErrors(errs);
@@ -68,7 +68,7 @@ function AdminLoginPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-white">
-      {/* Ambient Kairo brand background */}
+      {/* Ambient KairoID brand background */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -90,11 +90,11 @@ function AdminLoginPage() {
           <div className="flex flex-col items-center text-center">
             <KairoLogo width={150} />
             <h1 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">
-              Kairo Operations
+              KairoID Operations
             </h1>
             <p className="mt-1 text-sm text-slate-500">Internal Trust Infrastructure</p>
             <p className="mt-3 text-xs text-slate-500">
-              Secure access for authorised Kairo operators.
+              Secure access for authorised KairoID operators.
             </p>
           </div>
 
@@ -262,12 +262,12 @@ function AdminLoginPage() {
             <span>
               {auth.mode === "demo"
                 ? "Demo mode only. Authentication and permissions are simulated in the browser."
-                : "Secure internal access only. Authorised Kairo personnel only."}
+                : "Secure internal access only. Authorised KairoID personnel only."}
             </span>
           </div>
         </div>
 
-        <p className="mt-4 text-center text-[11px] text-slate-400">© Kairo — Operations Portal</p>
+        <p className="mt-4 text-center text-[11px] text-slate-400">© KairoID — Operations Portal</p>
       </main>
       <PostAuthGuard />
     </div>

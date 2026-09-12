@@ -1,5 +1,5 @@
 /**
- * Kairo Admin — Verification workflow dialogs.
+ * KairoID Admin — Verification workflow dialogs.
  *
  * Each dialog is a controlled component that renders inside a
  * `WorkflowActionDialog` shell. Every submission goes through the shared
@@ -1173,12 +1173,12 @@ export function UnableDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Unable to Verify"
-      consequenceSummary="Kairo could not reach a reliable verification conclusion. This is not a rejection."
+      consequenceSummary="KairoID could not reach a reliable verification conclusion. This is not a rejection."
       eligibility={eligibility}
       submitLabel={
         appEnv.adminDemoMode ? "Mark unable to verify (session-only)" : "Finalize unable to verify"
       }
-      candidateImpactNote="Unable to Verify does not mean the claim is false. It means Kairo could not reach a reliable verification conclusion."
+      candidateImpactNote="Unable to Verify does not mean the claim is false. It means KairoID could not reach a reliable verification conclusion."
       onSubmit={async () => {
         if (isCanonicalProductionMode) {
           const decisionSummary = attempts.trim();

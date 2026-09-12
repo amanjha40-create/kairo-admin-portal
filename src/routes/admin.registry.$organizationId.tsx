@@ -32,7 +32,7 @@ import { ApiError } from "@/lib/api/errors";
 export const Route = createFileRoute("/admin/registry/$organizationId")({
   head: () => ({
     meta: [
-      { title: "Registry organization — Kairo Admin" },
+      { title: "Registry organization — KairoID Admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

@@ -1,5 +1,5 @@
 /**
- * Kairo Admin — System Operations mock data.
+ * KairoID Admin — System Operations mock data.
  *
  * Deterministic, isolated. Represents the shape of a future
  * observability / platform-control API. NOT connected to real infra.

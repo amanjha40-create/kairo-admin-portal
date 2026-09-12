@@ -53,7 +53,7 @@ const SOURCE_CLASSES = {
 
 const SOURCE_LABELS = {
   candidate: "Provided by candidate",
-  kairo_derived: "Matched by Kairo",
+  kairo_derived: "Matched by KairoID",
   verifier_confirmed: "Confirmed by verifier",
 } as const;
 

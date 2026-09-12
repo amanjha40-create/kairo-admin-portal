@@ -554,7 +554,7 @@ function NotesSection({
             <li key={note.id} className="rounded-md border border-border bg-background p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
-                  {note.authorDisplayName ?? note.authorUserId ?? "Kairo operator"}
+                  {note.authorDisplayName ?? note.authorUserId ?? "KairoID operator"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   {formatRelativeTime(note.createdAt)}
@@ -591,7 +591,7 @@ function TimelineSection({ events }: { events: AdminRiskEvent[] }) {
                 {event.detail ?? "No additional detail provided."}
               </p>
               <p className="text-[10px] text-muted-foreground">
-                {event.actorDisplayName ?? event.actorUserId ?? "Kairo operator"} ·{" "}
+                {event.actorDisplayName ?? event.actorUserId ?? "KairoID operator"} ·{" "}
                 {formatRelativeTime(event.createdAt)}
               </p>
             </li>

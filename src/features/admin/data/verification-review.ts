@@ -130,7 +130,7 @@ export type ClaimFieldSource = "candidate" | "kairo_derived" | "verifier_confirm
 
 export const CLAIM_SOURCE_LABEL: Record<ClaimFieldSource, string> = {
   candidate: "Provided by candidate",
-  kairo_derived: "Matched by Kairo",
+  kairo_derived: "Matched by KairoID",
   verifier_confirmed: "Confirmed by verifier",
 };
 
@@ -1473,7 +1473,7 @@ function mapDetailResponse(
   const corrections = detail.open_corrections.map((item) => mapCorrection(item, claim.fields));
   const notes = (detail.internal_notes ?? []).map((note) => ({
     id: note.public_id,
-    author: note.author_user_id ? "Kairo reviewer" : "System",
+    author: note.author_user_id ? "KairoID reviewer" : "System",
     role: "Reviewer",
     at: note.created_at,
     body: note.body,
@@ -1844,7 +1844,7 @@ function mapCorrection(
 ): CorrectionRequest {
   return {
     id: item.public_id,
-    requestedBy: "Kairo reviewer",
+    requestedBy: "KairoID reviewer",
     requestedAt: item.created_at,
     reason: item.request_text,
     fields: [

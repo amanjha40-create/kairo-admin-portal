@@ -72,8 +72,8 @@ function registryRecord(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     public_id: "11111111-1111-1111-1111-111111111111",
     registry_code: "KR-ORG-TEST1234",
-    legal_name: "Kairo Test University",
-    display_name: "Kairo University",
+    legal_name: "KairoID Test University",
+    display_name: "KairoID University",
     organization_type: "educational_institution",
     country: "IN",
     state_province: "Karnataka",
@@ -84,7 +84,7 @@ function registryRecord(overrides: Partial<Record<string, unknown>> = {}) {
     trust_metadata: {},
     created_at: "2026-07-28T08:00:00.000Z",
     updated_at: "2026-07-28T09:00:00.000Z",
-    aliases: ["Kairo Institute"],
+    aliases: ["KairoID Institute"],
     domain: "university.kairo.test",
     state: "verified",
     active_case_count: 3,
@@ -132,7 +132,7 @@ describe("registry data adapter", () => {
 
     expect(result.total).toBe(1);
     expect(result.items[0]).toMatchObject({
-      canonicalName: "Kairo University",
+      canonicalName: "KairoID University",
       country: "IN",
       domain: "university.kairo.test",
       state: "verified",
@@ -148,7 +148,7 @@ describe("registry data adapter", () => {
     const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
       const url = new URL(String(input));
       expect(url.pathname).toBe("/api/v1/admin/trust-registry/search");
-      expect(url.searchParams.get("search")).toBe("Kairo");
+      expect(url.searchParams.get("search")).toBe("KairoID");
       expect(url.searchParams.get("status")).toBe("verified");
       expect(url.searchParams.get("page")).toBe("2");
       expect(url.searchParams.get("page_size")).toBe("1");
@@ -170,7 +170,7 @@ describe("registry data adapter", () => {
     });
 
     const result = await adapter.listOrganizations({
-      query: "Kairo",
+      query: "KairoID",
       state: "verified",
       page: 2,
       pageSize: 1,
@@ -315,7 +315,7 @@ describe("registry data adapter", () => {
     const detail = await adapter.getOrganization("11111111-1111-1111-1111-111111111111");
 
     expect(detail).toMatchObject({
-      aliases: ["Kairo Institute"],
+      aliases: ["KairoID Institute"],
       lifecycleStatus: "active",
       trustStatus: "trusted",
       possibleDuplicateIds: ["22222222-2222-2222-2222-222222222222"],

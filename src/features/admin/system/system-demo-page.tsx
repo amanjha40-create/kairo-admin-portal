@@ -130,7 +130,7 @@ export function SystemDemoPage() {
   const permissions = admin?.permissions ?? [];
   const canView = hasPermission(permissions, "system.view");
 
-  const session = useSystemSession(admin?.name ?? "Kairo Operator", admin?.role ?? "Admin");
+  const session = useSystemSession(admin?.name ?? "KairoID Operator", admin?.role ?? "Admin");
 
   const [tab, setTab] = useState<TabKey>("overview");
   const router = useRouter();

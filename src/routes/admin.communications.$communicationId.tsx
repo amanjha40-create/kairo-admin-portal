@@ -31,7 +31,7 @@ export const Route = createFileRoute("/admin/communications/$communicationId")({
     if (!loaderData) {
       return {
         meta: [
-          { title: "Communication not found — Kairo Admin" },
+          { title: "Communication not found — KairoID Admin" },
           { name: "robots", content: "noindex, nofollow" },
         ],
       };
@@ -40,7 +40,7 @@ export const Route = createFileRoute("/admin/communications/$communicationId")({
     if (!("comm" in loaderData) || !loaderData.comm) {
       return {
         meta: [
-          { title: "Communications — Kairo Admin" },
+          { title: "Communications — KairoID Admin" },
           { name: "robots", content: "noindex, nofollow" },
         ],
       };
@@ -48,7 +48,7 @@ export const Route = createFileRoute("/admin/communications/$communicationId")({
 
     return {
       meta: [
-        { title: `${loaderData.comm.reference} — Communications — Kairo Admin` },
+        { title: `${loaderData.comm.reference} — Communications — KairoID Admin` },
         { name: "robots", content: "noindex, nofollow" },
       ],
     };

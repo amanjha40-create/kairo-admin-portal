@@ -23,8 +23,8 @@ function isPublicAdminPath(pathname: string): boolean {
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Kairo Operations" },
-      { name: "description", content: "Kairo Operations — internal trust infrastructure." },
+      { title: "KairoID Operations" },
+      { name: "description", content: "KairoID Operations — internal trust infrastructure." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

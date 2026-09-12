@@ -24,7 +24,7 @@ import { hasPermission } from "@/features/admin/workflow/permissions";
 
 export const Route = createFileRoute("/admin/registry/")({
   head: () => ({
-    meta: [{ title: "Registry — Kairo Admin" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Registry — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
   }),
   component: RegistryPage,
 });
@@ -142,7 +142,7 @@ function RegistryPage() {
           <h1 className="text-lg font-semibold tracking-tight text-foreground">Registry</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Canonical organization truth for verifications, resolution, duplicate handling, and
-            shared operational identity across Kairo.
+            shared operational identity across KairoID.
           </p>
         </div>
         {!appEnv.adminDemoMode && canManageRegistry ? (

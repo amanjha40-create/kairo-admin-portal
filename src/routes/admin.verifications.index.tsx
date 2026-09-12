@@ -99,8 +99,8 @@ interface QueueSearch {
 export const Route = createFileRoute("/admin/verifications/")({
   head: () => ({
     meta: [
-      { title: "Verifications — Kairo Admin" },
-      { name: "description", content: "Verification queue for the Kairo operations team." },
+      { title: "Verifications — KairoID Admin" },
+      { name: "description", content: "Verification queue for the KairoID operations team." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -626,7 +626,7 @@ function VerificationsPage() {
           <p className="mt-0.5 text-sm text-muted-foreground">
             {view === "quality-review"
               ? "Verifier responses awaiting final admin quality review. Final outcomes are only set from this queue."
-              : "Review, resolve and track verification cases across Kairo."}
+              : "Review, resolve and track verification cases across KairoID."}
           </p>
         </div>
         <div className="flex items-center gap-1.5">

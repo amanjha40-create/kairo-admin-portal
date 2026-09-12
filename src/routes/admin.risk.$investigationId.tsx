@@ -36,7 +36,7 @@ export const Route = createFileRoute("/admin/risk/$investigationId")({
         title:
           loaderData && "inv" in loaderData && loaderData.inv
             ? `${loaderData.inv.reference} — Trust & Safety`
-            : "Trust & Safety — Kairo Admin",
+            : "Trust & Safety — KairoID Admin",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],

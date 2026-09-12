@@ -51,11 +51,11 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/admin/communications/")({
   head: () => ({
     meta: [
-      { title: "Communications — Kairo Admin" },
+      { title: "Communications — KairoID Admin" },
       {
         name: "description",
         content:
-          "Global monitoring of Kairo verification outreach, delivery, follow-ups and employer responses.",
+          "Global monitoring of KairoID verification outreach, delivery, follow-ups and employer responses.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],

@@ -120,7 +120,7 @@ import { UnsavedChangesDialog } from "@/features/admin/components/unsaved-change
 export const Route = createFileRoute("/admin/verifications/$caseId")({
   head: () => ({
     meta: [
-      { title: "Verification case — Kairo Admin" },
+      { title: "Verification case — KairoID Admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -747,7 +747,7 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
           <WorkspaceSection
             id="notes"
             title="Internal notes"
-            description="Visible only to Kairo operators."
+            description="Visible only to KairoID operators."
           >
             <InternalNotesPanel
               notes={workflow.notes}

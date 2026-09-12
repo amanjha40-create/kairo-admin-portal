@@ -221,7 +221,7 @@ describe("admin communications adapter", () => {
         payload_summary: {
           verification_request_public_id: "22222222-2222-2222-2222-222222222222",
           subject_name: "Aman Jha",
-          employer_name: "Kairo",
+          employer_name: "KairoID",
         },
         notification_public_id: "33333333-3333-3333-3333-333333333333",
         delivery_timeline: [

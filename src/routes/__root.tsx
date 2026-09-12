@@ -82,26 +82,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Kairo Admin" },
+      { title: "KairoID Admin" },
       {
         name: "description",
-        content:
-          "Kairo Operations Hub is an internal admin portal for managing Kairo's operations and trust.",
+        content: "KairoID Operations Hub. Verify once. Trusted everywhere.",
       },
-      { name: "author", content: "Kairo" },
-      { property: "og:title", content: "Kairo Admin" },
+      { name: "author", content: "KairoID" },
+      { property: "og:title", content: "KairoID Admin" },
       {
         property: "og:description",
-        content:
-          "Kairo Operations Hub is an internal admin portal for managing Kairo's operations and trust.",
+        content: "KairoID Operations Hub. Verify once. Trusted everywhere.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Kairo Admin" },
+      { name: "twitter:title", content: "KairoID Admin" },
       {
         name: "twitter:description",
-        content:
-          "Kairo Operations Hub is an internal admin portal for managing Kairo's operations and trust.",
+        content: "KairoID Operations Hub. Verify once. Trusted everywhere.",
       },
     ],
     links: [

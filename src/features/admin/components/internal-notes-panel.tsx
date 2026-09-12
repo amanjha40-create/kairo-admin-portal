@@ -114,8 +114,8 @@ export function InternalNotesPanel({
           title="No internal notes yet"
           description={
             mode === "demo"
-              ? "Notes are visible only to Kairo operators in this browser session."
-              : "Notes are visible only to Kairo operators and persist in the shared backend."
+              ? "Notes are visible only to KairoID operators in this browser session."
+              : "Notes are visible only to KairoID operators and persist in the shared backend."
           }
         />
       ) : (

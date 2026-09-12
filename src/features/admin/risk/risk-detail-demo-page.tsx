@@ -72,7 +72,10 @@ export function DemoRiskInvestigationDetailPage({
   const canPrepareActions = hasPermission(permissions, "risk.prepare_actions");
   const base = loaderData.inv;
 
-  const session = useInvestigationSession(admin?.name ?? "Kairo Operator", admin?.role ?? "Admin");
+  const session = useInvestigationSession(
+    admin?.name ?? "KairoID Operator",
+    admin?.role ?? "Admin",
+  );
   const inv = useMemo(() => (base ? session.overlay(base) : null), [session, base]);
 
   const router = useRouter();
@@ -409,7 +412,7 @@ function DuplicateReviewSection({
             type="text"
             value={rationale}
             onChange={(e) => setRationale(e.target.value)}
-            placeholder="Rationale (visible only to Kairo)"
+            placeholder="Rationale (visible only to KairoID)"
             className="h-8 flex-1 min-w-[220px] rounded border border-border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             disabled={disabled}
           />

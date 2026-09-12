@@ -19,7 +19,7 @@ import type {
 const INVALID_CREDENTIALS_MESSAGE =
   "Invalid email or password. Check your credentials and try again.";
 const ACCESS_DENIED_MESSAGE =
-  "Your account does not have permission to access the Kairo Admin Portal.";
+  "Your account does not have permission to access the KairoID Admin Portal.";
 const NOT_CONFIGURED_MESSAGE = "Admin authentication is not configured.";
 const PASSWORD_RESET_NOT_CONFIGURED_MESSAGE = "Admin password reset is not configured.";
 const INVITATION_NOT_CONFIGURED_MESSAGE = "Admin invitation acceptance is not configured.";
@@ -127,7 +127,7 @@ export function createProductionAuthAdapter(
 
   const notice = !config.authTransportConfigured
     ? "Admin authentication is not configured. Set VITE_API_BASE_URL before enabling production sign-in."
-    : "Production mode uses the shared Kairo backend authentication flow.";
+    : "Production mode uses the shared KairoID backend authentication flow.";
   const isConfigured = config.authTransportConfigured;
 
   async function fetchAdminSession(accessToken: string): Promise<SessionLookupResult> {

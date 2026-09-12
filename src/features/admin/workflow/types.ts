@@ -1,5 +1,5 @@
 /**
- * Kairo Admin — Verification workflow type layer.
+ * KairoID Admin — Verification workflow type layer.
  *
  * Central definitions for controlled workflow actions. No business logic
  * lives here — rules go in `eligibility.ts`, permissions in

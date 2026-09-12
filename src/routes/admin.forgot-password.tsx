@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/admin/forgot-password")({
   head: () => ({
     meta: [
-      { title: "Reset access — Kairo Operations" },
-      { name: "description", content: "Request an admin password reset for Kairo Operations." },
+      { title: "Reset access — KairoID Operations" },
+      { name: "description", content: "Request an admin password reset for KairoID Operations." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -60,7 +60,7 @@ function ForgotPasswordPage() {
           <div className="flex flex-col items-center text-center">
             <KairoLogo width={150} />
             <h1 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">
-              Kairo Operations
+              KairoID Operations
             </h1>
             <p className="mt-1 text-sm text-slate-500">Reset your admin access</p>
           </div>

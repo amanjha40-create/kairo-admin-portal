@@ -135,7 +135,7 @@ export const OUTREACH_TEMPLATES: OutreachTemplate[] = [
     channel: "email",
     subject: "Verification request — {{candidateName}}",
     bodyPreview:
-      "Hello {{contactName}},\n\nKairo is verifying the employment history of {{candidateName}}, who has provided your organisation ({{organizationName}}) as a reference. Could you confirm the role and dates below via the secure link?\n\n— The Kairo Verification Team",
+      "Hello {{contactName}},\n\nKairo is verifying the employment history of {{candidateName}}, who has provided your organisation ({{organizationName}}) as a reference. Could you confirm the role and dates below via the secure link?\n\n— The KairoID Verification Team",
   },
   {
     id: "employer_verification_follow_up_v1",
@@ -143,7 +143,7 @@ export const OUTREACH_TEMPLATES: OutreachTemplate[] = [
     channel: "email",
     subject: "Reminder — verification request for {{candidateName}}",
     bodyPreview:
-      "Hello {{contactName}},\n\nJust a reminder about the verification request for {{candidateName}}. It should take under 2 minutes.\n\n— The Kairo Verification Team",
+      "Hello {{contactName}},\n\nJust a reminder about the verification request for {{candidateName}}. It should take under 2 minutes.\n\n— The KairoID Verification Team",
   },
   {
     id: "reference_check_request_v1",
@@ -151,7 +151,7 @@ export const OUTREACH_TEMPLATES: OutreachTemplate[] = [
     channel: "email",
     subject: "Reference request — {{candidateName}}",
     bodyPreview:
-      "Hello {{contactName}},\n\nKairo is contacting you as a professional reference for {{candidateName}}. If you're available, please confirm the details below.\n\n— The Kairo Verification Team",
+      "Hello {{contactName}},\n\nKairo is contacting you as a professional reference for {{candidateName}}. If you're available, please confirm the details below.\n\n— The KairoID Verification Team",
   },
   {
     id: "credential_issuer_confirmation_v1",
@@ -159,7 +159,7 @@ export const OUTREACH_TEMPLATES: OutreachTemplate[] = [
     channel: "email",
     subject: "Credential confirmation — {{credentialName}}",
     bodyPreview:
-      "Hello,\n\nKairo is confirming a credential ({{credentialName}}) presented by {{candidateName}}. Please confirm issuance details via the secure link.\n\n— The Kairo Verification Team",
+      "Hello,\n\nKairo is confirming a credential ({{credentialName}}) presented by {{candidateName}}. Please confirm issuance details via the secure link.\n\n— The KairoID Verification Team",
   },
 ];
 

@@ -50,10 +50,10 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/admin/")({
   head: () => ({
     meta: [
-      { title: "Overview — Kairo Admin" },
+      { title: "Overview — KairoID Admin" },
       {
         name: "description",
-        content: "Kairo growth, verification operations and urgent activity.",
+        content: "KairoID growth, verification operations and urgent activity.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -131,7 +131,7 @@ function OverviewPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-foreground">Overview</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Monitor Kairo's growth, verification operations and urgent platform activity.
+            Monitor KairoID's growth, verification operations and urgent platform activity.
           </p>
         </div>
         <DateRangeSelector />

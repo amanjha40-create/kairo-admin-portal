@@ -44,7 +44,7 @@ import { ApiError } from "@/lib/api/errors";
 export const Route = createFileRoute("/admin/users/$userId")({
   head: () => ({
     meta: [
-      { title: "User detail — Kairo Admin" },
+      { title: "User detail — KairoID Admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -454,7 +454,7 @@ function UserDetailPage() {
 
             <WorkspaceSection
               title="Internal Admin notes"
-              description={`${user.notes.length} note${user.notes.length === 1 ? "" : "s"} visible only to Kairo operators`}
+              description={`${user.notes.length} note${user.notes.length === 1 ? "" : "s"} visible only to KairoID operators`}
             >
               {user.capabilities.addNote ? (
                 <div className="mb-4 rounded-md border border-border bg-background p-3">
@@ -465,7 +465,7 @@ function UserDetailPage() {
                     id="admin-user-note"
                     value={noteBody}
                     onChange={(event) => setNoteBody(event.target.value)}
-                    placeholder={`Add a note as ${access.admin?.name ?? "Kairo Operator"}. Never visible to the candidate.`}
+                    placeholder={`Add a note as ${access.admin?.name ?? "KairoID Operator"}. Never visible to the candidate.`}
                     className="mt-2 min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
                   />
                   <div className="mt-3 flex items-center justify-end">
@@ -492,7 +492,7 @@ function UserDetailPage() {
                     <li key={note.id} className="rounded-md border border-border bg-background p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                         <div className="font-medium text-foreground">
-                          {note.authorDisplayName ?? "Kairo Operator"}
+                          {note.authorDisplayName ?? "KairoID Operator"}
                           {note.authorRole ? (
                             <span className="ml-1 text-muted-foreground">
                               ({humanize(note.authorRole)})

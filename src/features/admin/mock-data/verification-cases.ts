@@ -465,7 +465,7 @@ export const mockVerificationCases: VerificationCase[] = [
     candidateEmail: "chen.wei@example.com",
     candidateAvatarInitials: "CW",
     organizationId: "org-25",
-    organizationName: "Kairo Verified ID",
+    organizationName: "KairoID Verified ID",
     roleOrProgram: "Government ID document",
     verificationType: "identity",
     status: "verified",

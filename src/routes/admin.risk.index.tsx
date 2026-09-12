@@ -14,11 +14,11 @@ const DemoRiskCenterPageRuntime = demoRiskModule?.DemoRiskCenterPage ?? null;
 export const Route = createFileRoute("/admin/risk/")({
   head: () => ({
     meta: [
-      { title: "Trust & Safety — Kairo Admin" },
+      { title: "Trust & Safety — KairoID Admin" },
       {
         name: "description",
         content:
-          "Investigate risk signals, duplicate identities and document anomalies across the Kairo platform.",
+          "Investigate risk signals, duplicate identities and document anomalies across the KairoID platform.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],

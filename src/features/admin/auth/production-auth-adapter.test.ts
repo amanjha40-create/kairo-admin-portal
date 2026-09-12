@@ -244,7 +244,7 @@ describe("production auth adapter", () => {
       jsonResponse({
         account: {
           id: "support-user",
-          email: "support@kairoid.com",
+          email: "contact@kairoid.com",
           name: "Support User",
           initials: "SU",
           role_key: "support",
@@ -314,7 +314,7 @@ describe("production auth adapter", () => {
         return jsonResponse({
           account: {
             id: "user-3",
-            email: "support@kairoid.com",
+            email: "contact@kairoid.com",
             name: "Support User",
             initials: "SU",
             role_key: "support",

@@ -115,7 +115,7 @@ export function getAdminEnvironmentNotice(config: AppEnvConfig = appEnv): string
     return "Admin authentication is not configured. Set VITE_API_BASE_URL and wire the approved backend auth contract before enabling production sign-in.";
   }
 
-  return "Production mode uses the shared Kairo backend authentication flow configured through VITE_API_BASE_URL.";
+  return "Production mode uses the shared KairoID backend authentication flow configured through VITE_API_BASE_URL.";
 }
 
 export function requireApiBaseUrl(config: AppEnvConfig = appEnv): string {

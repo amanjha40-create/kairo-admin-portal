@@ -84,7 +84,7 @@ function queuePayload() {
         organization_public_id: "22222222-2222-2222-2222-222222222222",
         subject_name: "Aman Jha",
         subject_email: "Aman+Changed@Example.com",
-        target_organization_name: "Kairo",
+        target_organization_name: "KairoID",
         target_organization_email: "hr@kairo.example",
         request_type: "employment",
         status: "pending_admin_review",
@@ -96,7 +96,7 @@ function queuePayload() {
         consented_fields: ["role", "employment_dates"],
         consented_evidence_scope: ["offer_letter", "payslip"],
         employment_claim: {
-          employer_name: "Kairo",
+          employer_name: "KairoID",
           role: "Senior Product Engineer",
         },
         evidence_summary: {
@@ -143,10 +143,10 @@ function terminalQueuePayload() {
         status: "verified",
         employment_id: null,
         education_id: "0a9a10e2-51fd-4f45-9346-7e90c615eb0d",
-        target_organization_name: "Kairo Durability Test University",
+        target_organization_name: "KairoID Durability Test University",
         employment_claim: null,
         education_claim: {
-          institution_name: "Kairo Durability Test University",
+          institution_name: "KairoID Durability Test University",
           degree: "Bachelor of Business Administration",
         },
       },
@@ -223,12 +223,12 @@ function detailPayload() {
     organization_resolution: {
       status: "resolved",
       organization_public_id: "22222222-2222-2222-2222-222222222222",
-      organization_name: "Kairo",
+      organization_name: "KairoID",
     },
     registry_resolution: {
       status: "resolved",
       registry_record_public_id: "88888888-8888-8888-8888-888888888888",
-      registry_name: "Kairo Canonical",
+      registry_name: "KairoID Canonical",
       resolution_confidence: 97,
       organization_type: "employer",
       country: "IN",
@@ -294,7 +294,7 @@ describe("verification review adapter", () => {
     expect(cases[0]).toMatchObject({
       candidateId: "99999999-9999-9999-9999-999999999999",
       candidateName: "Aman Jha",
-      organizationName: "Kairo",
+      organizationName: "KairoID",
       status: "pending_admin_review",
       priority: "high",
       linkedRecordLabel: "Employment · aaaaaaa1",
@@ -543,7 +543,7 @@ describe("verification review adapter", () => {
       workflowOwner: "Admin review",
       registryResolutionStatus: "resolved",
       registryRecordId: "88888888-8888-8888-8888-888888888888",
-      registryName: "Kairo Canonical",
+      registryName: "KairoID Canonical",
       registryOrganizationType: "employer",
       registryCountry: "IN",
       registryStateProvince: "Karnataka",
@@ -579,7 +579,7 @@ describe("verification review adapter", () => {
           employment: {
             id: "aaaaaaa1-1111-1111-1111-111111111111",
             subject_full_name: "Aman Jha",
-            employer_legal_name: "Kairo",
+            employer_legal_name: "KairoID",
             job_title: "Senior Product Engineer",
             employment_type: "full_time",
             start_date: "2021-04-15",
@@ -707,7 +707,7 @@ describe("verification review adapter", () => {
           organization_resolution: {
             status: "unresolved",
             organization_public_id: null,
-            organization_name: "Kairo",
+            organization_name: "KairoID",
           },
         });
       }
@@ -782,12 +782,12 @@ describe("verification review adapter", () => {
     await adapter.cancelCase("case-1", "Request cancelled by admin review.");
     await adapter.recordClarificationResponse("case-1", "Updated role attached.");
     await adapter.createRegistryRecord("case-1", {
-      legalName: "Kairo Labs Private Limited",
+      legalName: "KairoID Labs Private Limited",
       organizationType: "employer",
       country: "IN",
     });
     await adapter.createCanonicalOrganization("case-1", {
-      name: "Kairo Labs Private Limited",
+      name: "KairoID Labs Private Limited",
       organizationType: "employer",
       country: "IN",
       stateProvince: "Karnataka",
@@ -847,7 +847,7 @@ describe("verification review adapter", () => {
     });
     expect(requests[12]).toMatchObject({
       body: {
-        name: "Kairo Labs Private Limited",
+        name: "KairoID Labs Private Limited",
         organization_type: "employer",
         country: "IN",
         state_province: "Karnataka",
@@ -1031,7 +1031,7 @@ describe("verification review adapter", () => {
     expect(detail?.routingContext).toMatchObject({
       registryResolutionStatus: "resolved",
       registryRecordId: "88888888-8888-8888-8888-888888888888",
-      registryName: "Kairo Canonical",
+      registryName: "KairoID Canonical",
     });
   });
 
@@ -1121,7 +1121,7 @@ describe("verification review adapter", () => {
       expect(detail?.routingContext).toMatchObject({
         registryResolutionStatus: "resolved",
         registryRecordId: "88888888-8888-8888-8888-888888888888",
-        registryName: "Kairo Canonical",
+        registryName: "KairoID Canonical",
       });
     },
   );

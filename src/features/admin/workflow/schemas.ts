@@ -1,5 +1,5 @@
 /**
- * Zod validation schemas for every Kairo Admin verification workflow form.
+ * Zod validation schemas for every KairoID Admin verification workflow form.
  * Used inside dialogs; specific errors surface at the field level, never
  * only via disabled submit buttons.
  */

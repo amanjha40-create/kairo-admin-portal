@@ -18,7 +18,7 @@ import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/users/")({
   head: () => ({
-    meta: [{ title: "Users — Kairo Admin" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Users — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
   }),
   component: UsersDirectoryPage,
 });
@@ -109,8 +109,9 @@ function UsersDirectoryPage() {
       <header>
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Users</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Candidate operations directory backed by the shared Kairo backend. Search by name, email,
-          or public ID to inspect account state, trust, verifications, and passport readiness.
+          Candidate operations directory backed by the shared KairoID backend. Search by name,
+          email, or public ID to inspect account state, trust, verifications, and passport
+          readiness.
         </p>
       </header>
 

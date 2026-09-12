@@ -1,5 +1,5 @@
 /**
- * Kairo Admin — Communications mock data.
+ * KairoID Admin — Communications mock data.
  *
  * Deterministic seed data powering the Communications Center at
  * `/admin/communications` and each Communication detail workspace at
@@ -313,7 +313,7 @@ export const mockTemplates: TemplateDefinition[] = [
     variables: ["candidate_name", "reference_name", "context"],
     subjectPreview: "Reference request for {{candidate_name}}",
     bodyPreview:
-      "Hello {{reference_name}},\n\n{{candidate_name}} listed you as a reference on Kairo. Please respond to a short set of verification questions using the secure link.\n\nKairo",
+      "Hello {{reference_name}},\n\n{{candidate_name}} listed you as a reference on KairoID. Please respond to a short set of verification questions using the secure link.\n\nKairo",
     updatedAt: iso(120),
   },
   {

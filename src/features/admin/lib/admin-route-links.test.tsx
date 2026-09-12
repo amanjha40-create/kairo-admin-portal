@@ -19,14 +19,14 @@ describe("admin registry route links", () => {
     expect(
       getVerificationRegistryLinkModel(
         "b7ab6443-66ef-4cc9-8819-c1f4fb5a18ee",
-        "Kairo Durability Test University",
+        "KairoID Durability Test University",
       ),
     ).toEqual({
       organizationId: "b7ab6443-66ef-4cc9-8819-c1f4fb5a18ee",
-      label: "Kairo Durability Test University",
+      label: "KairoID Durability Test University",
     });
 
-    expect(getVerificationRegistryLinkModel(null, "Kairo Durability Test University")).toBeNull();
+    expect(getVerificationRegistryLinkModel(null, "KairoID Durability Test University")).toBeNull();
     expect(getVerificationRegistryLinkModel(undefined, undefined)).toBeNull();
   });
 
@@ -34,7 +34,7 @@ describe("admin registry route links", () => {
     const element = AdminRegistryDetailLink({
       organizationId: "b7ab6443-66ef-4cc9-8819-c1f4fb5a18ee",
       className: "test-link",
-      children: "Kairo Durability Test University",
+      children: "KairoID Durability Test University",
     }) as ReactElement<Record<string, unknown>>;
 
     expect(element.props["data-testid"]).toBe("admin-registry-detail-link");
@@ -42,7 +42,7 @@ describe("admin registry route links", () => {
     expect(element.props.params).toEqual({
       organizationId: "b7ab6443-66ef-4cc9-8819-c1f4fb5a18ee",
     });
-    expect(element.props.children).toBe("Kairo Durability Test University");
+    expect(element.props.children).toBe("KairoID Durability Test University");
   });
 
   it("navigates the router to the intended admin registry detail path", async () => {

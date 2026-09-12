@@ -4,7 +4,7 @@ import { SystemOperationsPage } from "@/features/admin/runtime/system-page";
 export const Route = createFileRoute("/admin/system")({
   head: () => ({
     meta: [
-      { title: "System Operations — Kairo Admin" },
+      { title: "System Operations — KairoID Admin" },
       {
         name: "description",
         content:

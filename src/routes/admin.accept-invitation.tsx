@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/admin/accept-invitation")({
   head: () => ({
     meta: [
-      { title: "Accept Admin invitation — Kairo Operations" },
-      { name: "description", content: "Accept a sanctioned invitation to Kairo Admin." },
+      { title: "Accept Admin invitation — KairoID Operations" },
+      { name: "description", content: "Accept a sanctioned invitation to KairoID Admin." },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -94,7 +94,7 @@ function AdminInvitationPage() {
               Accept Admin invitation
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Confirm your sanctioned access to Kairo Operations
+              Confirm your sanctioned access to KairoID Operations
             </p>
           </div>
 
@@ -134,7 +134,7 @@ function AdminInvitationPage() {
                 <div className="flex items-start gap-2">
                   <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
                   <p>
-                    Existing Kairo users can accept directly. New recipients should complete the
+                    Existing KairoID users can accept directly. New recipients should complete the
                     account setup fields below.
                   </p>
                 </div>
@@ -217,7 +217,7 @@ function InvitationUnavailable({ message }: { message: string }) {
       className="mt-7 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
     >
       <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
-      <p>{message} Request a new invitation from an authorised Kairo administrator.</p>
+      <p>{message} Request a new invitation from an authorised KairoID administrator.</p>
     </div>
   );
 }

@@ -15,7 +15,7 @@ import { formatRelativeTime } from "@/features/admin/lib/format";
 export const Route = createFileRoute("/admin/notifications/")({
   head: () => ({
     meta: [
-      { title: "Notifications — Kairo Admin" },
+      { title: "Notifications — KairoID Admin" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
