@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, Building2, Plus } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, Plus } from "lucide-react";
 import { appEnv } from "@/config/env";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
@@ -59,6 +59,7 @@ function RegistryPage() {
   const [pageSize, setPageSize] = useState(10);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const canManageRegistry = hasPermission(access.admin?.permissions ?? [], "registry.manage");
+  const canViewCompanies = hasPermission(access.admin?.permissions ?? [], "users.view");
 
   const metricsQuery = useQuery(registryMetricsQueryOptions());
   const listQuery = useQuery(
@@ -145,16 +146,27 @@ function RegistryPage() {
             shared operational identity across KairoID.
           </p>
         </div>
-        {!appEnv.adminDemoMode && canManageRegistry ? (
-          <button
-            type="button"
-            onClick={() => setShowCreateForm((value) => !value)}
-            className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
-          >
-            <Plus aria-hidden className="size-3.5" />
-            Create registry organization
-          </button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {!appEnv.adminDemoMode && canViewCompanies ? (
+            <Link
+              to="/admin/registry/organizations"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/92"
+            >
+              Client organizations
+              <ArrowRight aria-hidden className="size-3.5" />
+            </Link>
+          ) : null}
+          {!appEnv.adminDemoMode && canManageRegistry ? (
+            <button
+              type="button"
+              onClick={() => setShowCreateForm((value) => !value)}
+              className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+            >
+              <Plus aria-hidden className="size-3.5" />
+              Create registry organization
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">

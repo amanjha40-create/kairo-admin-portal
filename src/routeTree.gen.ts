@@ -29,12 +29,15 @@ import { Route as AdminNotificationsIndexRouteImport } from './routes/admin.noti
 import { Route as AdminNotificationsNotificationIdRouteImport } from './routes/admin.notifications.$notificationId'
 import { Route as AdminRegistryIndexRouteImport } from './routes/admin.registry.index'
 import { Route as AdminRegistryOrganizationIdRouteImport } from './routes/admin.registry.$organizationId'
+import { Route as AdminRegistryOrganizationsRouteImport } from './routes/admin.registry.organizations'
 import { Route as AdminRiskIndexRouteImport } from './routes/admin.risk.index'
 import { Route as AdminRiskInvestigationIdRouteImport } from './routes/admin.risk.$investigationId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin.users.$userId'
 import { Route as AdminVerificationsIndexRouteImport } from './routes/admin.verifications.index'
 import { Route as AdminVerificationsCaseIdRouteImport } from './routes/admin.verifications.$caseId'
+import { Route as AdminRegistryOrganizationsIndexRouteImport } from './routes/admin.registry.organizations.index'
+import { Route as AdminRegistryOrganizationsOrganizationIdRouteImport } from './routes/admin.registry.organizations.$organizationId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -140,6 +143,12 @@ const AdminRegistryOrganizationIdRoute =
     path: '/$organizationId',
     getParentRoute: () => AdminRegistryRoute,
   } as any)
+const AdminRegistryOrganizationsRoute =
+  AdminRegistryOrganizationsRouteImport.update({
+    id: '/organizations',
+    path: '/organizations',
+    getParentRoute: () => AdminRegistryRoute,
+  } as any)
 const AdminRiskIndexRoute = AdminRiskIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -172,6 +181,18 @@ const AdminVerificationsCaseIdRoute =
     path: '/$caseId',
     getParentRoute: () => AdminVerificationsRoute,
   } as any)
+const AdminRegistryOrganizationsIndexRoute =
+  AdminRegistryOrganizationsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AdminRegistryOrganizationsRoute,
+  } as any)
+const AdminRegistryOrganizationsOrganizationIdRoute =
+  AdminRegistryOrganizationsOrganizationIdRouteImport.update({
+    id: '/$organizationId',
+    path: '/$organizationId',
+    getParentRoute: () => AdminRegistryOrganizationsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -191,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/admin/communications/$communicationId': typeof AdminCommunicationsCommunicationIdRoute
   '/admin/notifications/$notificationId': typeof AdminNotificationsNotificationIdRoute
   '/admin/registry/$organizationId': typeof AdminRegistryOrganizationIdRoute
+  '/admin/registry/organizations': typeof AdminRegistryOrganizationsRouteWithChildren
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
@@ -200,6 +222,8 @@ export interface FileRoutesByFullPath {
   '/admin/risk/': typeof AdminRiskIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/admin/verifications/': typeof AdminVerificationsIndexRoute
+  '/admin/registry/organizations/$organizationId': typeof AdminRegistryOrganizationsOrganizationIdRoute
+  '/admin/registry/organizations/': typeof AdminRegistryOrganizationsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -221,6 +245,8 @@ export interface FileRoutesByTo {
   '/admin/risk': typeof AdminRiskIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/admin/verifications': typeof AdminVerificationsIndexRoute
+  '/admin/registry/organizations/$organizationId': typeof AdminRegistryOrganizationsOrganizationIdRoute
+  '/admin/registry/organizations': typeof AdminRegistryOrganizationsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -241,6 +267,7 @@ export interface FileRoutesById {
   '/admin/communications/$communicationId': typeof AdminCommunicationsCommunicationIdRoute
   '/admin/notifications/$notificationId': typeof AdminNotificationsNotificationIdRoute
   '/admin/registry/$organizationId': typeof AdminRegistryOrganizationIdRoute
+  '/admin/registry/organizations': typeof AdminRegistryOrganizationsRouteWithChildren
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
@@ -250,6 +277,8 @@ export interface FileRoutesById {
   '/admin/risk/': typeof AdminRiskIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/admin/verifications/': typeof AdminVerificationsIndexRoute
+  '/admin/registry/organizations/$organizationId': typeof AdminRegistryOrganizationsOrganizationIdRoute
+  '/admin/registry/organizations/': typeof AdminRegistryOrganizationsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -271,6 +300,7 @@ export interface FileRouteTypes {
     | '/admin/communications/$communicationId'
     | '/admin/notifications/$notificationId'
     | '/admin/registry/$organizationId'
+    | '/admin/registry/organizations'
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
@@ -280,6 +310,8 @@ export interface FileRouteTypes {
     | '/admin/risk/'
     | '/admin/users/'
     | '/admin/verifications/'
+    | '/admin/registry/organizations/$organizationId'
+    | '/admin/registry/organizations/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -301,6 +333,8 @@ export interface FileRouteTypes {
     | '/admin/risk'
     | '/admin/users'
     | '/admin/verifications'
+    | '/admin/registry/organizations/$organizationId'
+    | '/admin/registry/organizations'
   id:
     | '__root__'
     | '/'
@@ -320,6 +354,7 @@ export interface FileRouteTypes {
     | '/admin/communications/$communicationId'
     | '/admin/notifications/$notificationId'
     | '/admin/registry/$organizationId'
+    | '/admin/registry/organizations'
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
@@ -329,6 +364,8 @@ export interface FileRouteTypes {
     | '/admin/risk/'
     | '/admin/users/'
     | '/admin/verifications/'
+    | '/admin/registry/organizations/$organizationId'
+    | '/admin/registry/organizations/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -478,6 +515,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRegistryOrganizationIdRouteImport
       parentRoute: typeof AdminRegistryRoute
     }
+    '/admin/registry/organizations': {
+      id: '/admin/registry/organizations'
+      path: '/organizations'
+      fullPath: '/admin/registry/organizations'
+      preLoaderRoute: typeof AdminRegistryOrganizationsRouteImport
+      parentRoute: typeof AdminRegistryRoute
+    }
     '/admin/risk/': {
       id: '/admin/risk/'
       path: '/'
@@ -520,6 +564,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVerificationsCaseIdRouteImport
       parentRoute: typeof AdminVerificationsRoute
     }
+    '/admin/registry/organizations/': {
+      id: '/admin/registry/organizations/'
+      path: '/'
+      fullPath: '/admin/registry/organizations/'
+      preLoaderRoute: typeof AdminRegistryOrganizationsIndexRouteImport
+      parentRoute: typeof AdminRegistryOrganizationsRoute
+    }
+    '/admin/registry/organizations/$organizationId': {
+      id: '/admin/registry/organizations/$organizationId'
+      path: '/$organizationId'
+      fullPath: '/admin/registry/organizations/$organizationId'
+      preLoaderRoute: typeof AdminRegistryOrganizationsOrganizationIdRouteImport
+      parentRoute: typeof AdminRegistryOrganizationsRoute
+    }
   }
 }
 
@@ -550,13 +608,32 @@ const AdminNotificationsRouteChildren: AdminNotificationsRouteChildren = {
 const AdminNotificationsRouteWithChildren =
   AdminNotificationsRoute._addFileChildren(AdminNotificationsRouteChildren)
 
+interface AdminRegistryOrganizationsRouteChildren {
+  AdminRegistryOrganizationsOrganizationIdRoute: typeof AdminRegistryOrganizationsOrganizationIdRoute
+  AdminRegistryOrganizationsIndexRoute: typeof AdminRegistryOrganizationsIndexRoute
+}
+
+const AdminRegistryOrganizationsRouteChildren: AdminRegistryOrganizationsRouteChildren =
+  {
+    AdminRegistryOrganizationsOrganizationIdRoute:
+      AdminRegistryOrganizationsOrganizationIdRoute,
+    AdminRegistryOrganizationsIndexRoute: AdminRegistryOrganizationsIndexRoute,
+  }
+
+const AdminRegistryOrganizationsRouteWithChildren =
+  AdminRegistryOrganizationsRoute._addFileChildren(
+    AdminRegistryOrganizationsRouteChildren,
+  )
+
 interface AdminRegistryRouteChildren {
   AdminRegistryOrganizationIdRoute: typeof AdminRegistryOrganizationIdRoute
+  AdminRegistryOrganizationsRoute: typeof AdminRegistryOrganizationsRouteWithChildren
   AdminRegistryIndexRoute: typeof AdminRegistryIndexRoute
 }
 
 const AdminRegistryRouteChildren: AdminRegistryRouteChildren = {
   AdminRegistryOrganizationIdRoute: AdminRegistryOrganizationIdRoute,
+  AdminRegistryOrganizationsRoute: AdminRegistryOrganizationsRouteWithChildren,
   AdminRegistryIndexRoute: AdminRegistryIndexRoute,
 }
 
