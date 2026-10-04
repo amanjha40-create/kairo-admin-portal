@@ -54,7 +54,7 @@ function OrganizationDirectoryPage() {
   const [status, setStatus] = useState("all");
   const [organizationType, setOrganizationType] = useState("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const debouncedSearch = useDebouncedValue(search, 300);
   const canView = hasPermission(access.admin?.permissions ?? [], "users.view");
   const options = companyDirectoryQueryOptions({
