@@ -19,6 +19,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { EmptyState } from "./states";
+import { EvidenceReviewAction } from "./evidence-review-action";
+import { evidenceDispositionLabel } from "../workflow/evidence-review";
 import {
   EVIDENCE_DOC_LABEL,
   formatFileSize,
@@ -97,10 +99,14 @@ export function EvidencePanel({
   items,
   onRequestEvidenceUrl,
   onOpenEvidence,
+  canReview = false,
+  onReviewEvidence,
 }: {
   items: EvidenceItem[];
   onRequestEvidenceUrl?: (evidenceId: string) => Promise<string | null>;
   onOpenEvidence?: (evidenceId: string) => Promise<void>;
+  canReview?: boolean;
+  onReviewEvidence?: (evidenceId: string) => Promise<void>;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const open = items.find((i) => i.id === openId) ?? null;
@@ -132,10 +138,12 @@ export function EvidencePanel({
         >
           {open ? (
             <EvidencePreview
-              key={open.id}
+              key={`${open.id}:${open.contentVersion ?? ""}`}
               item={open}
               onRequestEvidenceUrl={onRequestEvidenceUrl}
               onOpenEvidence={onOpenEvidence}
+              canReview={canReview}
+              onReviewEvidence={onReviewEvidence}
             />
           ) : null}
         </SheetContent>
@@ -158,8 +166,8 @@ function EvidenceCard({ item, onOpen }: { item: EvidenceItem; onOpen: () => void
         <FileText aria-hidden className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="break-words text-sm font-medium text-foreground">{item.title}</p>
           <span
             className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium", rev.className)}
           >
@@ -198,11 +206,16 @@ export function EvidencePreview({
   item,
   onRequestEvidenceUrl,
   onOpenEvidence,
+  canReview = false,
+  onReviewEvidence,
 }: {
   item: EvidenceItem;
   onRequestEvidenceUrl?: (evidenceId: string) => Promise<string | null>;
   onOpenEvidence?: (evidenceId: string) => Promise<void>;
+  canReview?: boolean;
+  onReviewEvidence?: (evidenceId: string) => Promise<void>;
 }) {
+  const [openedExternally, setOpenedExternally] = useState(false);
   const kind = getEvidencePreviewKind(item);
   const [retryCount, setRetryCount] = useState(0);
   const [preview, dispatch] = useReducer(evidencePreviewReducer, {
@@ -270,12 +283,17 @@ export function EvidencePreview({
           <MetaRow label="Source" value={item.source.replace(/_/g, " ")} />
           <MetaRow label="Processing" value={PROCESSING_META[item.processingStatus].label} />
           <MetaRow label="Review" value={REVIEW_META[item.reviewStatus].label} />
+          <MetaRow label="Disposition" value={evidenceDispositionLabel(item.disposition)} />
         </dl>
 
         {onOpenEvidence ? (
           <button
             type="button"
-            onClick={() => void onOpenEvidence(item.id)}
+            onClick={() =>
+              void onOpenEvidence(item.id)
+                .then(() => setOpenedExternally(true))
+                .catch(() => setOpenedExternally(false))
+            }
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
           >
             <ExternalLink aria-hidden className="size-3.5" />
@@ -368,6 +386,19 @@ export function EvidencePreview({
             <p className="mt-1 text-muted-foreground">{item.candidateNote}</p>
           </div>
         ) : null}
+        <EvidenceReviewAction
+          key={`${item.id}:${item.contentVersion ?? ""}:${item.reviewed}`}
+          item={item}
+          canReview={canReview}
+          inspectable={
+            preview.status === "ready" ||
+            openedExternally ||
+            (!item.mimeType &&
+              item.filename === "Filename unavailable" &&
+              !!item.extraction?.extractedFields.length)
+          }
+          onReview={onReviewEvidence}
+        />
       </div>
     </>
   );
@@ -482,7 +513,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-border bg-background p-2">
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-xs text-foreground">{value}</dd>
+      <dd className="mt-0.5 break-words text-xs text-foreground">{value}</dd>
     </div>
   );
 }

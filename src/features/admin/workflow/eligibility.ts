@@ -15,6 +15,7 @@ import type {
   WorkflowTransitionRule,
 } from "./types";
 import { hasPermission } from "./permissions";
+import { evidenceReviewProgress } from "./evidence-review";
 
 /**
  * Base transition rules. `getWorkflowEligibility` applies these first and
@@ -157,6 +158,7 @@ export function buildWorkflowCaseState(
   const outstandingCorrection =
     overrides.hasOutstandingCorrectionOverride ??
     detail.corrections.some((c) => c.state !== "resolved" && c.state !== "closed");
+  const progress = evidenceReviewProgress(detail.evidence);
 
   return {
     currentStatus: overrides.currentStatus ?? detail.summary.status,
@@ -173,8 +175,8 @@ export function buildWorkflowCaseState(
     hasOpenPossibleDuplicate,
     organizationResolved: detail.organization.state === "resolved",
     outstandingCorrection,
-    evidenceCount: detail.evidence.length,
-    evidenceReviewedCount: detail.evidence.filter((e) => e.reviewStatus === "reviewed").length,
+    evidenceCount: progress.required,
+    evidenceReviewedCount: progress.reviewed,
   };
 }
 
@@ -237,6 +239,15 @@ export function evaluateWorkflowEligibility(
   }
 
   // Action-specific rules
+  if (
+    state.currentStatus === "pending_admin_quality_review" &&
+    ["verify", "direct_confirmation", "reject", "unable_to_verify"].includes(action) &&
+    state.evidenceReviewedCount < state.evidenceCount
+  ) {
+    blockingReasons.push(
+      `Evidence review incomplete: ${state.evidenceReviewedCount}/${state.evidenceCount} applicable items reviewed.`,
+    );
+  }
   switch (action) {
     case "request_correction":
       if (state.outstandingCorrection) {
@@ -291,7 +302,7 @@ export function evaluateWorkflowEligibility(
       if (state.hasOpenPossibleDuplicate) {
         blockingReasons.push("Possible duplicate must be resolved before a terminal decision.");
       }
-      if (state.evidenceCount === 0) {
+      if (state.evidenceCount === 0 && !state.usesCanonicalDispatchContract) {
         blockingReasons.push("No evidence attached to this case.");
       }
       if (state.evidenceReviewedCount === 0 && state.evidenceCount > 0) {

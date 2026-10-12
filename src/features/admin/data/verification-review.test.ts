@@ -185,7 +185,11 @@ function detailPayload() {
         value: {
           role: "Senior Product Engineer",
         },
-        status: "approved",
+        status: "accepted",
+        reviewed: true,
+        reviewed_at: "2026-07-28T08:30:00.000Z",
+        reviewed_by_user_id: "33333333-3333-3333-3333-333333333333",
+        review_applicable: true,
         created_at: "2026-07-28T08:00:00.000Z",
         updated_at: "2026-07-28T08:30:00.000Z",
         original_filename: "employment-letter.pdf",
@@ -241,6 +245,75 @@ function detailPayload() {
     },
   };
 }
+
+describe.each([
+  ["shared adapter", createVerificationReviewAdapter],
+  ["production runtime", createProductionVerificationReviewAdapter],
+] as const)("API242 evidence contract: %s", (_name, createAdapter) => {
+  function setup(payload = detailPayload()) {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/review"))
+        return jsonResponse({
+          evidence_public_id: payload.evidence[0].public_id,
+          reviewed: true,
+          reviewed_at: "2026-07-28T12:00:00Z",
+          reviewed_by_user_id: "synthetic-reviewer",
+        });
+      if (path.includes("/timeline")) return jsonResponse(timelinePayload());
+      expect(init?.method ?? "GET").toBe("GET");
+      return jsonResponse(payload);
+    });
+    return {
+      fetchImpl,
+      adapter: createAdapter(createProductionConfig(), {
+        production: { storage, fetchImpl, now: () => new Date("2026-07-28T12:00:00Z") },
+      }),
+    };
+  }
+  it("sends exactly the bodyless per-evidence POST and consumes backend provenance", async () => {
+    const { adapter, fetchImpl } = setup();
+    const id = detailPayload().evidence[0].public_id;
+    const result = await adapter.reviewEvidence("11111111-1111-1111-1111-111111111111", id);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(String(url)).toContain(
+      `/api/v1/admin/verification-requests/11111111-1111-1111-1111-111111111111/evidence/${id}/review`,
+    );
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBeUndefined();
+    expect(result.reviewed).toBe(true);
+    expect(result.reviewed_at).toBe("2026-07-28T12:00:00Z");
+  });
+  it("maps explicit metadata independently of accepted disposition and reflects replacement", async () => {
+    const payload = detailPayload();
+    const { adapter } = setup(payload);
+    const first = await adapter.getCaseDetail(payload.request.public_id);
+    expect(first?.evidence[0]).toMatchObject({
+      reviewed: true,
+      reviewApplicable: true,
+      disposition: "accepted",
+    });
+    payload.evidence[0].reviewed = false;
+    const replacement = await adapter.getCaseDetail(payload.request.public_id);
+    expect(replacement?.evidence[0]).toMatchObject({
+      reviewed: false,
+      reviewStatus: "not_reviewed",
+      disposition: "accepted",
+    });
+  });
+  it("never treats obsolete approved disposition as review", async () => {
+    const payload = detailPayload();
+    payload.evidence[0].status = "approved";
+    payload.evidence[0].reviewed = false;
+    const { adapter } = setup(payload);
+    expect((await adapter.getCaseDetail(payload.request.public_id))?.evidence[0].reviewed).toBe(
+      false,
+    );
+  });
+});
 
 function timelinePayload() {
   return {

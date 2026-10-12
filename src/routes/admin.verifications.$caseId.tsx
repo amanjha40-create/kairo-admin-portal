@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -43,6 +43,10 @@ import { StatusBadge } from "@/features/admin/components/status-badge";
 import { PriorityBadge } from "@/features/admin/components/priority-badge";
 import { WorkspaceSection, SourceBadge } from "@/features/admin/components/workspace-section";
 import { EvidencePanel } from "@/features/admin/components/evidence-panel";
+import {
+  canReviewEvidence,
+  evidenceReviewProgress,
+} from "@/features/admin/workflow/evidence-review";
 import { CaseTimeline } from "@/features/admin/components/case-timeline";
 import { InternalNotesPanel } from "@/features/admin/components/internal-notes-panel";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
@@ -360,6 +364,28 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
   const { admin } = useAdminAccess();
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
+  const reviewingEvidence = useRef(new Set<string>());
+
+  async function reviewEvidence(evidenceId: string) {
+    if (reviewingEvidence.current.has(evidenceId)) throw new Error("Review already pending.");
+    reviewingEvidence.current.add(evidenceId);
+    try {
+      await adapter.reviewEvidence(caseId, evidenceId);
+      await queryClient.invalidateQueries(
+        {
+          queryKey: verificationReviewKeys.detail("production", caseId),
+        },
+        { throwOnError: true },
+      );
+    } catch (error) {
+      await queryClient.invalidateQueries({
+        queryKey: verificationReviewKeys.detail("production", caseId),
+      });
+      throw error;
+    } finally {
+      reviewingEvidence.current.delete(evidenceId);
+    }
+  }
 
   async function refreshCase() {
     await Promise.all([
@@ -385,8 +411,7 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
       const url = await getEvidenceAccessUrl(evidenceId);
       if (!url) {
         evidenceWindow?.close();
-        toast.error("Evidence download is unavailable");
-        return;
+        throw new Error("Evidence download is unavailable");
       }
       if (evidenceWindow) {
         evidenceWindow.location.replace(url);
@@ -396,8 +421,9 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
     } catch (error) {
       evidenceWindow?.close();
       toast.error("Evidence could not be opened", {
-        description: error instanceof Error ? error.message : "Unknown error",
+        description: "The protected evidence could not be loaded. Try again from this case.",
       });
+      throw error;
     }
   }
 
@@ -675,6 +701,11 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
               items={detail.evidence}
               onRequestEvidenceUrl={appEnv.adminDemoMode ? undefined : getEvidenceAccessUrl}
               onOpenEvidence={appEnv.adminDemoMode ? undefined : openEvidence}
+              canReview={
+                !appEnv.adminDemoMode &&
+                canReviewEvidence(detail.summary.status, admin?.permissions ?? [])
+              }
+              onReviewEvidence={appEnv.adminDemoMode ? undefined : reviewEvidence}
             />
           </WorkspaceSection>
 
@@ -1932,10 +1963,8 @@ function DecisionPreparationPanel({
   canDirectConfirm: boolean;
   onOpen: (a: WorkflowAction) => void;
 }) {
-  const evidenceReviewed = detail.evidence.filter((e) => e.reviewStatus === "reviewed").length;
-  const evidenceAttention = detail.evidence.filter(
-    (e) => e.reviewStatus === "needs_attention",
-  ).length;
+  const progress = evidenceReviewProgress(detail.evidence);
+  const evidenceAttention = detail.evidence.filter((e) => e.attentionFlags.length > 0).length;
   const openFlags = detail.flags.filter(
     (f) => f.state === "open" && !workflow.acknowledgedFlagIds.has(f.id),
   ).length;
@@ -1948,7 +1977,7 @@ function DecisionPreparationPanel({
       label: "Evidence reviewed",
       value: (
         <span className="tabular-nums text-foreground">
-          {evidenceReviewed} / {detail.evidence.length}
+          {progress.reviewed} of {progress.required}
         </span>
       ),
     },

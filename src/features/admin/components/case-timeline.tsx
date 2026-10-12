@@ -23,6 +23,8 @@ const KIND_META: Record<TimelineEventKind, { icon: typeof Plus; label: string }>
   case_created: { icon: Plus, label: "Case created" },
   candidate_submitted: { icon: Upload, label: "Candidate submitted" },
   evidence_uploaded: { icon: FileText, label: "Evidence uploaded" },
+  evidence_reviewed: { icon: ShieldCheck, label: "Evidence reviewed" },
+  evidence_review_invalidated: { icon: RotateCcw, label: "Evidence review invalidated" },
   processing_result: { icon: Cpu, label: "Processing result" },
   assignment_changed: { icon: UserPlus, label: "Assignment changed" },
   priority_changed: { icon: ArrowUp, label: "Priority changed" },

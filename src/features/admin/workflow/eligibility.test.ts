@@ -17,7 +17,12 @@ function createDetail(
     }>;
     flags?: Array<{ id: string; state: "open"; severity: "high"; flag: string }>;
     organizationState?: "resolved" | "unresolved";
-    evidence?: Array<{ id: string; reviewStatus: "reviewed" }>;
+    evidence?: Array<{
+      id: string;
+      reviewStatus: "reviewed";
+      reviewed?: boolean;
+      reviewApplicable?: boolean;
+    }>;
     corrections?: Array<{ id: string; state: "requested" }>;
   } = {},
 ) {
@@ -37,7 +42,9 @@ function createDetail(
       },
     ],
     corrections: options.corrections ?? [],
-    evidence: options.evidence ?? [{ id: "evidence-1", reviewStatus: "reviewed" }],
+    evidence: options.evidence ?? [
+      { id: "evidence-1", reviewStatus: "reviewed", reviewed: true, reviewApplicable: true },
+    ],
     organization: { state: options.organizationState ?? "resolved" },
   } as never;
 }

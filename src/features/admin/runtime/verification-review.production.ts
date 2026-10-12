@@ -9,6 +9,10 @@ import {
   isVerificationStatus,
 } from "@/features/admin/lib/verification-status";
 import { formatClaimDuration } from "@/features/admin/lib/claim-duration";
+import type {
+  EvidenceReviewMetadata,
+  EvidenceReviewResponse,
+} from "@/features/admin/workflow/evidence-review";
 
 export type VerificationType =
   "employment" | "education" | "certification" | "identity" | "platform" | "reference" | "unknown";
@@ -249,7 +253,7 @@ export interface EvidenceExtraction {
   processingDetails?: string;
 }
 
-export interface EvidenceItem {
+export interface EvidenceItem extends EvidenceReviewMetadata {
   id: string;
   title: string;
   docType: EvidenceDocType;
@@ -469,6 +473,8 @@ export type TimelineEventKind =
   | "case_created"
   | "candidate_submitted"
   | "evidence_uploaded"
+  | "evidence_reviewed"
+  | "evidence_review_invalidated"
   | "processing_result"
   | "assignment_changed"
   | "priority_changed"
@@ -607,6 +613,10 @@ interface BackendAdminReviewQueueResponse {
 }
 
 interface BackendAdminReviewEvidenceResponse {
+  reviewed: boolean;
+  reviewed_at: string | null;
+  reviewed_by_user_id: string | null;
+  review_applicable: boolean;
   public_id: string;
   evidence_type: string;
   field_key: string;
@@ -846,6 +856,7 @@ export interface VerificationQueuePage {
 }
 
 export interface VerificationReviewAdapter {
+  reviewEvidence: (caseId: string, evidenceId: string) => Promise<EvidenceReviewResponse>;
   mode: "demo" | "production";
   listCases: () => Promise<VerificationCase[]>;
   getCaseDetail: (caseId: string) => Promise<VerificationCaseDetail | undefined>;
@@ -1021,6 +1032,21 @@ export function createVerificationReviewAdapter(
         `/api/v1/admin/verification-requests/${caseId}/evidence/${evidenceId}/download-url`,
       );
       return data.download_url ?? null;
+    },
+    async reviewEvidence(caseId, evidenceId) {
+      const result = await api.request<EvidenceReviewResponse>(
+        `/api/v1/admin/verification-requests/${caseId}/evidence/${evidenceId}/review`,
+        { method: "POST" },
+      );
+      if (
+        result.evidence_public_id !== evidenceId ||
+        result.reviewed !== true ||
+        !result.reviewed_at ||
+        !Number.isFinite(Date.parse(result.reviewed_at))
+      ) {
+        throw new Error("Evidence review response could not be confirmed.");
+      }
+      return result;
     },
     async listReviewers(search) {
       const query = search
@@ -1692,10 +1718,17 @@ function mapEvidence(item: BackendAdminReviewEvidenceResponse, fields: ClaimFiel
     source: "candidate_upload",
     fileSizeBytes: item.file_size ?? undefined,
     processingStatus: mapProcessingStatus(item.upload_status),
-    reviewStatus: mapEvidenceReviewStatus(item.status),
+    reviewStatus: item.reviewed === true ? "reviewed" : "not_reviewed",
+    reviewed: item.reviewed === true,
+    reviewedAt: item.reviewed_at ?? null,
+    reviewedByUserId: item.reviewed_by_user_id ?? null,
+    reviewApplicable: item.review_applicable === true,
+    disposition: item.status,
+    contentVersion: item.updated_at,
     extractionSummary: item.value ? JSON.stringify(item.value) : undefined,
-    attentionFlags:
-      mapEvidenceReviewStatus(item.status) === "needs_attention" ? ["document_mismatch"] : [],
+    attentionFlags: ["rejected", "needs_correction"].includes(item.status)
+      ? ["document_mismatch"]
+      : [],
     downloadUrl,
     extraction:
       item.value && Object.keys(item.value).length > 0
@@ -2106,18 +2139,6 @@ function mapProcessingStatus(value?: string | null): EvidenceProcessingState {
   }
 }
 
-function mapEvidenceReviewStatus(value: string): EvidenceReviewState {
-  switch (value) {
-    case "approved":
-      return "reviewed";
-    case "changes_requested":
-    case "rejected":
-      return "needs_attention";
-    default:
-      return "not_reviewed";
-  }
-}
-
 function mapCorrectionState(value: string): CorrectionState {
   switch (value) {
     case "resolved":
@@ -2143,6 +2164,7 @@ function mapContactState(value: string): ContactState {
 }
 
 function mapTimelineKind(value: string): TimelineEventKind {
+  if (value === "evidence_reviewed" || value === "evidence_review_invalidated") return value;
   if (value.includes("assign")) return "assignment_changed";
   if (value.includes("priority")) return "priority_changed";
   if (value.includes("correction")) return "correction_requested";
