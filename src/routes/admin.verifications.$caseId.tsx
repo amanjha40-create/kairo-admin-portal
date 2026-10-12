@@ -43,6 +43,7 @@ import { StatusBadge } from "@/features/admin/components/status-badge";
 import { PriorityBadge } from "@/features/admin/components/priority-badge";
 import { WorkspaceSection, SourceBadge } from "@/features/admin/components/workspace-section";
 import { EvidencePanel } from "@/features/admin/components/evidence-panel";
+import { ManagerReferencePanel } from "@/features/admin/components/manager-reference-panel";
 import {
   canReviewEvidence,
   evidenceReviewProgress,
@@ -100,6 +101,11 @@ import {
   isTerminalStatus,
 } from "@/features/admin/workflow/eligibility";
 import { mapVerificationActionError } from "@/features/admin/workflow/action-errors";
+import { sendAndConfirmManagerInvitation } from "@/features/admin/workflow/manager-reference-invitation";
+import {
+  createAdminEmploymentReferencesAdapter,
+  employmentReferencesKeys,
+} from "@/features/admin/data/employment-references";
 import {
   FIELD_CONFIRMATION_LABEL,
   type WorkflowAction,
@@ -364,6 +370,20 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
   const { admin } = useAdminAccess();
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createVerificationReviewAdapter(appEnv), []);
+  const employmentReferencesAdapter = useMemo(
+    () => createAdminEmploymentReferencesAdapter(appEnv),
+    [],
+  );
+  const employmentId =
+    detail.linkedRecord?.type === "employment" ? detail.linkedRecord.publicId : null;
+  const employmentReferencesQuery = useQuery({
+    queryKey: employmentReferencesKeys.overview(employmentId ?? "unavailable"),
+    queryFn: () => {
+      if (!employmentId) throw new Error("A linked employment record is required.");
+      return employmentReferencesAdapter.getOverview(employmentId);
+    },
+    enabled: !appEnv.adminDemoMode && Boolean(employmentId),
+  });
   const reviewingEvidence = useRef(new Set<string>());
 
   async function reviewEvidence(evidenceId: string) {
@@ -396,6 +416,32 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
         queryKey: verificationReviewKeys.list("production"),
       }),
     ]);
+  }
+
+  async function sendManagerReferenceInvitation(idempotencyKey: string) {
+    const nominationId = employmentReferencesQuery.data?.reportingManager.nominationId;
+    if (!employmentId || !nominationId) {
+      throw new Error("The reporting manager reference is not ready to invite.");
+    }
+
+    await sendAndConfirmManagerInvitation({
+      send: () =>
+        employmentReferencesAdapter.sendManagerInvitation(employmentId, {
+          nominationId,
+          idempotencyKey,
+        }),
+      refresh: async () => {
+        const refreshed = await employmentReferencesQuery.refetch();
+        if (refreshed.isError || !refreshed.data) {
+          throw new Error("The manager reference state could not be refreshed.");
+        }
+        return refreshed.data;
+      },
+    });
+
+    toast.success("Reference request sent", {
+      description: "The backend confirmed delivery to the HR-confirmed reporting manager.",
+    });
   }
 
   async function getEvidenceAccessUrl(evidenceId: string) {
@@ -692,6 +738,20 @@ function CaseWorkspace({ detail }: { detail: VerificationCaseDetail }) {
         <div className="flex min-w-0 flex-col gap-4">
           <ClaimSummarySection detail={detail} />
           <RequestContextSection detail={detail} />
+          {!appEnv.adminDemoMode && employmentId ? (
+            <ManagerReferencePanel
+              references={employmentReferencesQuery.data}
+              isLoading={employmentReferencesQuery.isPending}
+              isError={employmentReferencesQuery.isError}
+              caseStatus={detail.summary.status}
+              canonicalEmploymentStatus={detail.linkedRecord?.canonicalStatus}
+              permissions={admin?.permissions ?? []}
+              onRetry={() => {
+                void employmentReferencesQuery.refetch();
+              }}
+              onSend={sendManagerReferenceInvitation}
+            />
+          ) : null}
           <WorkspaceSection
             id="evidence"
             title="Evidence"
