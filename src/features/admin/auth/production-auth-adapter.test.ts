@@ -215,6 +215,7 @@ describe("production auth adapter", () => {
         role: "Hr",
         permissions: expect.arrayContaining([
           "verification.note",
+          "verification.review_address",
           "communications.view",
           "communications.failure.review",
           "system.audit.view",

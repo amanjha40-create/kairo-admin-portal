@@ -26,6 +26,7 @@ export interface ProductionAdminApiOptions {
 
 export interface AdminAuthenticatedApi {
   request: <T>(path: string, options?: ApiRequestOptions) => Promise<T>;
+  requestBlob: (path: string, options?: ApiRequestOptions) => Promise<Blob>;
 }
 
 const UNAUTHORIZED_MESSAGE = "Your session is no longer valid. Sign in again to continue.";
@@ -147,6 +148,17 @@ export function createAdminAuthenticatedApi(
   return {
     async request<T>(path: string, options: ApiRequestOptions = {}) {
       const result = await authenticatedRequest<T>(path, options);
+      if (!result.ok) {
+        throw result.error;
+      }
+
+      return result.data;
+    },
+    async requestBlob(path: string, options: ApiRequestOptions = {}) {
+      const result = await authenticatedRequest<Blob>(path, {
+        ...options,
+        responseType: "blob",
+      });
       if (!result.ok) {
         throw result.error;
       }

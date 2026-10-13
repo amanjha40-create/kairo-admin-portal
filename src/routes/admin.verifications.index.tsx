@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowUpRight, Bookmark, Download, SlidersHorizontal } from "lucide-react";
+import { ArrowUpRight, Bookmark, Download, MapPinned, SlidersHorizontal } from "lucide-react";
 import { appEnv } from "@/config/env";
 import { cn } from "@/lib/utils";
 
@@ -630,6 +630,12 @@ function VerificationsPage() {
           </p>
         </div>
         <div className="flex items-center gap-1.5">
+          <Link
+            to="/admin/verifications/permanent-address"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            <MapPinned aria-hidden className="size-3.5" /> Permanent Address
+          </Link>
           <button
             type="button"
             title="Saved views coming soon"

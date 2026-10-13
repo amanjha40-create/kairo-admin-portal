@@ -74,7 +74,7 @@ const BACKEND_PERMISSION_MAP: Record<string, WorkflowPermission[]> = {
   trust_safety_resolve: ["risk.resolve"],
   assign_reviewer: ["verification.assign"],
   change_verification_priority: ["verification.change_priority"],
-  review_verification: ["communications.failure.review"],
+  review_verification: ["communications.failure.review", "verification.review_address"],
   dispatch_verification: [
     "verification.request_correction",
     "verification.approve_outreach",

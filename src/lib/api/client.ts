@@ -23,6 +23,7 @@ export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   body?: BodyInit | object | null;
   timeoutMs?: number;
+  responseType?: "json" | "blob";
 }
 
 export interface ApiClient {
@@ -54,10 +55,11 @@ export function createApiClient(options?: {
 
     const controller = new AbortController();
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const responseType = options.responseType ?? "json";
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
     const headers = new Headers(options.headers);
-    headers.set("accept", "application/json");
+    headers.set("accept", responseType === "blob" ? "*/*" : "application/json");
 
     let body: BodyInit | undefined;
     if (options.body instanceof FormData || options.body instanceof URLSearchParams) {
@@ -68,8 +70,9 @@ export function createApiClient(options?: {
     }
 
     try {
+      const { responseType: _responseType, timeoutMs: _timeoutMs, ...requestOptions } = options;
       const response = await fetchImpl(new URL(path, baseUrl), {
-        ...options,
+        ...requestOptions,
         body,
         credentials,
         headers,
@@ -78,9 +81,9 @@ export function createApiClient(options?: {
 
       clearTimeout(timeoutHandle);
       const requestId = getRequestId(response.headers);
-      const payload = await readJsonSafely(response);
 
       if (!response.ok) {
+        const payload = await readJsonSafely(response);
         return {
           ok: false,
           error: mapHttpStatusToApiError(response.status, requestId, payload),
@@ -88,6 +91,9 @@ export function createApiClient(options?: {
           requestId,
         };
       }
+
+      const payload =
+        responseType === "blob" ? await response.blob() : await readJsonSafely(response);
 
       return {
         ok: true,

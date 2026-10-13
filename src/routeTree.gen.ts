@@ -36,8 +36,11 @@ import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin.users.$userId'
 import { Route as AdminVerificationsIndexRouteImport } from './routes/admin.verifications.index'
 import { Route as AdminVerificationsCaseIdRouteImport } from './routes/admin.verifications.$caseId'
+import { Route as AdminVerificationsPermanentAddressRouteImport } from './routes/admin.verifications.permanent-address'
 import { Route as AdminRegistryOrganizationsIndexRouteImport } from './routes/admin.registry.organizations.index'
 import { Route as AdminRegistryOrganizationsOrganizationIdRouteImport } from './routes/admin.registry.organizations.$organizationId'
+import { Route as AdminVerificationsPermanentAddressIndexRouteImport } from './routes/admin.verifications.permanent-address.index'
+import { Route as AdminVerificationsPermanentAddressCandidateIdRouteImport } from './routes/admin.verifications.permanent-address.$candidateId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -181,6 +184,12 @@ const AdminVerificationsCaseIdRoute =
     path: '/$caseId',
     getParentRoute: () => AdminVerificationsRoute,
   } as any)
+const AdminVerificationsPermanentAddressRoute =
+  AdminVerificationsPermanentAddressRouteImport.update({
+    id: '/permanent-address',
+    path: '/permanent-address',
+    getParentRoute: () => AdminVerificationsRoute,
+  } as any)
 const AdminRegistryOrganizationsIndexRoute =
   AdminRegistryOrganizationsIndexRouteImport.update({
     id: '/',
@@ -192,6 +201,18 @@ const AdminRegistryOrganizationsOrganizationIdRoute =
     id: '/$organizationId',
     path: '/$organizationId',
     getParentRoute: () => AdminRegistryOrganizationsRoute,
+  } as any)
+const AdminVerificationsPermanentAddressIndexRoute =
+  AdminVerificationsPermanentAddressIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AdminVerificationsPermanentAddressRoute,
+  } as any)
+const AdminVerificationsPermanentAddressCandidateIdRoute =
+  AdminVerificationsPermanentAddressCandidateIdRouteImport.update({
+    id: '/$candidateId',
+    path: '/$candidateId',
+    getParentRoute: () => AdminVerificationsPermanentAddressRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -216,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
+  '/admin/verifications/permanent-address': typeof AdminVerificationsPermanentAddressRouteWithChildren
   '/admin/communications/': typeof AdminCommunicationsIndexRoute
   '/admin/notifications/': typeof AdminNotificationsIndexRoute
   '/admin/registry/': typeof AdminRegistryIndexRoute
@@ -223,7 +245,9 @@ export interface FileRoutesByFullPath {
   '/admin/users/': typeof AdminUsersIndexRoute
   '/admin/verifications/': typeof AdminVerificationsIndexRoute
   '/admin/registry/organizations/$organizationId': typeof AdminRegistryOrganizationsOrganizationIdRoute
+  '/admin/verifications/permanent-address/$candidateId': typeof AdminVerificationsPermanentAddressCandidateIdRoute
   '/admin/registry/organizations/': typeof AdminRegistryOrganizationsIndexRoute
+  '/admin/verifications/permanent-address/': typeof AdminVerificationsPermanentAddressIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -246,7 +270,9 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersIndexRoute
   '/admin/verifications': typeof AdminVerificationsIndexRoute
   '/admin/registry/organizations/$organizationId': typeof AdminRegistryOrganizationsOrganizationIdRoute
+  '/admin/verifications/permanent-address/$candidateId': typeof AdminVerificationsPermanentAddressCandidateIdRoute
   '/admin/registry/organizations': typeof AdminRegistryOrganizationsIndexRoute
+  '/admin/verifications/permanent-address': typeof AdminVerificationsPermanentAddressIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -271,6 +297,7 @@ export interface FileRoutesById {
   '/admin/risk/$investigationId': typeof AdminRiskInvestigationIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/verifications/$caseId': typeof AdminVerificationsCaseIdRoute
+  '/admin/verifications/permanent-address': typeof AdminVerificationsPermanentAddressRouteWithChildren
   '/admin/communications/': typeof AdminCommunicationsIndexRoute
   '/admin/notifications/': typeof AdminNotificationsIndexRoute
   '/admin/registry/': typeof AdminRegistryIndexRoute
@@ -278,7 +305,9 @@ export interface FileRoutesById {
   '/admin/users/': typeof AdminUsersIndexRoute
   '/admin/verifications/': typeof AdminVerificationsIndexRoute
   '/admin/registry/organizations/$organizationId': typeof AdminRegistryOrganizationsOrganizationIdRoute
+  '/admin/verifications/permanent-address/$candidateId': typeof AdminVerificationsPermanentAddressCandidateIdRoute
   '/admin/registry/organizations/': typeof AdminRegistryOrganizationsIndexRoute
+  '/admin/verifications/permanent-address/': typeof AdminVerificationsPermanentAddressIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -304,6 +333,7 @@ export interface FileRouteTypes {
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
+    | '/admin/verifications/permanent-address'
     | '/admin/communications/'
     | '/admin/notifications/'
     | '/admin/registry/'
@@ -311,7 +341,9 @@ export interface FileRouteTypes {
     | '/admin/users/'
     | '/admin/verifications/'
     | '/admin/registry/organizations/$organizationId'
+    | '/admin/verifications/permanent-address/$candidateId'
     | '/admin/registry/organizations/'
+    | '/admin/verifications/permanent-address/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -334,7 +366,9 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/verifications'
     | '/admin/registry/organizations/$organizationId'
+    | '/admin/verifications/permanent-address/$candidateId'
     | '/admin/registry/organizations'
+    | '/admin/verifications/permanent-address'
   id:
     | '__root__'
     | '/'
@@ -358,6 +392,7 @@ export interface FileRouteTypes {
     | '/admin/risk/$investigationId'
     | '/admin/users/$userId'
     | '/admin/verifications/$caseId'
+    | '/admin/verifications/permanent-address'
     | '/admin/communications/'
     | '/admin/notifications/'
     | '/admin/registry/'
@@ -365,7 +400,9 @@ export interface FileRouteTypes {
     | '/admin/users/'
     | '/admin/verifications/'
     | '/admin/registry/organizations/$organizationId'
+    | '/admin/verifications/permanent-address/$candidateId'
     | '/admin/registry/organizations/'
+    | '/admin/verifications/permanent-address/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -564,6 +601,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVerificationsCaseIdRouteImport
       parentRoute: typeof AdminVerificationsRoute
     }
+    '/admin/verifications/permanent-address': {
+      id: '/admin/verifications/permanent-address'
+      path: '/permanent-address'
+      fullPath: '/admin/verifications/permanent-address'
+      preLoaderRoute: typeof AdminVerificationsPermanentAddressRouteImport
+      parentRoute: typeof AdminVerificationsRoute
+    }
     '/admin/registry/organizations/': {
       id: '/admin/registry/organizations/'
       path: '/'
@@ -577,6 +621,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/registry/organizations/$organizationId'
       preLoaderRoute: typeof AdminRegistryOrganizationsOrganizationIdRouteImport
       parentRoute: typeof AdminRegistryOrganizationsRoute
+    }
+    '/admin/verifications/permanent-address/': {
+      id: '/admin/verifications/permanent-address/'
+      path: '/'
+      fullPath: '/admin/verifications/permanent-address/'
+      preLoaderRoute: typeof AdminVerificationsPermanentAddressIndexRouteImport
+      parentRoute: typeof AdminVerificationsPermanentAddressRoute
+    }
+    '/admin/verifications/permanent-address/$candidateId': {
+      id: '/admin/verifications/permanent-address/$candidateId'
+      path: '/$candidateId'
+      fullPath: '/admin/verifications/permanent-address/$candidateId'
+      preLoaderRoute: typeof AdminVerificationsPermanentAddressCandidateIdRouteImport
+      parentRoute: typeof AdminVerificationsPermanentAddressRoute
     }
   }
 }
@@ -669,13 +727,34 @@ const AdminUsersRouteWithChildren = AdminUsersRoute._addFileChildren(
   AdminUsersRouteChildren,
 )
 
+interface AdminVerificationsPermanentAddressRouteChildren {
+  AdminVerificationsPermanentAddressCandidateIdRoute: typeof AdminVerificationsPermanentAddressCandidateIdRoute
+  AdminVerificationsPermanentAddressIndexRoute: typeof AdminVerificationsPermanentAddressIndexRoute
+}
+
+const AdminVerificationsPermanentAddressRouteChildren: AdminVerificationsPermanentAddressRouteChildren =
+  {
+    AdminVerificationsPermanentAddressCandidateIdRoute:
+      AdminVerificationsPermanentAddressCandidateIdRoute,
+    AdminVerificationsPermanentAddressIndexRoute:
+      AdminVerificationsPermanentAddressIndexRoute,
+  }
+
+const AdminVerificationsPermanentAddressRouteWithChildren =
+  AdminVerificationsPermanentAddressRoute._addFileChildren(
+    AdminVerificationsPermanentAddressRouteChildren,
+  )
+
 interface AdminVerificationsRouteChildren {
   AdminVerificationsCaseIdRoute: typeof AdminVerificationsCaseIdRoute
+  AdminVerificationsPermanentAddressRoute: typeof AdminVerificationsPermanentAddressRouteWithChildren
   AdminVerificationsIndexRoute: typeof AdminVerificationsIndexRoute
 }
 
 const AdminVerificationsRouteChildren: AdminVerificationsRouteChildren = {
   AdminVerificationsCaseIdRoute: AdminVerificationsCaseIdRoute,
+  AdminVerificationsPermanentAddressRoute:
+    AdminVerificationsPermanentAddressRouteWithChildren,
   AdminVerificationsIndexRoute: AdminVerificationsIndexRoute,
 }
 

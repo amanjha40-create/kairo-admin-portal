@@ -68,6 +68,7 @@ export type WorkflowPermission =
   | "verification.acknowledge_flag"
   | "verification.record_clarification"
   | "verification.note"
+  | "verification.review_address"
   | "users.view"
   | "users.notes.create"
   | "users.account.disable"

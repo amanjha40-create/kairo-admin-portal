@@ -28,6 +28,7 @@ const ALL_DECISION_PERMISSIONS: WorkflowPermission[] = [
   "verification.acknowledge_flag",
   "verification.record_clarification",
   "verification.note",
+  "verification.review_address",
 ];
 
 const ALL_USER_PERMISSIONS: WorkflowPermission[] = [
@@ -143,6 +144,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleKey, WorkflowPermission[]> = {
     "verification.acknowledge_flag",
     "verification.record_clarification",
     "verification.note",
+    "verification.review_address",
     "users.view",
     "users.notes.create",
     "communications.view",
