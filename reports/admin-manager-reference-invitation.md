@@ -69,8 +69,27 @@ Add the normal Admin-owned invitation action for an eligible Reporting Manager R
 - Authorized report contains no manager contact, token, or secure URL.
 - Trust Score remains 82 and no post-response References contributor/snapshot exists; the response did not change the score.
 - A completed link returns a recorded/already-completed state and no form, preventing replay.
-- Android source was not changed. Live Android visual refresh is not recorded because no emulator or device was attached; backend Candidate-summary truth is 2/2.
-- Admin post-response visual refresh was not certified in the final pass because the existing Chrome tab rendered blank after a hard reload; the authoritative backend read-only check returned the completed state.
+
+## Physical Android Certification
+
+- Device: physical Xiaomi `22127PC95I`, Android 14.
+- Installed package: `com.kairo.app.staging`, version 1.0 (1), staging/debug.
+- Installed APK SHA-256: `75659c084d22a61f61afcaccf9c6edf649df4794a5c749ee49f5e8f0760d63e4`.
+- Native and web provenance both identify clean source SHA `db84c31da045b5074f8fbc0458e36329a110792f`; the installed APK checksum matches the qualified artifact from that worktree.
+- The same controlled Employment visibly renders `Verified`, `References 2 of 2 completed`, `HR Reference Completed`, and `Reporting Manager Completed`.
+- Navigating away and reopening the same Employment preserves the 2/2 completed state.
+- Candidate UI exposes no private HR/manager email, phone, confidential comments, ratings, invitation token, internal IDs, or provider metadata.
+- Trust Passport visibly remains 82/100. References are absent from the displayed score contributors and the backend confirms no References contribution.
+- No Android source or APK changed during this gate. No email, invitation, or reference mutation occurred.
+
+## Backend Push
+
+- Exact backend SHA `dbee34b482d6520d9646b8e428d2e25f0f96e8c8` was pushed unchanged to `origin/codex/backend-employment-references-v1` after the Android gate passed.
+- Local and remote branch heads are equal with ahead/behind `0/0`; the backend worktree is clean.
+
+## Separate Follow-Up
+
+- The previously observed Admin hard-refresh blank tab is tracked separately as Admin launch hardening and was not modified in this Android gate.
 
 ## Source Boundaries
 
