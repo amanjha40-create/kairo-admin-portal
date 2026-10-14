@@ -693,7 +693,8 @@ function LocationDiagnostics({
               <Comparison
                 label="Estimated point"
                 value={comparison.reverseEstimatedPointAddress}
-                invert
+                trueLabel="Yes"
+                falseLabel="No"
               />
               <Comparison label="Street" value={comparison.streetMatch} />
             </dl>
@@ -727,22 +728,15 @@ function LocationDiagnostics({
 function Comparison({
   label,
   value,
-  invert = false,
+  trueLabel = "Match",
+  falseLabel = "Conflict",
 }: {
   label: string;
   value: boolean | null;
-  invert?: boolean;
+  trueLabel?: string;
+  falseLabel?: string;
 }) {
-  const labelValue =
-    value == null
-      ? "Not available"
-      : value
-        ? invert
-          ? "No"
-          : "Match"
-        : invert
-          ? "Yes"
-          : "Conflict";
+  const labelValue = value == null ? "Not available" : value ? trueLabel : falseLabel;
   return (
     <div>
       <dt className="text-[10px] text-muted-foreground">{label}</dt>

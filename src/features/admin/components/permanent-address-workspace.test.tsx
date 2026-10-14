@@ -289,11 +289,22 @@ describe("PermanentAddressWorkspace", () => {
 
     expect(screen.getByText("PIN")).toBeTruthy();
     expect(text).toContain("Place type: Point Address");
+    expect(screen.getByText("Estimated point").parentElement?.textContent).toContain("No");
     expect(text).not.toContain("latitude");
     expect(text).not.toContain("longitude");
     expect(text).not.toContain("ciphertext");
     expect(text).not.toContain("S3");
     expect(text).not.toContain("storage path");
+  });
+
+  it("renders an estimated provider point truthfully", () => {
+    const detail = baseDetail();
+    const attempt = manualAttempt();
+    attempt.candidateComparisons[0].reverseEstimatedPointAddress = true;
+    detail.latestAttempt = attempt;
+    renderWorkspace(detail);
+
+    expect(screen.getByText("Estimated point").parentElement?.textContent).toContain("Yes");
   });
 
   it("requires the protected preview to render before enabling a document decision", async () => {
