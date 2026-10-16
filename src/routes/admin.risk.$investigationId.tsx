@@ -1,10 +1,15 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, type ErrorComponentProps } from "@tanstack/react-router";
 import { appEnv } from "@/config/env";
 import { TrustSafetyInvestigationProduction } from "@/features/admin/components/trust-safety-investigation-production";
 import { EmptyState, ErrorState } from "@/features/admin/components/states";
 
 type DemoRiskDetailLoaderModule = typeof import("@/features/admin/risk/risk-detail-demo-loader");
 type DemoRiskDetailPageModule = typeof import("@/features/admin/risk/risk-detail-demo-page");
+type DemoRiskDetailLoaderData = Awaited<
+  ReturnType<DemoRiskDetailLoaderModule["loadDemoRiskDetail"]>
+>;
+type RiskDetailLoaderData =
+  DemoRiskDetailLoaderData | { investigationId: string; production: true };
 
 const demoRiskDetailLoaderModule: DemoRiskDetailLoaderModule | null =
   import.meta.env.VITE_ADMIN_DEMO_MODE === "true"
@@ -20,7 +25,7 @@ const DemoRiskInvestigationDetailPage =
   demoRiskDetailPageModule?.DemoRiskInvestigationDetailPage ?? null;
 
 export const Route = createFileRoute("/admin/risk/$investigationId")({
-  loader: async ({ params }) => {
+  loader: async ({ params }): Promise<RiskDetailLoaderData> => {
     if (!appEnv.adminDemoMode || demoRiskDetailLoaderModule === null) {
       return {
         investigationId: params.investigationId,
@@ -60,12 +65,14 @@ function RiskDetailRoutePage() {
   return <DemoRiskInvestigationDetailPage loaderData={loaderData} />;
 }
 
-function RiskDetailErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
+function RiskDetailErrorBoundary({ error, reset }: ErrorComponentProps) {
   return (
     <div className="mx-auto max-w-2xl p-8">
       <ErrorState
         title="Something went wrong"
-        description={error.message}
+        description={
+          error instanceof Error ? error.message : "This investigation could not be loaded."
+        }
         action={
           <button
             type="button"

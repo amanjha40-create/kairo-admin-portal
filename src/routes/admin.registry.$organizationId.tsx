@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { ArrowLeft, Building2, ChevronRight, ExternalLink, GitMerge, Plus } from "lucide-react";
 import { appEnv } from "@/config/env";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
@@ -61,7 +61,7 @@ export const Route = createFileRoute("/admin/registry/$organizationId")({
   ),
 });
 
-function RegistryDetailErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
+function RegistryDetailErrorBoundary({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const copy = getRegistryDetailErrorCopy(error);
 
@@ -1140,7 +1140,7 @@ function InlineFormActions({
   );
 }
 
-function getRegistryDetailErrorCopy(error: Error) {
+function getRegistryDetailErrorCopy(error: unknown) {
   if (error instanceof ApiError && error.code === "unauthorized") {
     return {
       title: "Sign in required",
@@ -1157,6 +1157,7 @@ function getRegistryDetailErrorCopy(error: Error) {
 
   return {
     title: "Registry organization failed to load",
-    description: error.message,
+    description:
+      error instanceof Error ? error.message : "The registry organization could not be loaded.",
   };
 }

@@ -6,15 +6,18 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 
-async function reportRootError(error: Error) {
+async function reportRootError(error: unknown) {
   if (!import.meta.env.DEV) return;
   const { reportLovableError } = await import("../lib/lovable-error-reporting");
-  reportLovableError(error, { boundary: "tanstack_root_error_component" });
+  reportLovableError(error instanceof Error ? error : new Error("Unknown route error"), {
+    boundary: "tanstack_root_error_component",
+  });
 }
 
 function NotFoundComponent() {
@@ -39,7 +42,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {

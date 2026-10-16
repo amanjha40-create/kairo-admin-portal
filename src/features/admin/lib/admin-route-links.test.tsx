@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { AdminRegistryDetailLink } from "./admin-registry-detail-link";

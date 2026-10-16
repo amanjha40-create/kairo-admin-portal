@@ -54,7 +54,12 @@ export const Route = createFileRoute("/admin/communications/$communicationId")({
     };
   },
   errorComponent: ({ error }) => (
-    <EmptyState title="Something went wrong" description={error.message} />
+    <EmptyState
+      title="Something went wrong"
+      description={
+        error instanceof Error ? error.message : "This communication could not be loaded."
+      }
+    />
   ),
   notFoundComponent: DemoCommunicationNotFoundView,
   component: CommunicationDetailPage,
