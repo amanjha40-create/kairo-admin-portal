@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Building2, Database, Network } from "lucide-react";
+import { ArrowRight, Building2, Database, Network, Plus } from "lucide-react";
 import { appEnv } from "@/config/env";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { AdminSearchField } from "@/features/admin/components/search-field";
+import { CreateOrganizationDialog } from "@/features/admin/components/create-organization-dialog";
 import {
   EmptyState,
   ErrorState,
@@ -55,8 +56,13 @@ function OrganizationDirectoryPage() {
   const [organizationType, setOrganizationType] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [createOpen, setCreateOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 300);
   const canView = hasPermission(access.admin?.permissions ?? [], "users.view");
+  const canCreateOrganization = hasPermission(
+    access.admin?.permissions ?? [],
+    "create_organization",
+  );
   const options = companyDirectoryQueryOptions({
     search: debouncedSearch,
     status,
@@ -105,13 +111,28 @@ function OrganizationDirectoryPage() {
             verification activity, and team.
           </p>
         </div>
-        <Link
-          to="/admin/registry"
-          className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
-        >
-          <Network aria-hidden className="size-3.5" />
-          Trust Registry
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {canCreateOrganization ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/90"
+            >
+              <Plus aria-hidden className="size-3.5" /> Create organization
+            </button>
+          ) : (
+            <span className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+              Create organization permission required
+            </span>
+          )}
+          <Link
+            to="/admin/registry"
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            <Network aria-hidden className="size-3.5" />
+            Trust Registry
+          </Link>
+        </div>
       </header>
 
       <div className="relative overflow-hidden rounded-xl border border-border bg-card px-5 py-5">
@@ -288,6 +309,7 @@ function OrganizationDirectoryPage() {
         Company 360 reads canonical workspace data. Trust Registry identity remains a separate,
         linked source of organization truth.
       </div>
+      <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

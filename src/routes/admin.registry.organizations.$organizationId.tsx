@@ -14,6 +14,8 @@ import {
 import { appEnv } from "@/config/env";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { AdminSearchField } from "@/features/admin/components/search-field";
+import { OrganizationProvisioningPanel } from "@/features/admin/components/organization-provisioning-panel";
+import { PersonVerificationOperationsDialog } from "@/features/admin/components/person-verification-operations-dialog";
 import {
   EmptyState,
   ErrorState,
@@ -262,11 +264,13 @@ function Company360Page() {
         ))}
       </nav>
 
+      {tab === "overview" ? <OrganizationProvisioningPanel company={company} /> : null}
       {tab === "overview" ? (
         <OverviewTab company={company} overview={overview} activity={activityQuery.data?.items} />
       ) : null}
       {tab === "people" ? (
         <PeopleTab
+          organizationId={organizationId}
           query={peopleQuery}
           search={peopleSearch}
           status={peopleStatus}
@@ -433,6 +437,7 @@ function OverviewTab({
 }
 
 function PeopleTab({
+  organizationId,
   query,
   search,
   status,
@@ -442,6 +447,7 @@ function PeopleTab({
   onPage,
   onPageSize,
 }: {
+  organizationId: string;
   query: UseQueryResult<CompanyPage<CompanyPersonItem>, Error>;
   search: string;
   status: string;
@@ -451,6 +457,7 @@ function PeopleTab({
   onPage: (page: number) => void;
   onPageSize: (size: number) => void;
 }) {
+  const [operationsPerson, setOperationsPerson] = useState<CompanyPersonItem | null>(null);
   return (
     <WorkspaceSection
       title="People"
@@ -511,6 +518,13 @@ function PeopleTab({
                 >
                   View requests
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setOperationsPerson(person)}
+                  className="font-medium text-[#087F7C] hover:underline"
+                >
+                  Operations
+                </button>
               </div>,
             ])}
             page={query.data.page}
@@ -521,6 +535,14 @@ function PeopleTab({
           />
         ) : null}
       </QueryState>
+      <PersonVerificationOperationsDialog
+        organizationId={organizationId}
+        person={operationsPerson}
+        open={Boolean(operationsPerson)}
+        onOpenChange={(open) => {
+          if (!open) setOperationsPerson(null);
+        }}
+      />
     </WorkspaceSection>
   );
 }

@@ -104,7 +104,14 @@ export type WorkflowPermission =
   | "system.messaging.view"
   | "system.audit.view"
   | "system.alerts.manage"
-  | "system.configuration.view";
+  | "system.configuration.view"
+  | "create_person"
+  | "manage_assisted_profile"
+  | "send_candidate_activation"
+  | "create_organization"
+  | "invite_first_hr"
+  | "manage_court_check"
+  | "perform_in_person_verification";
 
 export type AdminRoleKey = "admin" | "operations_lead" | "trust_safety" | "reviewer" | "read_only";
 

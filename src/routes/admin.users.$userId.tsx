@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
+import { AssistedCandidateWorkspace } from "@/features/admin/components/assisted-candidate-workspace";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import {
@@ -283,6 +284,8 @@ function UserDetailPage() {
                 <Field label="Location">{user.location ?? "Unavailable"}</Field>
               </div>
             </WorkspaceSection>
+
+            <AssistedCandidateWorkspace candidateId={userId} />
 
             <WorkspaceSection
               title="Trust"

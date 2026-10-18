@@ -80,6 +80,16 @@ const ALL_SYSTEM_PERMISSIONS: WorkflowPermission[] = [
   "system.configuration.view",
 ];
 
+const ALL_ASSISTED_OPERATIONS_PERMISSIONS: WorkflowPermission[] = [
+  "create_person",
+  "manage_assisted_profile",
+  "send_candidate_activation",
+  "create_organization",
+  "invite_first_hr",
+  "manage_court_check",
+  "perform_in_person_verification",
+];
+
 // Read-only slice: view surfaces but never prepare changes.
 const READ_ONLY_SYSTEM_PERMISSIONS: WorkflowPermission[] = [
   "system.view",
@@ -105,6 +115,7 @@ const ROLE_PERMISSIONS: Record<AdminRoleKey, WorkflowPermission[]> = {
     ...ALL_COMMS_PERMISSIONS,
     ...ALL_RISK_PERMISSIONS,
     ...ALL_SYSTEM_PERMISSIONS,
+    ...ALL_ASSISTED_OPERATIONS_PERMISSIONS,
   ],
   operations_lead: [
     ...ALL_DECISION_PERMISSIONS,

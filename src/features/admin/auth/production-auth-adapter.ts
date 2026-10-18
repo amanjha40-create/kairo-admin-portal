@@ -111,6 +111,13 @@ const BACKEND_PERMISSION_MAP: Record<string, WorkflowPermission[]> = {
   system_operations_incident_create: ["system.alerts.manage"],
   system_operations_incident_update: ["system.alerts.manage"],
   system_operations_retry: ["communications.failure.review"],
+  create_person: ["create_person"],
+  manage_assisted_profile: ["manage_assisted_profile"],
+  send_candidate_activation: ["send_candidate_activation"],
+  create_organization: ["create_organization"],
+  invite_first_hr: ["invite_first_hr"],
+  manage_court_check: ["manage_court_check"],
+  perform_in_person_verification: ["perform_in_person_verification"],
 };
 
 export function createProductionAuthAdapter(

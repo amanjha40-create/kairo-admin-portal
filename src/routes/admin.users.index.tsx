@@ -2,7 +2,9 @@ import type React from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, Users as UsersIcon } from "lucide-react";
+import { AlertTriangle, UserPlus, Users as UsersIcon } from "lucide-react";
+import { useAdminAccess } from "@/features/admin/auth/admin-access";
+import { CreatePersonDialog } from "@/features/admin/components/create-person-dialog";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { AdminSearchField } from "@/features/admin/components/search-field";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
@@ -14,6 +16,7 @@ import {
   type AdminUserSortBy,
 } from "@/features/admin/data/users";
 import { formatRelativeTime } from "@/features/admin/lib/format";
+import { hasPermission } from "@/features/admin/workflow/permissions";
 import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/users/")({
@@ -38,11 +41,14 @@ const SORT_OPTIONS: Array<{ value: AdminUserSortBy; label: string }> = [
 ];
 
 function UsersDirectoryPage() {
+  const access = useAdminAccess();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | AdminUserAccountStatus>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [sortBy, setSortBy] = useState<AdminUserSortBy>("created_at");
+  const [createOpen, setCreateOpen] = useState(false);
+  const canCreatePerson = hasPermission(access.admin?.permissions ?? [], "create_person");
 
   const listQuery = useQuery(
     userListQueryOptions({
@@ -106,13 +112,28 @@ function UsersDirectoryPage() {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
-      <header>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Users</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Candidate operations directory backed by the shared KairoID backend. Search by name,
-          email, or public ID to inspect account state, trust, verifications, and passport
-          readiness.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Users</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Candidate operations directory backed by the shared KairoID backend. Search by name,
+            email, or public ID to inspect account state, trust, verifications, and passport
+            readiness.
+          </p>
+        </div>
+        {canCreatePerson ? (
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/90"
+          >
+            <UserPlus className="size-4" /> Create person
+          </button>
+        ) : (
+          <span className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+            Create person permission required
+          </span>
+        )}
       </header>
 
       <WorkspaceSection
@@ -252,6 +273,7 @@ function UsersDirectoryPage() {
           </div>
         )}
       </WorkspaceSection>
+      <CreatePersonDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
