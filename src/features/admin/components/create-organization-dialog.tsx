@@ -12,9 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  adminOperationsKeys,
   createAdminOperationsAdapter,
+  getFirstHrInvitationAction,
   organizationProvisioningQueryOptions,
+  rehydrateOrganizationProvisioning,
   type OrganizationProvisioningResult,
 } from "@/features/admin/data/admin-operations";
 import { company360Keys } from "@/features/admin/data/organizations";
@@ -59,7 +60,9 @@ export function CreateOrganizationDialog({
     ...organizationProvisioningQueryOptions(organizationId),
     enabled: Boolean(organizationId),
   });
-  const invitation = provisioningQuery.data?.firstHrInvitation;
+  const provisioning = provisioningQuery.data;
+  const invitation = provisioning?.firstHrInvitation;
+  const invitationAction = getFirstHrInvitationAction(provisioning);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -84,29 +87,43 @@ export function CreateOrganizationDialog({
   });
 
   const inviteMutation = useMutation({
-    mutationFn: async (resend: boolean) => {
+    mutationFn: async () => {
       if (!organization) throw new Error("Create the organization first.");
       const input = { fullName: hrName.trim(), email: hrEmail.trim() };
-      return resend && invitation
-        ? adapter.resendFirstHr(
-            organization.organizationPublicId,
-            invitation.invitationPublicId,
-            input,
-          )
-        : adapter.inviteFirstHr(organization.organizationPublicId, input);
+      if (invitationAction === "resend" && invitation) {
+        return adapter.resendFirstHr(
+          organization.organizationPublicId,
+          invitation.invitationPublicId,
+          input,
+        );
+      }
+      if (invitationAction === "invite") {
+        return adapter.inviteFirstHr(organization.organizationPublicId, input);
+      }
+      throw new Error("The canonical membership state does not permit a first-HR invitation.");
     },
     onSuccess: async () => {
       if (!organization) return;
       await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: adminOperationsKeys.provisioning(organization.organizationPublicId),
-        }),
+        rehydrateOrganizationProvisioning(queryClient, organization.organizationPublicId),
         queryClient.invalidateQueries({ queryKey: company360Keys.all() }),
       ]);
-      toast.success("First HR owner invitation queued");
+      toast.success(
+        invitationAction === "resend"
+          ? "First HR invitation recovery queued"
+          : "First HR owner invitation queued",
+      );
     },
-    onError: (error) =>
-      toast.error(getOperationError(error, "The first HR invitation could not be sent.")),
+    onError: async (error) => {
+      if (organization) {
+        try {
+          await rehydrateOrganizationProvisioning(queryClient, organization.organizationPublicId);
+        } catch {
+          // Preserve the original delivery error while the query exposes its own read failure state.
+        }
+      }
+      toast.error(getOperationError(error, "The first HR invitation could not be sent."));
+    },
   });
 
   const reset = () => {
@@ -201,58 +218,98 @@ export function CreateOrganizationDialog({
           <div className="space-y-4">
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <p className="font-medium">{organization.name} created</p>
-              <p className="mt-1 text-xs">Lifecycle: Awaiting first HR claim</p>
-              <p className="mt-1 text-xs">Owner membership present: No</p>
+              {provisioningQuery.isPending ? (
+                <p className="mt-1 text-xs">Loading canonical membership state...</p>
+              ) : provisioningQuery.error ? (
+                <p className="mt-1 text-xs text-red-800">Canonical membership state unavailable.</p>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs">
+                    Membership: {provisioning?.memberPresent ? "Present" : "None"}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Owner membership: {provisioning?.ownerMembershipPresent ? "Present" : "None"}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="rounded-lg border border-border p-4">
-              <h3 className="text-sm font-semibold">Invite first HR owner</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The invitee accepts through the existing Team Invitation flow and chooses their own
-                account password. The initial role is fixed to Owner.
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Input label="HR full name" value={hrName} onChange={setHrName} required />
-                <Input
-                  label="HR work email"
-                  value={hrEmail}
-                  onChange={setHrEmail}
-                  type="email"
-                  required
-                />
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => inviteMutation.mutate(Boolean(invitation))}
-                  disabled={
-                    !hrName.trim() ||
-                    !hrEmail.trim() ||
-                    inviteMutation.isPending ||
-                    invitation?.effectiveStatus === "accepted"
-                  }
-                  className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-xs font-medium text-background disabled:opacity-50"
-                >
-                  {invitation ? <RefreshCw className="size-3.5" /> : <Mail className="size-3.5" />}
-                  {inviteMutation.isPending
-                    ? "Sending..."
-                    : invitation?.effectiveStatus === "accepted"
-                      ? "First HR claimed"
+              <h3 className="text-sm font-semibold">
+                {provisioning?.ownerMembershipPresent
+                  ? "First HR owner accepted / claimed"
+                  : provisioning?.memberPresent
+                    ? "First HR invitation unavailable"
+                    : invitationAction === "resend"
+                      ? "Recover first HR invitation"
                       : invitation
-                        ? "Resend invitation"
-                        : "Send first HR invitation"}
-                </button>
-              </div>
+                        ? "Send new first HR invitation"
+                        : "Invite first HR owner"}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {provisioning?.ownerMembershipPresent
+                  ? "Canonical owner membership is active. No further first-HR invitation is available."
+                  : provisioning?.memberPresent
+                    ? "The backend rejects first-HR invitations while any organization membership exists."
+                    : "The invitee accepts through the existing Team Invitation flow and chooses their own account password. The initial role is fixed to Owner."}
+              </p>
+              {invitationAction !== "none" ? (
+                <>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Input label="HR full name" value={hrName} onChange={setHrName} required />
+                    <Input
+                      label="HR work email"
+                      value={hrEmail}
+                      onChange={setHrEmail}
+                      type="email"
+                      required
+                    />
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => inviteMutation.mutate()}
+                      disabled={!hrName.trim() || !hrEmail.trim() || inviteMutation.isPending}
+                      className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-xs font-medium text-background disabled:opacity-50"
+                    >
+                      {invitationAction === "resend" ? (
+                        <RefreshCw className="size-3.5" />
+                      ) : (
+                        <Mail className="size-3.5" />
+                      )}
+                      {inviteMutation.isPending
+                        ? "Sending..."
+                        : invitationAction === "resend"
+                          ? invitation?.effectiveStatus === "pending"
+                            ? "Resend invitation"
+                            : "Recover first HR invitation"
+                          : invitation
+                            ? "Send new first HR invitation"
+                            : "Send first HR invitation"}
+                    </button>
+                  </div>
+                </>
+              ) : null}
               {invitation ? (
                 <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  <p className="font-medium">Activation {humanize(invitation.effectiveStatus)}</p>
+                  <p className="font-medium">
+                    Activation {humanize(invitation.effectiveStatus)}
+                    {invitation.effectiveStatus !== invitation.status
+                      ? ` · stored ${humanize(invitation.status)}`
+                      : ""}
+                  </p>
                   <p className="mt-1">Invitee: {invitation.inviteeEmailMasked}</p>
                   {invitation.expiresAt ? (
                     <p>Expires: {new Date(invitation.expiresAt).toLocaleString()}</p>
                   ) : null}
+                  {invitation.deliveryFailedAt ? (
+                    <p className="text-red-700">
+                      Delivery failed {new Date(invitation.deliveryFailedAt).toLocaleString()}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-[11px]">
-                    This masked state is rehydrated from the backend. Resend still requires the
-                    intended HR name and full work email; no token is displayed.
+                    This masked state is rehydrated from the backend. Recovery requires the intended
+                    HR name and full work email; no token is displayed.
                   </p>
                 </div>
               ) : provisioningQuery.isPending ? (

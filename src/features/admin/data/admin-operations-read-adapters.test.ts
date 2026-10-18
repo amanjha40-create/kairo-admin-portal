@@ -352,9 +352,9 @@ describe("Admin V1.1 read-adapter closure", () => {
     expect(createOrganization).toContain("organizationProvisioningQueryOptions");
     expect(createOrganization).not.toContain("useState<FirstHrInvitation");
     expect(createOrganization).toMatch(
-      /Resend still requires the\s+intended HR name and full work email/,
+      /Recovery requires the intended\s+HR name and full work email/,
     );
-    expect(createOrganization).toContain('invitation?.effectiveStatus === "accepted"');
-    expect(createOrganization).toContain("First HR claimed");
+    expect(createOrganization).toContain("getFirstHrInvitationAction");
+    expect(createOrganization).toContain("First HR owner accepted / claimed");
   });
 });

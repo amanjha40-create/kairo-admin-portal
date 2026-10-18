@@ -18,6 +18,7 @@ import {
   createAdminOperationsAdapter,
   inPersonReceiptQueryOptions,
   inPersonReceiptsQueryOptions,
+  refreshCourtReceiptCache,
   validateEvidenceFile,
   type CourtCheck,
   type CourtCheckStatus,
@@ -79,11 +80,6 @@ export function PersonVerificationOperationsDialog({
               ) : (
                 <PermissionCopy permission="users.view" />
               )
-            ) : !person.linkedUserId ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
-                This organization person is not linked to a canonical Candidate, so private evidence
-                ownership cannot be established. Court and in-person operations are unavailable.
-              </div>
             ) : tab === "court" ? (
               canCourt ? (
                 <CourtWorkspace
@@ -117,7 +113,7 @@ function CourtWorkspace({
 }: {
   organizationId: string;
   person: CompanyPersonItem;
-  candidateId: string;
+  candidateId?: string;
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
   const queryClient = useQueryClient();
@@ -162,10 +158,7 @@ function CourtWorkspace({
 
   const refreshCanonicalState = async (checkId: string) => {
     await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: adminOperationsKeys.courtList(organizationId, person.id),
-      }),
-      queryClient.fetchQuery(courtReceiptQueryOptions(organizationId, person.id, checkId)),
+      refreshCourtReceiptCache(queryClient, organizationId, person.id, checkId),
       queryClient.invalidateQueries({
         queryKey: adminOperationsKeys.verificationReport(organizationId, person.id),
       }),
@@ -174,6 +167,7 @@ function CourtWorkspace({
   };
   const save = useMutation({
     mutationFn: async () => {
+      if (!candidateId) throw new Error("Link a canonical Candidate before writing Court data.");
       const input = {
         status,
         ...(searchedAt ? { searchedAt: new Date(searchedAt).toISOString() } : {}),
@@ -193,21 +187,22 @@ function CourtWorkspace({
     },
     onSuccess: async (result) => {
       setSelectedCourtId(result.publicId);
-      toast.success(check ? "Court check updated" : "Court check created");
       await refreshCanonicalState(result.publicId);
+      toast.success(check ? "Court check updated" : "Court check created");
     },
     onError: (error) =>
       toast.error(getOperationError(error, "The Court check could not be saved.")),
   });
   const finalize = useMutation({
     mutationFn: async () => {
+      if (!candidateId) throw new Error("Link a canonical Candidate before finalizing Court data.");
       if (!check) throw new Error("Save the Court check first.");
       return adapter.finalizeCourtCheck(organizationId, person.id, check.publicId);
     },
     onSuccess: async (result) => {
       setSelectedCourtId(result.publicId);
-      toast.success("Court check finalized and locked");
       await refreshCanonicalState(result.publicId);
+      toast.success("Court check finalized and locked");
     },
     onError: (error) =>
       toast.error(getOperationError(error, "The Court check could not be finalized.")),
@@ -234,27 +229,29 @@ function CourtWorkspace({
               {receiptsQuery.data?.total ?? 0}.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCourtId(null);
-              setIdempotencyKey(crypto.randomUUID());
-              setStatus("pending");
-              setSearchedAt("");
-              setJurisdiction("");
-              setCoverage("");
-              setSearchPeriod("");
-              setSource("");
-              setFinding("");
-              setRemarks("");
-              setLimitations("");
-              setExistingEvidenceIds([]);
-              setEvidence([]);
-            }}
-            className="h-8 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent"
-          >
-            New Court check
-          </button>
+          {candidateId ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCourtId(null);
+                setIdempotencyKey(crypto.randomUUID());
+                setStatus("pending");
+                setSearchedAt("");
+                setJurisdiction("");
+                setCoverage("");
+                setSearchPeriod("");
+                setSource("");
+                setFinding("");
+                setRemarks("");
+                setLimitations("");
+                setExistingEvidenceIds([]);
+                setEvidence([]);
+              }}
+              className="h-8 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent"
+            >
+              New Court check
+            </button>
+          ) : null}
         </div>
         {receiptsQuery.isPending ? (
           <p className="mt-3 text-xs text-muted-foreground">Loading persisted Court receipts...</p>
@@ -293,117 +290,136 @@ function CourtWorkspace({
           </p>
         ) : null}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1 text-xs font-medium">
-          Result / status
-          <select
-            value={status}
-            disabled={Boolean(check?.finalizedAt)}
-            onChange={(event) => setStatus(event.target.value as CourtCheckStatus)}
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
-          >
-            <option value="pending">Pending</option>
-            <option value="no_match_found">No matching record within stated scope</option>
-            <option value="match_found">Match found</option>
-            <option value="review_required">Review required</option>
-            <option value="unable_to_complete">Unable to complete</option>
-          </select>
-        </label>
-        <Input
-          label={`Searched at${resultRequiresDate ? " *" : ""}`}
-          type="datetime-local"
-          value={searchedAt}
-          onChange={setSearchedAt}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <Input
-          label="Jurisdiction *"
-          value={jurisdiction}
-          onChange={setJurisdiction}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <Input
-          label="Search period"
-          value={searchPeriod}
-          onChange={setSearchPeriod}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <Input
-          label="Named source *"
-          value={source}
-          onChange={setSource}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <Input
-          label="Coverage *"
-          value={coverage}
-          onChange={setCoverage}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <TextArea
-          label={`Finding${findingRequired ? " *" : ""}`}
-          value={finding}
-          onChange={setFinding}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <TextArea
-          label="Remarks"
-          value={remarks}
-          onChange={setRemarks}
-          disabled={Boolean(check?.finalizedAt)}
-        />
-        <div className="sm:col-span-2">
-          <TextArea
-            label="Scope limitations *"
-            value={limitations}
-            onChange={setLimitations}
+      {candidateId ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs font-medium">
+              Result / status
+              <select
+                value={status}
+                disabled={Boolean(check?.finalizedAt)}
+                onChange={(event) => setStatus(event.target.value as CourtCheckStatus)}
+                className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
+              >
+                <option value="pending">Pending</option>
+                <option value="no_match_found">No matching record within stated scope</option>
+                <option value="match_found">Match found</option>
+                <option value="review_required">Review required</option>
+                <option value="unable_to_complete">Unable to complete</option>
+              </select>
+            </label>
+            <Input
+              label={`Searched at${resultRequiresDate ? " *" : ""}`}
+              type="datetime-local"
+              value={searchedAt}
+              onChange={setSearchedAt}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <Input
+              label="Jurisdiction *"
+              value={jurisdiction}
+              onChange={setJurisdiction}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <Input
+              label="Search period"
+              value={searchPeriod}
+              onChange={setSearchPeriod}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <Input
+              label="Named source *"
+              value={source}
+              onChange={setSource}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <Input
+              label="Coverage *"
+              value={coverage}
+              onChange={setCoverage}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <TextArea
+              label={`Finding${findingRequired ? " *" : ""}`}
+              value={finding}
+              onChange={setFinding}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <TextArea
+              label="Remarks"
+              value={remarks}
+              onChange={setRemarks}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+            <div className="sm:col-span-2">
+              <TextArea
+                label="Scope limitations *"
+                value={limitations}
+                onChange={setLimitations}
+                disabled={Boolean(check?.finalizedAt)}
+              />
+            </div>
+          </div>
+          <EvidenceUploader
+            candidateId={candidateId}
+            evidence={evidence}
+            onEvidence={setEvidence}
             disabled={Boolean(check?.finalizedAt)}
           />
-        </div>
-      </div>
-      <EvidenceUploader
-        candidateId={candidateId}
-        evidence={evidence}
-        onEvidence={setEvidence}
-        disabled={Boolean(check?.finalizedAt)}
-      />
-      {existingEvidenceIds.length ? (
-        <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          Persisted private evidence: {existingEvidenceIds.length} document
-          {existingEvidenceIds.length === 1 ? "" : "s"} (
-          {existingEvidenceIds.map((id) => id.slice(0, 8)).join(", ")})
-        </div>
-      ) : null}
-      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-        A no-match result means only “No match found within the stated court-record scope.” It is
-        not police verification, criminal clearance, or a guarantee that no record exists.
-      </div>
-      <div className="flex flex-wrap justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => save.mutate()}
-          disabled={
-            !formValid ||
-            save.isPending ||
-            Boolean(check?.finalizedAt) ||
-            (Boolean(canonicalCourtId) && receiptQuery.isPending)
-          }
-          className="h-9 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent disabled:opacity-50"
-        >
-          {save.isPending ? "Saving..." : check ? "Save Court check changes" : "Create Court check"}
-        </button>
-        <button
-          type="button"
-          onClick={() => finalize.mutate()}
-          disabled={
-            !check || check.status === "pending" || finalize.isPending || Boolean(check.finalizedAt)
-          }
-          className="h-9 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
-        >
-          {finalize.isPending ? "Finalizing..." : "Finalize Court check"}
-        </button>
-      </div>
-      {check ? <CourtReceipt check={check} /> : null}
+          {existingEvidenceIds.length ? (
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Persisted private evidence: {existingEvidenceIds.length} document
+              {existingEvidenceIds.length === 1 ? "" : "s"} (
+              {existingEvidenceIds.map((id) => id.slice(0, 8)).join(", ")})
+            </div>
+          ) : null}
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            A no-match result means only “No match found within the stated court-record scope.” It
+            is not police verification, criminal clearance, or a guarantee that no record exists.
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => save.mutate()}
+              disabled={
+                !formValid ||
+                save.isPending ||
+                Boolean(check?.finalizedAt) ||
+                (Boolean(canonicalCourtId) && receiptQuery.isPending)
+              }
+              className="h-9 rounded-md border border-border px-3 text-xs font-medium hover:bg-accent disabled:opacity-50"
+            >
+              {save.isPending
+                ? "Saving..."
+                : check
+                  ? "Save Court check changes"
+                  : "Create Court check"}
+            </button>
+            <button
+              type="button"
+              onClick={() => finalize.mutate()}
+              disabled={
+                !check ||
+                check.status === "pending" ||
+                finalize.isPending ||
+                Boolean(check.finalizedAt)
+              }
+              className="h-9 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
+            >
+              {finalize.isPending ? "Finalizing..." : "Finalize Court check"}
+            </button>
+          </div>
+          {check ? <CourtReceipt check={check} /> : null}
+        </>
+      ) : (
+        <>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            Existing scoped receipts remain readable. New Court operations, changes, finalization,
+            and private evidence uploads require a linked canonical Candidate.
+          </div>
+          {check ? <CourtReceipt check={check} /> : null}
+        </>
+      )}
     </div>
   );
 }
@@ -415,7 +431,7 @@ function InPersonWorkspace({
 }: {
   organizationId: string;
   person: CompanyPersonItem;
-  candidateId: string;
+  candidateId?: string;
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
   const queryClient = useQueryClient();
@@ -437,8 +453,11 @@ function InPersonWorkspace({
   const [notes, setNotes] = useState("");
   const [evidence, setEvidence] = useState<EvidenceReceipt[]>([]);
   const mutation = useMutation({
-    mutationFn: () =>
-      adapter.recordInPerson(organizationId, person.id, {
+    mutationFn: () => {
+      if (!candidateId) {
+        throw new Error("Link a canonical Candidate before recording an in-person observation.");
+      }
+      return adapter.recordInPerson(organizationId, person.id, {
         verificationType,
         performedAt: new Date(performedAt).toISOString(),
         ...(personMet.trim() ? { personMet: personMet.trim() } : {}),
@@ -447,7 +466,8 @@ function InPersonWorkspace({
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         evidenceDocumentIds: evidence.map((item) => item.documentId),
         idempotencyKey,
-      }),
+      });
+    },
     onSuccess: async (resultReceipt) => {
       setSelectedReceiptId(resultReceipt.publicId);
       setIdempotencyKey(crypto.randomUUID());
@@ -526,59 +546,75 @@ function InPersonWorkspace({
           </p>
         ) : null}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1 text-xs font-medium">
-          Observation type
-          <select
-            value={verificationType}
-            onChange={(event) =>
-              setVerificationType(event.target.value as InPersonVerificationType)
-            }
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
-          >
-            <option value="identity_observation">Identity observed in person</option>
-            <option value="document_observation">Document observed in person</option>
-          </select>
-        </label>
-        <Input
-          label="Performed at *"
-          type="datetime-local"
-          value={performedAt}
-          onChange={setPerformedAt}
-        />
-        <Input label="Person met" value={personMet} onChange={setPersonMet} />
-        <Input label="Relationship" value={relationship} onChange={setRelationship} />
-        <label className="space-y-1 text-xs font-medium">
-          Result
-          <select
-            value={result}
-            onChange={(event) => setResult(event.target.value as InPersonVerificationResult)}
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
-          >
-            <option value="observed_consistent">Observed consistent</option>
-            <option value="discrepancy">Discrepancy</option>
-            <option value="unable_to_complete">Unable to complete</option>
-          </select>
-        </label>
-        <TextArea label="Notes" value={notes} onChange={setNotes} />
-      </div>
-      <EvidenceUploader candidateId={candidateId} evidence={evidence} onEvidence={setEvidence} />
-      <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        This records what was observed. It does not verify employment, education, identity, or a
-        document in any canonical verification state machine. It grants zero Permanent Address Check
-        1/2/3 credit.
-      </div>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => mutation.mutate()}
-          disabled={!performedAt || mutation.isPending}
-          className="h-9 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
-        >
-          {mutation.isPending ? "Recording..." : "Record in-person observation"}
-        </button>
-      </div>
-      {receipt ? <InPersonReceipt receipt={receipt} /> : null}
+      {candidateId ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs font-medium">
+              Observation type
+              <select
+                value={verificationType}
+                onChange={(event) =>
+                  setVerificationType(event.target.value as InPersonVerificationType)
+                }
+                className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
+              >
+                <option value="identity_observation">Identity observed in person</option>
+                <option value="document_observation">Document observed in person</option>
+              </select>
+            </label>
+            <Input
+              label="Performed at *"
+              type="datetime-local"
+              value={performedAt}
+              onChange={setPerformedAt}
+            />
+            <Input label="Person met" value={personMet} onChange={setPersonMet} />
+            <Input label="Relationship" value={relationship} onChange={setRelationship} />
+            <label className="space-y-1 text-xs font-medium">
+              Result
+              <select
+                value={result}
+                onChange={(event) => setResult(event.target.value as InPersonVerificationResult)}
+                className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
+              >
+                <option value="observed_consistent">Observed consistent</option>
+                <option value="discrepancy">Discrepancy</option>
+                <option value="unable_to_complete">Unable to complete</option>
+              </select>
+            </label>
+            <TextArea label="Notes" value={notes} onChange={setNotes} />
+          </div>
+          <EvidenceUploader
+            candidateId={candidateId}
+            evidence={evidence}
+            onEvidence={setEvidence}
+          />
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            This records what was observed. It does not verify employment, education, identity, or a
+            document in any canonical verification state machine. It grants zero Permanent Address
+            Check 1/2/3 credit.
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => mutation.mutate()}
+              disabled={!performedAt || mutation.isPending}
+              className="h-9 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
+            >
+              {mutation.isPending ? "Recording..." : "Record in-person observation"}
+            </button>
+          </div>
+          {receipt ? <InPersonReceipt receipt={receipt} /> : null}
+        </>
+      ) : (
+        <>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            Existing scoped receipts remain readable. New in-person observations and private
+            evidence uploads require a linked canonical Candidate.
+          </div>
+          {receipt ? <InPersonReceipt receipt={receipt} /> : null}
+        </>
+      )}
     </div>
   );
 }

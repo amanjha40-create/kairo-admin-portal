@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { appEnv, type AppEnvConfig } from "@/config/env";
 import {
   createAdminAuthenticatedApi,
@@ -210,6 +210,15 @@ export interface OrganizationProvisioningStatus {
   memberPresent: boolean;
   ownerMembershipPresent: boolean;
   firstHrInvitation?: FirstHrInvitationStatus;
+}
+
+export type FirstHrInvitationAction = "invite" | "resend" | "none";
+
+export function getFirstHrInvitationAction(
+  provisioning?: OrganizationProvisioningStatus,
+): FirstHrInvitationAction {
+  if (!provisioning || provisioning.memberPresent) return "none";
+  return provisioning.firstHrInvitation?.status === "pending" ? "resend" : "invite";
 }
 
 export interface AdminOperationsPage<T> {
@@ -1248,6 +1257,17 @@ export function organizationProvisioningQueryOptions(
   });
 }
 
+export async function rehydrateOrganizationProvisioning(
+  queryClient: QueryClient,
+  organizationId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  const query = organizationProvisioningQueryOptions(organizationId, config, options);
+  await queryClient.invalidateQueries({ queryKey: query.queryKey, refetchType: "none" });
+  return queryClient.fetchQuery(query);
+}
+
 export function courtReceiptsQueryOptions(
   organizationId: string,
   personId: string,
@@ -1286,6 +1306,23 @@ export function courtReceiptQueryOptions(
       ),
     retry: false,
   });
+}
+
+export async function refreshCourtReceiptCache(
+  queryClient: QueryClient,
+  organizationId: string,
+  personId: string,
+  checkId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  const listKey = adminOperationsKeys.courtList(organizationId, personId);
+  const detail = courtReceiptQueryOptions(organizationId, personId, checkId, config, options);
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: listKey }),
+    queryClient.invalidateQueries({ queryKey: detail.queryKey, refetchType: "none" }),
+  ]);
+  return queryClient.fetchQuery(detail);
 }
 
 export function inPersonReceiptsQueryOptions(
