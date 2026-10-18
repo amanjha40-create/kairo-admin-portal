@@ -62,7 +62,7 @@ export function CreateOrganizationDialog({
   });
   const provisioning = provisioningQuery.data;
   const invitation = provisioning?.firstHrInvitation;
-  const invitationAction = getFirstHrInvitationAction(provisioning);
+  const invitationAction = getFirstHrInvitationAction(provisioning, !provisioningQuery.isError);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -221,7 +221,17 @@ export function CreateOrganizationDialog({
               {provisioningQuery.isPending ? (
                 <p className="mt-1 text-xs">Loading canonical membership state...</p>
               ) : provisioningQuery.error ? (
-                <p className="mt-1 text-xs text-red-800">Canonical membership state unavailable.</p>
+                <div className="mt-1 text-xs text-red-800">
+                  <p>Canonical membership state unavailable. Invitation actions are disabled.</p>
+                  <button
+                    type="button"
+                    onClick={() => void provisioningQuery.refetch()}
+                    disabled={provisioningQuery.isFetching}
+                    className="mt-2 inline-flex h-8 items-center gap-1 rounded-md border border-red-300 px-2 font-medium disabled:opacity-50"
+                  >
+                    <RefreshCw className="size-3" /> Retry canonical status
+                  </button>
+                </div>
               ) : (
                 <>
                   <p className="mt-1 text-xs">
@@ -236,22 +246,26 @@ export function CreateOrganizationDialog({
 
             <div className="rounded-lg border border-border p-4">
               <h3 className="text-sm font-semibold">
-                {provisioning?.ownerMembershipPresent
-                  ? "First HR owner accepted / claimed"
-                  : provisioning?.memberPresent
-                    ? "First HR invitation unavailable"
-                    : invitationAction === "resend"
-                      ? "Recover first HR invitation"
-                      : invitation
-                        ? "Send new first HR invitation"
-                        : "Invite first HR owner"}
+                {provisioningQuery.isError
+                  ? "Canonical first-HR state unknown"
+                  : provisioning?.ownerMembershipPresent
+                    ? "First HR owner accepted / claimed"
+                    : provisioning?.memberPresent
+                      ? "First HR invitation unavailable"
+                      : invitationAction === "resend"
+                        ? "Recover first HR invitation"
+                        : invitation
+                          ? "Send new first HR invitation"
+                          : "Invite first HR owner"}
               </h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                {provisioning?.ownerMembershipPresent
-                  ? "Canonical owner membership is active. No further first-HR invitation is available."
-                  : provisioning?.memberPresent
-                    ? "The backend rejects first-HR invitations while any organization membership exists."
-                    : "The invitee accepts through the existing Team Invitation flow and chooses their own account password. The initial role is fixed to Owner."}
+                {provisioningQuery.isError
+                  ? "Retry canonical status before creating or recovering an invitation."
+                  : provisioning?.ownerMembershipPresent
+                    ? "Canonical owner membership is active. No further first-HR invitation is available."
+                    : provisioning?.memberPresent
+                      ? "The backend rejects first-HR invitations while any organization membership exists."
+                      : "The invitee accepts through the existing Team Invitation flow and chooses their own account password. The initial role is fixed to Owner."}
               </p>
               {invitationAction !== "none" ? (
                 <>

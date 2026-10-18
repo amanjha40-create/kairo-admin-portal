@@ -6,9 +6,14 @@ import { AUTH_TOKEN_KEY, type SessionStorageBag } from "@/features/admin/auth/se
 import {
   adminOperationsKeys,
   courtReceiptQueryOptions,
+  createAdminOperationsAdapter,
+  getCourtNullableFieldChanges,
   getFirstHrInvitationAction,
+  isAdminManagedEvidenceOwner,
   refreshCourtReceiptCache,
   rehydrateOrganizationProvisioning,
+  type CourtCheck,
+  type ManagedCandidate,
   type OrganizationProvisioningStatus,
 } from "./admin-operations";
 
@@ -84,6 +89,27 @@ function courtBody(overrides: Record<string, unknown> = {}) {
     created_at: "2026-10-18T08:00:00Z",
     updated_at: "2026-10-18T08:00:00Z",
     semantic_notice: "A no-match result is scoped and is not criminal clearance.",
+    ...overrides,
+  };
+}
+
+function courtCheck(overrides: Partial<CourtCheck> = {}): CourtCheck {
+  return {
+    publicId: COURT_ID,
+    organizationPublicId: ORGANIZATION_ID,
+    personPublicId: PERSON_ID,
+    status: "pending",
+    jurisdiction: "Bengaluru District Courts",
+    coverage: "Named public court indexes",
+    searchPeriod: "2016-2026",
+    source: "Named court index",
+    finding: "Old finding",
+    remarks: "Old remarks",
+    limitations: "Sealed and unavailable records are excluded.",
+    evidenceDocumentIds: [],
+    createdAt: "2026-10-18T08:00:00Z",
+    updatedAt: "2026-10-18T08:00:00Z",
+    semanticNotice: "A no-match result is scoped and is not criminal clearance.",
     ...overrides,
   };
 }
@@ -166,6 +192,55 @@ describe("Admin V1.1 final compatibility closure", () => {
     });
   });
 
+  it("cancels an obsolete in-flight Court detail before the canonical refresh wins", async () => {
+    let resolveOld: (value: Response) => void = () => undefined;
+    const delayedOldResponse = new Promise<Response>((resolve) => {
+      resolveOld = resolve;
+    });
+    const canonical = courtBody({
+      status: "no_match_found",
+      searched_at: "2026-10-18T08:05:00Z",
+      finding: null,
+      updated_at: "2026-10-18T08:06:00Z",
+    });
+    let oldSignal: AbortSignal | null = null;
+    const fetchImpl = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
+      if (fetchImpl.mock.calls.length === 1) {
+        oldSignal = init?.signal ?? null;
+        return delayedOldResponse;
+      }
+      return response(canonical);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const apiOptions = options(fetchImpl);
+    const detail = courtReceiptQueryOptions(
+      ORGANIZATION_ID,
+      PERSON_ID,
+      COURT_ID,
+      config(),
+      apiOptions,
+    );
+
+    const oldRequest = queryClient.fetchQuery(detail).catch((error) => error);
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    const refreshed = await refreshCourtReceiptCache(
+      queryClient,
+      ORGANIZATION_ID,
+      PERSON_ID,
+      COURT_ID,
+      config(),
+      apiOptions,
+    );
+
+    expect((oldSignal as AbortSignal | null)?.aborted).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(refreshed.status).toBe("no_match_found");
+    resolveOld(response(courtBody({ finding: "Obsolete response" })));
+    await oldRequest;
+    await Promise.resolve();
+    expect(queryClient.getQueryData(detail.queryKey)).toEqual(refreshed);
+  });
+
   it.each(["expired", "declined", "cancelled", "revoked"])(
     "uses a new invitation instead of invalid resend for stored terminal status %s",
     (status) => {
@@ -234,6 +309,135 @@ describe("Admin V1.1 final compatibility closure", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("fails closed when delivery recovery cannot read canonical state, then restores recovery after retry", async () => {
+    let attempt = 0;
+    const fetchImpl = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
+      expect(init?.method).toBeUndefined();
+      attempt += 1;
+      if (attempt === 1) return response({ detail: "temporarily unavailable" }, 503);
+      return response({
+        organization_public_id: ORGANIZATION_ID,
+        member_present: false,
+        owner_membership_present: false,
+        first_hr_invitation: {
+          invitation_public_id: INVITATION_ID,
+          invitee_email_masked: "ow***@example.com",
+          status: "pending",
+          effective_status: "delivery_failed",
+          expires_at: "2026-10-19T00:00:00Z",
+          last_sent_at: "2026-10-18T00:00:00Z",
+          delivery_failed_at: "2026-10-18T00:00:01Z",
+        },
+      });
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = adminOperationsKeys.provisioning(ORGANIZATION_ID);
+    queryClient.setQueryData(key, provisioning());
+
+    await expect(
+      rehydrateOrganizationProvisioning(queryClient, ORGANIZATION_ID, config(), options(fetchImpl)),
+    ).rejects.toBeDefined();
+    const failedQuery = queryClient.getQueryState(key);
+    expect(failedQuery?.status).toBe("error");
+    expect(
+      getFirstHrInvitationAction(
+        queryClient.getQueryData<OrganizationProvisioningStatus>(key),
+        failedQuery?.status !== "error",
+      ),
+    ).toBe("none");
+
+    const recovered = await rehydrateOrganizationProvisioning(
+      queryClient,
+      ORGANIZATION_ID,
+      config(),
+      options(fetchImpl),
+    );
+    expect(queryClient.getQueryState(key)?.status).toBe("success");
+    expect(getFirstHrInvitationAction(recovered)).toBe("resend");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows evidence upload only for the linked Admin-managed Candidate", () => {
+    const managed: ManagedCandidate = {
+      candidateId: "55555555-5555-4555-8555-555555555555",
+      emailMasked: "ca***@example.com",
+      claimStatus: "admin_created_unclaimed",
+      passwordConfigured: false,
+      emailVerified: false,
+      phoneVerified: false,
+      createdAt: "2026-10-18T08:00:00Z",
+    };
+
+    expect(isAdminManagedEvidenceOwner()).toBe(false);
+    expect(isAdminManagedEvidenceOwner(managed.candidateId)).toBe(false);
+    expect(isAdminManagedEvidenceOwner("66666666-6666-4666-8666-666666666666", managed)).toBe(
+      false,
+    );
+    expect(isAdminManagedEvidenceOwner(managed.candidateId, managed)).toBe(true);
+  });
+
+  it("serializes cleared nullable Court fields as null and omits unchanged values", async () => {
+    const current = courtCheck();
+    expect(
+      getCourtNullableFieldChanges(current, {
+        searchedAt: "",
+        searchPeriod: "2016-2026",
+        finding: "Old finding",
+        remarks: "Old remarks",
+      }),
+    ).toEqual({});
+    expect(
+      getCourtNullableFieldChanges(current, {
+        searchedAt: "",
+        searchPeriod: "",
+        finding: "",
+        remarks: "",
+      }),
+    ).toEqual({ searchPeriod: null, finding: null, remarks: null });
+    expect(
+      getCourtNullableFieldChanges(current, {
+        searchedAt: "",
+        searchPeriod: "2020-2026",
+        finding: "Updated finding",
+        remarks: "Updated remarks",
+      }),
+    ).toEqual({
+      searchPeriod: "2020-2026",
+      finding: "Updated finding",
+      remarks: "Updated remarks",
+    });
+
+    let canonical = courtBody({
+      search_period: "2016-2026",
+      finding: "Old finding",
+      remarks: "Old remarks",
+    });
+    let patchPayload: Record<string, unknown> = {};
+    const fetchImpl = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        patchPayload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        canonical = { ...canonical, ...patchPayload, updated_at: "2026-10-18T08:10:00Z" };
+      }
+      return response(canonical);
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+    const changes = getCourtNullableFieldChanges(current, {
+      searchedAt: "",
+      searchPeriod: "",
+      finding: "",
+      remarks: "",
+    });
+
+    await adapter.updateCourtCheck(ORGANIZATION_ID, PERSON_ID, COURT_ID, changes);
+    const witness = await adapter.getCourtCheck(ORGANIZATION_ID, PERSON_ID, COURT_ID);
+    expect(patchPayload).toEqual({ search_period: null, finding: null, remarks: null });
+    expect(witness).toMatchObject({
+      searchPeriod: undefined,
+      finding: undefined,
+      remarks: undefined,
+    });
+  });
+
   it("keeps unlinked receipt reads visible while guarding every linked-Candidate write path", () => {
     const operations = readFileSync(
       new URL("../components/person-verification-operations-dialog.tsx", import.meta.url),
@@ -249,6 +453,12 @@ describe("Admin V1.1 final compatibility closure", () => {
     expect(operations).toContain(
       "Link a canonical Candidate before recording an in-person observation.",
     );
+    expect(operations.match(/managedCandidateQueryOptions/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(
+      operations.match(
+        /Evidence upload is unavailable because this linked Candidate is not Admin-managed/g,
+      ),
+    ).toHaveLength(2);
     expect(operations).toContain("{candidateId ? (");
   });
 
@@ -269,6 +479,8 @@ describe("Admin V1.1 final compatibility closure", () => {
       expect(source).toContain("Recover first HR invitation");
       expect(source).toContain("ownerMembershipPresent");
       expect(source).toContain("memberPresent");
+      expect(source).toContain("Retry canonical status");
+      expect(source).toContain("!provisioningQuery.isError");
     }
     expect(panel).toContain(
       "The backend rejects first-HR invitations while any organization membership exists.",

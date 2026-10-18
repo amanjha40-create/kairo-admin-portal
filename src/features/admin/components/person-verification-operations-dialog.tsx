@@ -16,12 +16,17 @@ import {
   courtReceiptQueryOptions,
   courtReceiptsQueryOptions,
   createAdminOperationsAdapter,
+  getCourtNullableFieldChanges,
   inPersonReceiptQueryOptions,
   inPersonReceiptsQueryOptions,
+  isAdminManagedEvidenceOwner,
+  managedCandidateQueryOptions,
   refreshCourtReceiptCache,
   validateEvidenceFile,
   type CourtCheck,
+  type CourtCheckInput,
   type CourtCheckStatus,
+  type CourtCheckUpdateInput,
   type EvidenceReceipt,
   type InPersonVerificationReceipt,
   type InPersonVerificationResult,
@@ -117,6 +122,11 @@ function CourtWorkspace({
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
   const queryClient = useQueryClient();
+  const managedCandidateQuery = useQuery({
+    ...managedCandidateQueryOptions(candidateId ?? ""),
+    enabled: Boolean(candidateId),
+  });
+  const canUploadEvidence = isAdminManagedEvidenceOwner(candidateId, managedCandidateQuery.data);
   const receiptsQuery = useQuery(courtReceiptsQueryOptions(organizationId, person.id));
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>();
   const canonicalCourtId =
@@ -168,7 +178,28 @@ function CourtWorkspace({
   const save = useMutation({
     mutationFn: async () => {
       if (!candidateId) throw new Error("Link a canonical Candidate before writing Court data.");
-      const input = {
+      const evidenceDocumentIds = [
+        ...existingEvidenceIds,
+        ...evidence.map((item) => item.documentId),
+      ];
+      if (check) {
+        const input: CourtCheckUpdateInput = {
+          status,
+          jurisdiction: jurisdiction.trim(),
+          coverage: coverage.trim(),
+          source: source.trim(),
+          limitations: limitations.trim(),
+          evidenceDocumentIds,
+          ...getCourtNullableFieldChanges(check, {
+            searchedAt,
+            searchPeriod,
+            finding,
+            remarks,
+          }),
+        };
+        return adapter.updateCourtCheck(organizationId, person.id, check.publicId, input);
+      }
+      const input: CourtCheckInput = {
         status,
         ...(searchedAt ? { searchedAt: new Date(searchedAt).toISOString() } : {}),
         jurisdiction: jurisdiction.trim(),
@@ -178,12 +209,10 @@ function CourtWorkspace({
         ...(finding.trim() ? { finding: finding.trim() } : {}),
         ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
         limitations: limitations.trim(),
-        evidenceDocumentIds: [...existingEvidenceIds, ...evidence.map((item) => item.documentId)],
+        evidenceDocumentIds,
         idempotencyKey,
       };
-      return check
-        ? adapter.updateCourtCheck(organizationId, person.id, check.publicId, input)
-        : adapter.createCourtCheck(organizationId, person.id, input);
+      return adapter.createCourtCheck(organizationId, person.id, input);
     },
     onSuccess: async (result) => {
       setSelectedCourtId(result.publicId);
@@ -360,12 +389,18 @@ function CourtWorkspace({
               />
             </div>
           </div>
-          <EvidenceUploader
-            candidateId={candidateId}
-            evidence={evidence}
-            onEvidence={setEvidence}
-            disabled={Boolean(check?.finalizedAt)}
-          />
+          {managedCandidateQuery.isPending ? (
+            <EvidenceEligibilityNotice message="Checking Admin-managed Candidate ownership..." />
+          ) : canUploadEvidence ? (
+            <EvidenceUploader
+              candidateId={candidateId}
+              evidence={evidence}
+              onEvidence={setEvidence}
+              disabled={Boolean(check?.finalizedAt)}
+            />
+          ) : (
+            <EvidenceEligibilityNotice message="Evidence upload is unavailable because this linked Candidate is not Admin-managed." />
+          )}
           {existingEvidenceIds.length ? (
             <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
               Persisted private evidence: {existingEvidenceIds.length} document
@@ -435,6 +470,11 @@ function InPersonWorkspace({
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
   const queryClient = useQueryClient();
+  const managedCandidateQuery = useQuery({
+    ...managedCandidateQueryOptions(candidateId ?? ""),
+    enabled: Boolean(candidateId),
+  });
+  const canUploadEvidence = isAdminManagedEvidenceOwner(candidateId, managedCandidateQuery.data);
   const receiptsQuery = useQuery(inPersonReceiptsQueryOptions(organizationId, person.id));
   const [selectedReceiptId, setSelectedReceiptId] = useState<string>();
   const canonicalReceiptId = selectedReceiptId ?? receiptsQuery.data?.items.at(0)?.publicId;
@@ -584,11 +624,17 @@ function InPersonWorkspace({
             </label>
             <TextArea label="Notes" value={notes} onChange={setNotes} />
           </div>
-          <EvidenceUploader
-            candidateId={candidateId}
-            evidence={evidence}
-            onEvidence={setEvidence}
-          />
+          {managedCandidateQuery.isPending ? (
+            <EvidenceEligibilityNotice message="Checking Admin-managed Candidate ownership..." />
+          ) : canUploadEvidence ? (
+            <EvidenceUploader
+              candidateId={candidateId}
+              evidence={evidence}
+              onEvidence={setEvidence}
+            />
+          ) : (
+            <EvidenceEligibilityNotice message="Evidence upload is unavailable because this linked Candidate is not Admin-managed." />
+          )}
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             This records what was observed. It does not verify employment, education, identity, or a
             document in any canonical verification state machine. It grants zero Permanent Address
@@ -859,6 +905,14 @@ function EvidenceReference({ evidenceId }: { evidenceId?: string }) {
     <p className="mt-2 text-[11px] text-muted-foreground">
       Private evidence linked · {evidenceId.slice(0, 8)}
     </p>
+  );
+}
+
+function EvidenceEligibilityNotice({ message }: { message: string }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      {message}
+    </div>
   );
 }
 

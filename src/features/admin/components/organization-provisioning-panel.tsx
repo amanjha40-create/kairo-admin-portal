@@ -27,7 +27,7 @@ export function OrganizationProvisioningPanel({ company }: { company: CompanyDet
   });
   const provisioning = provisioningQuery.data;
   const invitation = provisioning?.firstHrInvitation;
-  const invitationAction = getFirstHrInvitationAction(provisioning);
+  const invitationAction = getFirstHrInvitationAction(provisioning, !provisioningQuery.isError);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -79,6 +79,14 @@ export function OrganizationProvisioningPanel({ company }: { company: CompanyDet
               "The canonical first-HR state could not be loaded.",
             )}
           </p>
+          <button
+            type="button"
+            onClick={() => void provisioningQuery.refetch()}
+            disabled={provisioningQuery.isFetching}
+            className="mt-2 inline-flex h-8 items-center gap-1 rounded-md border border-red-300 px-2 font-medium disabled:opacity-50"
+          >
+            <RefreshCw className="size-3" /> Retry canonical status
+          </button>
         </div>
       ) : (
         <div className="space-y-3">

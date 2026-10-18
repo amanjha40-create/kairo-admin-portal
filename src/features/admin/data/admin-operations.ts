@@ -216,9 +216,17 @@ export type FirstHrInvitationAction = "invite" | "resend" | "none";
 
 export function getFirstHrInvitationAction(
   provisioning?: OrganizationProvisioningStatus,
+  canonicalStateKnown = true,
 ): FirstHrInvitationAction {
-  if (!provisioning || provisioning.memberPresent) return "none";
+  if (!canonicalStateKnown || !provisioning || provisioning.memberPresent) return "none";
   return provisioning.firstHrInvitation?.status === "pending" ? "resend" : "invite";
+}
+
+export function isAdminManagedEvidenceOwner(
+  linkedCandidateId?: string,
+  managedCandidate?: ManagedCandidate,
+) {
+  return Boolean(linkedCandidateId && managedCandidate?.candidateId === linkedCandidateId);
 }
 
 export interface AdminOperationsPage<T> {
@@ -270,6 +278,40 @@ export interface CourtCheck {
   createdAt: string;
   updatedAt: string;
   semanticNotice: string;
+}
+
+export interface CourtCheckUpdateInput extends Partial<
+  Omit<CourtCheckInput, "idempotencyKey" | "searchedAt" | "searchPeriod" | "finding" | "remarks">
+> {
+  searchedAt?: string | null;
+  searchPeriod?: string | null;
+  finding?: string | null;
+  remarks?: string | null;
+}
+
+export function getCourtNullableFieldChanges(
+  current: CourtCheck,
+  draft: {
+    searchedAt: string;
+    searchPeriod: string;
+    finding: string;
+    remarks: string;
+  },
+): Pick<CourtCheckUpdateInput, "searchedAt" | "searchPeriod" | "finding" | "remarks"> {
+  const changes: Pick<
+    CourtCheckUpdateInput,
+    "searchedAt" | "searchPeriod" | "finding" | "remarks"
+  > = {};
+  const nextSearchedAt = draft.searchedAt ? new Date(draft.searchedAt).toISOString() : null;
+  const currentSearchedAt = current.searchedAt ? new Date(current.searchedAt).toISOString() : null;
+  if (nextSearchedAt !== currentSearchedAt) changes.searchedAt = nextSearchedAt;
+
+  for (const key of ["searchPeriod", "finding", "remarks"] as const) {
+    const next = draft[key].trim() || null;
+    const previous = current[key]?.trim() || null;
+    if (next !== previous) changes[key] = next;
+  }
+  return changes;
 }
 
 export interface InPersonVerificationInput {
@@ -716,7 +758,12 @@ export interface AdminOperationsAdapter {
     page?: number,
     pageSize?: number,
   ) => Promise<AdminOperationsPage<CourtCheck>>;
-  getCourtCheck: (organizationId: string, personId: string, checkId: string) => Promise<CourtCheck>;
+  getCourtCheck: (
+    organizationId: string,
+    personId: string,
+    checkId: string,
+    signal?: AbortSignal,
+  ) => Promise<CourtCheck>;
   createCourtCheck: (
     organizationId: string,
     personId: string,
@@ -726,7 +773,7 @@ export interface AdminOperationsAdapter {
     organizationId: string,
     personId: string,
     checkId: string,
-    input: Partial<Omit<CourtCheckInput, "idempotencyKey">>,
+    input: CourtCheckUpdateInput,
   ) => Promise<CourtCheck>;
   finalizeCourtCheck: (
     organizationId: string,
@@ -1155,10 +1202,11 @@ export function createAdminOperationsAdapter(
       );
       return mapOperationsPage(response, mapCourt);
     },
-    async getCourtCheck(organizationId, personId, checkId) {
+    async getCourtCheck(organizationId, personId, checkId, signal) {
       return mapCourt(
         await api.request<BackendCourtCheck>(
           `${organizationPersonPath(organizationId, personId)}/court-checks/${encodeURIComponent(checkId)}`,
+          { signal },
         ),
       );
     },
@@ -1298,11 +1346,12 @@ export function courtReceiptQueryOptions(
 ) {
   return queryOptions({
     queryKey: adminOperationsKeys.courtDetail(organizationId, personId, checkId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       createAdminOperationsAdapter(config, options).getCourtCheck(
         organizationId,
         personId,
         checkId,
+        signal,
       ),
     retry: false,
   });
@@ -1318,6 +1367,7 @@ export async function refreshCourtReceiptCache(
 ) {
   const listKey = adminOperationsKeys.courtList(organizationId, personId);
   const detail = courtReceiptQueryOptions(organizationId, personId, checkId, config, options);
+  await queryClient.cancelQueries({ queryKey: detail.queryKey, exact: true });
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: listKey }),
     queryClient.invalidateQueries({ queryKey: detail.queryKey, refetchType: "none" }),
@@ -1691,8 +1741,14 @@ function toSnakeCourt(input: Partial<CourtCheckInput>) {
   };
 }
 
-function toSnakeCourtUpdate(input: Partial<Omit<CourtCheckInput, "idempotencyKey">>) {
-  const { idempotency_key: _ignored, ...body } = toSnakeCourt(input);
+function toSnakeCourtUpdate(input: CourtCheckUpdateInput) {
+  const { searchedAt, searchPeriod, finding, remarks, ...nonNullable } = input;
+  const { idempotency_key: _ignored, ...serialized } = toSnakeCourt(nonNullable);
+  const body: Record<string, unknown> = serialized;
+  if ("searchedAt" in input) body.searched_at = searchedAt ?? null;
+  if ("searchPeriod" in input) body.search_period = searchPeriod ?? null;
+  if ("finding" in input) body.finding = finding ?? null;
+  if ("remarks" in input) body.remarks = remarks ?? null;
   return body;
 }
 
