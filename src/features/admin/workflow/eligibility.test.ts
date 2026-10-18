@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { VerificationStatus } from "../data/types";
 import { evaluateWorkflowEligibility, buildWorkflowCaseState } from "./eligibility";
 import { permissionsForRole } from "./permissions";
+import { directConfirmationSchema } from "./schemas";
 
 function createDetail(
   status: VerificationStatus,
@@ -109,8 +110,21 @@ describe("verification workflow eligibility", () => {
     expect(returnToVerifier.irrelevant).toBe(true);
   });
 
-  it.each(["pending_admin_review", "in_progress", "pending_admin_quality_review"] as const)(
-    "allows privileged direct confirmation from %s",
+  it("allows privileged direct confirmation during final quality review", () => {
+    const detail = createDetail("pending_admin_quality_review");
+
+    expect(
+      evaluateWorkflowEligibility(
+        detail,
+        "direct_confirmation",
+        adminActor,
+        buildWorkflowCaseState(detail),
+      ),
+    ).toMatchObject({ allowed: true, irrelevant: false, nextStatusOnSuccess: "verified" });
+  });
+
+  it.each(["pending_admin_review", "pending_admin_re_review", "in_progress"] as const)(
+    "does not offer direct confirmation from backend-ineligible state %s",
     (status) => {
       const detail = createDetail(status);
 
@@ -121,9 +135,43 @@ describe("verification workflow eligibility", () => {
           adminActor,
           buildWorkflowCaseState(detail),
         ),
-      ).toMatchObject({ allowed: true, irrelevant: false, nextStatusOnSuccess: "verified" });
+      ).toMatchObject({ allowed: false, irrelevant: true });
     },
   );
+
+  it("blocks direct confirmation until all applicable evidence is reviewed", () => {
+    const detail = createDetail("pending_admin_quality_review", {
+      evidence: [
+        { id: "evidence-1", reviewStatus: "reviewed", reviewed: true, reviewApplicable: true },
+        { id: "evidence-2", reviewStatus: "reviewed", reviewed: false, reviewApplicable: true },
+      ],
+    });
+
+    expect(
+      evaluateWorkflowEligibility(
+        detail,
+        "direct_confirmation",
+        adminActor,
+        buildWorkflowCaseState(detail),
+      ),
+    ).toMatchObject({
+      allowed: false,
+      blockingReasons: ["Evidence review incomplete: 1/2 applicable items reviewed."],
+    });
+  });
+
+  it("accepts in-person as a canonical direct-confirmation method", () => {
+    expect(
+      directConfirmationSchema.safeParse({
+        confirmationMethod: "in_person",
+        confirmedBy: "Authorized source representative",
+        verifierRole: "Records officer",
+        contactDetailUsed: "In-person meeting at the issuing office",
+        confirmationOutcome: "details_confirmed",
+        internalNote: "Reviewed the applicable case evidence during the in-person confirmation.",
+      }).success,
+    ).toBe(true);
+  });
 
   it("blocks direct confirmation for unauthorized and terminal cases", () => {
     const reviewer = {
@@ -132,7 +180,7 @@ describe("verification workflow eligibility", () => {
       roleKey: "read_only" as const,
       permissions: permissionsForRole("read_only"),
     };
-    const active = createDetail("pending_admin_review");
+    const active = createDetail("pending_admin_quality_review");
     const terminal = createDetail("verified");
 
     expect(
@@ -298,18 +346,7 @@ describe("verification workflow eligibility", () => {
       "request_correction",
       ["pending_admin_review", "pending_admin_re_review", "pending_admin_quality_review"],
     ],
-    [
-      "direct_confirmation",
-      [
-        "pending_admin_review",
-        "pending_admin_re_review",
-        "approved_for_organization_verification",
-        "pending_organization_resolution",
-        "pending_organization_acceptance",
-        "in_progress",
-        "pending_admin_quality_review",
-      ],
-    ],
+    ["direct_confirmation", ["pending_admin_quality_review"]],
     ["reject", ["pending_admin_review", "pending_admin_re_review", "pending_admin_quality_review"]],
   ] as const)("matches backend state eligibility for %s", (action, allowedStatuses) => {
     const allowedStatusSet = new Set<VerificationStatus>(allowedStatuses);

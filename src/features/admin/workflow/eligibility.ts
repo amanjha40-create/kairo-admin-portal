@@ -40,15 +40,7 @@ export const TRANSITION_RULES: WorkflowTransitionRule[] = [
   },
   {
     action: "direct_confirmation",
-    fromStatuses: [
-      "pending_admin_review",
-      "pending_admin_re_review",
-      "approved_for_organization_verification",
-      "pending_organization_resolution",
-      "pending_organization_acceptance",
-      "in_progress",
-      "pending_admin_quality_review",
-    ],
+    fromStatuses: ["pending_admin_quality_review"],
     toStatus: "verified",
     requiredPermission: "verification.verify",
   },
