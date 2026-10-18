@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Building2, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -12,8 +12,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  adminOperationsKeys,
   createAdminOperationsAdapter,
-  type FirstHrInvitation,
+  organizationProvisioningQueryOptions,
   type OrganizationProvisioningResult,
 } from "@/features/admin/data/admin-operations";
 import { company360Keys } from "@/features/admin/data/organizations";
@@ -52,8 +53,13 @@ export function CreateOrganizationDialog({
   const [organization, setOrganization] = useState<OrganizationProvisioningResult | null>(null);
   const [hrName, setHrName] = useState("");
   const [hrEmail, setHrEmail] = useState("");
-  const [invitation, setInvitation] = useState<FirstHrInvitation | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const organizationId = organization?.organizationPublicId ?? "";
+  const provisioningQuery = useQuery({
+    ...organizationProvisioningQueryOptions(organizationId),
+    enabled: Boolean(organizationId),
+  });
+  const invitation = provisioningQuery.data?.firstHrInvitation;
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -89,9 +95,14 @@ export function CreateOrganizationDialog({
           )
         : adapter.inviteFirstHr(organization.organizationPublicId, input);
     },
-    onSuccess: async (result) => {
-      setInvitation(result);
-      await queryClient.invalidateQueries({ queryKey: company360Keys.all() });
+    onSuccess: async () => {
+      if (!organization) return;
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: adminOperationsKeys.provisioning(organization.organizationPublicId),
+        }),
+        queryClient.invalidateQueries({ queryKey: company360Keys.all() }),
+      ]);
       toast.success("First HR owner invitation queued");
     },
     onError: (error) =>
@@ -110,7 +121,6 @@ export function CreateOrganizationDialog({
     setOrganization(null);
     setHrName("");
     setHrEmail("");
-    setInvitation(null);
     setIdempotencyKey(crypto.randomUUID());
     createMutation.reset();
     inviteMutation.reset();
@@ -209,35 +219,58 @@ export function CreateOrganizationDialog({
                   onChange={setHrEmail}
                   type="email"
                   required
-                  disabled={Boolean(invitation)}
                 />
               </div>
               <div className="mt-3 flex justify-end">
                 <button
                   type="button"
                   onClick={() => inviteMutation.mutate(Boolean(invitation))}
-                  disabled={!hrName.trim() || !hrEmail.trim() || inviteMutation.isPending}
+                  disabled={
+                    !hrName.trim() ||
+                    !hrEmail.trim() ||
+                    inviteMutation.isPending ||
+                    invitation?.effectiveStatus === "accepted"
+                  }
                   className="inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-xs font-medium text-background disabled:opacity-50"
                 >
                   {invitation ? <RefreshCw className="size-3.5" /> : <Mail className="size-3.5" />}
                   {inviteMutation.isPending
                     ? "Sending..."
-                    : invitation
-                      ? "Resend invitation"
-                      : "Send first HR invitation"}
+                    : invitation?.effectiveStatus === "accepted"
+                      ? "First HR claimed"
+                      : invitation
+                        ? "Resend invitation"
+                        : "Send first HR invitation"}
                 </button>
               </div>
               {invitation ? (
                 <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  <p className="font-medium">Activation {humanize(invitation.status)}</p>
+                  <p className="font-medium">Activation {humanize(invitation.effectiveStatus)}</p>
                   <p className="mt-1">Invitee: {invitation.inviteeEmailMasked}</p>
-                  <p>Expires: {new Date(invitation.expiresAt).toLocaleString()}</p>
+                  {invitation.expiresAt ? (
+                    <p>Expires: {new Date(invitation.expiresAt).toLocaleString()}</p>
+                  ) : null}
                   <p className="mt-1 text-[11px]">
-                    Delivery state is represented only by the backend invitation status; no token is
-                    displayed.
+                    This masked state is rehydrated from the backend. Resend still requires the
+                    intended HR name and full work email; no token is displayed.
                   </p>
                 </div>
-              ) : null}
+              ) : provisioningQuery.isPending ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Loading canonical first-HR status...
+                </p>
+              ) : provisioningQuery.error ? (
+                <p className="mt-3 text-xs text-red-700">
+                  {getOperationError(
+                    provisioningQuery.error,
+                    "The canonical first-HR status could not be loaded.",
+                  )}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No first-HR invitation is recorded yet.
+                </p>
+              )}
             </div>
 
             <DialogFooter>

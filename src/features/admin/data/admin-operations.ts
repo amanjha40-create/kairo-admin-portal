@@ -195,6 +195,31 @@ export interface FirstHrInvitation {
   acceptancePath: "/team-invitations/accept?token={opaque_token}";
 }
 
+export interface FirstHrInvitationStatus {
+  invitationPublicId: string;
+  inviteeEmailMasked: string;
+  status: string;
+  effectiveStatus: string;
+  expiresAt?: string;
+  lastSentAt?: string;
+  deliveryFailedAt?: string;
+}
+
+export interface OrganizationProvisioningStatus {
+  organizationPublicId: string;
+  memberPresent: boolean;
+  ownerMembershipPresent: boolean;
+  firstHrInvitation?: FirstHrInvitationStatus;
+}
+
+export interface AdminOperationsPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface EvidenceReceipt {
   documentId: string;
   originalFilename: string;
@@ -265,6 +290,123 @@ export interface InPersonVerificationReceipt {
   changesCanonicalVerificationStatus: false;
   permanentAddressCheckCredit: 0;
   createdAt: string;
+}
+
+export type VerificationReportStatus = "INTERIM" | "FINAL";
+export type VerificationReportCheckStatus =
+  | "CONFIRMED"
+  | "DETAILS_MATCHED"
+  | "DISCREPANCY"
+  | "PENDING"
+  | "AWAITING_RESPONSE"
+  | "UNABLE_TO_VERIFY"
+  | "REJECTED"
+  | "NOT_ORDERED";
+
+export interface AdminVerificationReport {
+  schemaVersion: "hr_verification_report_v1";
+  header: {
+    personName: string;
+    role?: string;
+    personId: string;
+    initiatedAt?: string;
+    requestedByOrganization: string;
+    maskedEmail?: string;
+    maskedPhone?: string;
+    consentAt?: string;
+    trustScore?: number;
+    reportUpdatedAt: string;
+    reportStatus: VerificationReportStatus;
+  };
+  checkSummaries: Array<{
+    check: string;
+    status: VerificationReportCheckStatus;
+    updatedAt?: string;
+    displayText: string;
+  }>;
+  identity: Array<{
+    declaredValues: Record<string, string | null>;
+    verifiedValues: Record<string, string | null>;
+    source?: string;
+    reviewedAt?: string;
+    evidenceId?: string;
+    status: VerificationReportCheckStatus;
+    remarks?: string;
+  }>;
+  employment: Array<{
+    organization: string;
+    maskedEmployeeId?: string;
+    declaredTitle?: string;
+    confirmedTitle?: string;
+    declaredStartDate?: string;
+    declaredEndDate?: string;
+    confirmedStartDate?: string;
+    confirmedEndDate?: string;
+    employmentType?: string;
+    confirmedBy?: string;
+    source?: string;
+    receivedAt?: string;
+    evidenceId?: string;
+    reviewer?: string;
+    remarks?: string;
+    status: VerificationReportCheckStatus;
+  }>;
+  education: Array<{
+    qualification?: string;
+    institution?: string;
+    university?: string;
+    completionYear?: number;
+    declaredValues: Record<string, string | null>;
+    confirmedValues: Record<string, string | null>;
+    source?: string;
+    confirmationDate?: string;
+    evidenceId?: string;
+    status: VerificationReportCheckStatus;
+  }>;
+  references: Array<{
+    name?: string;
+    titleOrRelationship?: string;
+    organization?: string;
+    knownFor?: string;
+    requestDate?: string;
+    followUpDates: string[];
+    responseDate?: string;
+    status: VerificationReportCheckStatus;
+    strengths?: string;
+    developmentAreas?: string;
+    rehireResponse?: string;
+    comments?: string;
+    evidenceId?: string;
+  }>;
+  address: Array<{
+    declaredAddress?: string;
+    verificationMethod?: string;
+    verifiedAt?: string;
+    status: VerificationReportCheckStatus;
+    scope?: string;
+    physicalVisitPerformed: boolean;
+    evidenceId?: string;
+  }>;
+  courtSearch: Array<{
+    safeSubjectDisplay?: string;
+    scope?: string;
+    searchPeriod?: string;
+    searchedAt?: string;
+    source?: string;
+    finding?: string;
+    evidenceId?: string;
+    reviewer?: string;
+    remarks?: string;
+    limitations?: string;
+    status: VerificationReportCheckStatus;
+  }>;
+  openItems: Array<{
+    code: string;
+    check: string;
+    displayText: string;
+    requestPublicId?: string;
+  }>;
+  hrReviewRequired: boolean;
 }
 
 interface BackendManagedCandidate {
@@ -344,6 +486,154 @@ interface BackendCourtCheck {
   semantic_notice: string;
 }
 
+interface BackendPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+interface BackendInPersonVerification {
+  public_id: string;
+  organization_public_id: string;
+  person_public_id: string;
+  verification_type: InPersonVerificationType;
+  method: "in_person";
+  performed_at: string;
+  performed_by_user_id: string;
+  person_met: string | null;
+  relationship: string | null;
+  result: InPersonVerificationResult;
+  notes: string | null;
+  evidence_document_ids: string[];
+  changes_canonical_verification_status: false;
+  permanent_address_check_credit: 0;
+  created_at: string;
+}
+
+interface BackendOrganizationProvisioningStatus {
+  organization_public_id: string;
+  member_present: boolean;
+  owner_membership_present: boolean;
+  first_hr_invitation: {
+    invitation_public_id: string;
+    invitee_email_masked: string;
+    status: string;
+    effective_status: string;
+    expires_at: string | null;
+    last_sent_at: string | null;
+    delivery_failed_at: string | null;
+  } | null;
+}
+
+interface BackendVerificationReport {
+  schema_version: "hr_verification_report_v1";
+  header: {
+    person_name: string;
+    role: string | null;
+    person_id: string;
+    initiated_at: string | null;
+    requested_by_organization: string;
+    masked_email: string | null;
+    masked_phone: string | null;
+    consent_at: string | null;
+    trust_score: number | null;
+    report_updated_at: string;
+    report_status: VerificationReportStatus;
+  };
+  check_summaries: Array<{
+    check: string;
+    status: VerificationReportCheckStatus;
+    updated_at: string | null;
+    display_text: string;
+  }>;
+  identity: Array<{
+    declared_values: Record<string, string | null>;
+    verified_values: Record<string, string | null>;
+    source: string | null;
+    reviewed_at: string | null;
+    evidence_id: string | null;
+    status: VerificationReportCheckStatus;
+    remarks: string | null;
+  }>;
+  employment: Array<{
+    organization: string;
+    masked_employee_id: string | null;
+    declared_title: string | null;
+    confirmed_title: string | null;
+    declared_start_date: string | null;
+    declared_end_date: string | null;
+    confirmed_start_date: string | null;
+    confirmed_end_date: string | null;
+    employment_type: string | null;
+    confirmed_by: string | null;
+    source: string | null;
+    received_at: string | null;
+    evidence_id: string | null;
+    reviewer: string | null;
+    remarks: string | null;
+    status: VerificationReportCheckStatus;
+  }>;
+  education: Array<{
+    qualification: string | null;
+    institution: string | null;
+    university: string | null;
+    completion_year: number | null;
+    declared_values: Record<string, string | null>;
+    confirmed_values: Record<string, string | null>;
+    source: string | null;
+    confirmation_date: string | null;
+    evidence_id: string | null;
+    status: VerificationReportCheckStatus;
+  }>;
+  references: Array<{
+    name: string | null;
+    title_or_relationship: string | null;
+    organization: string | null;
+    known_for: string | null;
+    request_date: string | null;
+    follow_up_dates: string[];
+    response_date: string | null;
+    status: VerificationReportCheckStatus;
+    strengths: string | null;
+    development_areas: string | null;
+    rehire_response: string | null;
+    comments: string | null;
+    evidence_id: string | null;
+  }>;
+  address: Array<{
+    declared_address: string | null;
+    verification_method: string | null;
+    verified_at: string | null;
+    status: VerificationReportCheckStatus;
+    scope: string | null;
+    physical_visit_performed: boolean;
+    evidence_id: string | null;
+  }>;
+  court_search: Array<{
+    safe_subject_display: string | null;
+    scope: string | null;
+    search_period: string | null;
+    searched_at: string | null;
+    source: string | null;
+    finding: string | null;
+    evidence_id: string | null;
+    reviewer: string | null;
+    remarks: string | null;
+    limitations: string | null;
+    status: VerificationReportCheckStatus;
+  }>;
+  open_items: Array<{
+    code: string;
+    check: string;
+    display_text: string;
+    request_public_id: string | null;
+  }>;
+  hr_review_required: boolean;
+  metadata?: Record<string, unknown>;
+}
+
 export interface AdminOperationsAdapter {
   createCandidate: (input: CreateCandidateInput) => Promise<ManagedCandidate>;
   getCandidate: (candidateId: string) => Promise<ManagedCandidate>;
@@ -409,7 +699,15 @@ export interface AdminOperationsAdapter {
     invitationId: string,
     input: { fullName: string; email: string },
   ) => Promise<FirstHrInvitation>;
+  getOrganizationProvisioning: (organizationId: string) => Promise<OrganizationProvisioningStatus>;
   uploadEvidence: (candidateId: string, file: File) => Promise<EvidenceReceipt>;
+  listCourtChecks: (
+    organizationId: string,
+    personId: string,
+    page?: number,
+    pageSize?: number,
+  ) => Promise<AdminOperationsPage<CourtCheck>>;
+  getCourtCheck: (organizationId: string, personId: string, checkId: string) => Promise<CourtCheck>;
   createCourtCheck: (
     organizationId: string,
     personId: string,
@@ -431,12 +729,62 @@ export interface AdminOperationsAdapter {
     personId: string,
     input: InPersonVerificationInput,
   ) => Promise<InPersonVerificationReceipt>;
+  listInPersonVerifications: (
+    organizationId: string,
+    personId: string,
+    page?: number,
+    pageSize?: number,
+  ) => Promise<AdminOperationsPage<InPersonVerificationReceipt>>;
+  getInPersonVerification: (
+    organizationId: string,
+    personId: string,
+    recordId: string,
+  ) => Promise<InPersonVerificationReceipt>;
+  getVerificationReport: (
+    organizationId: string,
+    personId: string,
+  ) => Promise<AdminVerificationReport>;
 }
 
 export const adminOperationsKeys = {
   all: () => ["admin", "operations-v1-1"] as const,
   candidate: (candidateId: string) =>
     [...adminOperationsKeys.all(), "candidate", candidateId] as const,
+  provisioning: (organizationId: string) =>
+    [...adminOperationsKeys.all(), "provisioning", organizationId] as const,
+  courtList: (organizationId: string, personId: string, page = 1, pageSize = 100) =>
+    [
+      ...adminOperationsKeys.all(),
+      "court",
+      organizationId,
+      personId,
+      "list",
+      page,
+      pageSize,
+    ] as const,
+  courtDetail: (organizationId: string, personId: string, checkId: string) =>
+    [...adminOperationsKeys.all(), "court", organizationId, personId, "detail", checkId] as const,
+  inPersonList: (organizationId: string, personId: string, page = 1, pageSize = 100) =>
+    [
+      ...adminOperationsKeys.all(),
+      "in-person",
+      organizationId,
+      personId,
+      "list",
+      page,
+      pageSize,
+    ] as const,
+  inPersonDetail: (organizationId: string, personId: string, recordId: string) =>
+    [
+      ...adminOperationsKeys.all(),
+      "in-person",
+      organizationId,
+      personId,
+      "detail",
+      recordId,
+    ] as const,
+  verificationReport: (organizationId: string, personId: string) =>
+    [...adminOperationsKeys.all(), "verification-report", organizationId, personId] as const,
 };
 
 export function createAdminOperationsAdapter(
@@ -748,6 +1096,13 @@ export function createAdminOperationsAdapter(
         ),
       );
     },
+    async getOrganizationProvisioning(organizationId) {
+      return mapOrganizationProvisioning(
+        await api.request<BackendOrganizationProvisioningStatus>(
+          `/api/v1/admin/operations/organizations/${encodeURIComponent(organizationId)}/provisioning`,
+        ),
+      );
+    },
     async uploadEvidence(candidateId, file) {
       const intent = await api.request<{
         document_id: string;
@@ -785,6 +1140,19 @@ export function createAdminOperationsAdapter(
         verificationStatus: response.verification_status,
       };
     },
+    async listCourtChecks(organizationId, personId, page = 1, pageSize = 100) {
+      const response = await api.request<BackendPage<BackendCourtCheck>>(
+        `${organizationPersonPath(organizationId, personId)}/court-checks?${pageQuery(page, pageSize)}`,
+      );
+      return mapOperationsPage(response, mapCourt);
+    },
+    async getCourtCheck(organizationId, personId, checkId) {
+      return mapCourt(
+        await api.request<BackendCourtCheck>(
+          `${organizationPersonPath(organizationId, personId)}/court-checks/${encodeURIComponent(checkId)}`,
+        ),
+      );
+    },
     async createCourtCheck(organizationId, personId, input) {
       return mapCourt(
         await api.request<BackendCourtCheck>(
@@ -812,53 +1180,45 @@ export function createAdminOperationsAdapter(
         ),
       );
     },
+    async listInPersonVerifications(organizationId, personId, page = 1, pageSize = 100) {
+      const response = await api.request<BackendPage<BackendInPersonVerification>>(
+        `${organizationPersonPath(organizationId, personId)}/in-person-verifications?${pageQuery(page, pageSize)}`,
+      );
+      return mapOperationsPage(response, mapInPerson);
+    },
+    async getInPersonVerification(organizationId, personId, recordId) {
+      return mapInPerson(
+        await api.request<BackendInPersonVerification>(
+          `${organizationPersonPath(organizationId, personId)}/in-person-verifications/${encodeURIComponent(recordId)}`,
+        ),
+      );
+    },
     async recordInPerson(organizationId, personId, input) {
-      const response = await api.request<{
-        public_id: string;
-        organization_public_id: string;
-        person_public_id: string;
-        verification_type: InPersonVerificationType;
-        method: "in_person";
-        performed_at: string;
-        performed_by_user_id: string;
-        person_met: string | null;
-        relationship: string | null;
-        result: InPersonVerificationResult;
-        notes: string | null;
-        evidence_document_ids: string[];
-        changes_canonical_verification_status: false;
-        permanent_address_check_credit: 0;
-        created_at: string;
-      }>(`${organizationPersonPath(organizationId, personId)}/in-person-verifications`, {
-        method: "POST",
-        body: {
-          verification_type: input.verificationType,
-          performed_at: input.performedAt,
-          ...(input.personMet ? { person_met: input.personMet } : {}),
-          ...(input.relationship ? { relationship: input.relationship } : {}),
-          result: input.result,
-          ...(input.notes ? { notes: input.notes } : {}),
-          evidence_document_ids: input.evidenceDocumentIds,
-          idempotency_key: input.idempotencyKey,
-        },
-      });
-      return {
-        publicId: response.public_id,
-        organizationPublicId: response.organization_public_id,
-        personPublicId: response.person_public_id,
-        verificationType: response.verification_type,
-        method: response.method,
-        performedAt: response.performed_at,
-        performedByUserId: response.performed_by_user_id,
-        personMet: response.person_met ?? undefined,
-        relationship: response.relationship ?? undefined,
-        result: response.result,
-        notes: response.notes ?? undefined,
-        evidenceDocumentIds: response.evidence_document_ids,
-        changesCanonicalVerificationStatus: response.changes_canonical_verification_status,
-        permanentAddressCheckCredit: response.permanent_address_check_credit,
-        createdAt: response.created_at,
-      };
+      return mapInPerson(
+        await api.request<BackendInPersonVerification>(
+          `${organizationPersonPath(organizationId, personId)}/in-person-verifications`,
+          {
+            method: "POST",
+            body: {
+              verification_type: input.verificationType,
+              performed_at: input.performedAt,
+              ...(input.personMet ? { person_met: input.personMet } : {}),
+              ...(input.relationship ? { relationship: input.relationship } : {}),
+              result: input.result,
+              ...(input.notes ? { notes: input.notes } : {}),
+              evidence_document_ids: input.evidenceDocumentIds,
+              idempotency_key: input.idempotencyKey,
+            },
+          },
+        ),
+      );
+    },
+    async getVerificationReport(organizationId, personId) {
+      return mapVerificationReport(
+        await api.request<BackendVerificationReport>(
+          `/api/v1/admin/organizations/${encodeURIComponent(organizationId)}/people/${encodeURIComponent(personId)}/verification-report`,
+        ),
+      );
     },
   };
 }
@@ -871,6 +1231,113 @@ export function managedCandidateQueryOptions(
   return queryOptions({
     queryKey: adminOperationsKeys.candidate(candidateId),
     queryFn: () => createAdminOperationsAdapter(config, options).getCandidate(candidateId),
+    retry: false,
+  });
+}
+
+export function organizationProvisioningQueryOptions(
+  organizationId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.provisioning(organizationId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).getOrganizationProvisioning(organizationId),
+    retry: false,
+  });
+}
+
+export function courtReceiptsQueryOptions(
+  organizationId: string,
+  personId: string,
+  page = 1,
+  pageSize = 100,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.courtList(organizationId, personId, page, pageSize),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).listCourtChecks(
+        organizationId,
+        personId,
+        page,
+        pageSize,
+      ),
+    retry: false,
+  });
+}
+
+export function courtReceiptQueryOptions(
+  organizationId: string,
+  personId: string,
+  checkId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.courtDetail(organizationId, personId, checkId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).getCourtCheck(
+        organizationId,
+        personId,
+        checkId,
+      ),
+    retry: false,
+  });
+}
+
+export function inPersonReceiptsQueryOptions(
+  organizationId: string,
+  personId: string,
+  page = 1,
+  pageSize = 100,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.inPersonList(organizationId, personId, page, pageSize),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).listInPersonVerifications(
+        organizationId,
+        personId,
+        page,
+        pageSize,
+      ),
+    retry: false,
+  });
+}
+
+export function inPersonReceiptQueryOptions(
+  organizationId: string,
+  personId: string,
+  recordId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.inPersonDetail(organizationId, personId, recordId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).getInPersonVerification(
+        organizationId,
+        personId,
+        recordId,
+      ),
+    retry: false,
+  });
+}
+
+export function adminVerificationReportQueryOptions(
+  organizationId: string,
+  personId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.verificationReport(organizationId, personId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).getVerificationReport(organizationId, personId),
     retry: false,
   });
 }
@@ -962,6 +1429,41 @@ function mapFirstHr(response: unknown): FirstHrInvitation {
   };
 }
 
+function mapOrganizationProvisioning(
+  response: BackendOrganizationProvisioningStatus,
+): OrganizationProvisioningStatus {
+  const invitation = response.first_hr_invitation;
+  return {
+    organizationPublicId: response.organization_public_id,
+    memberPresent: response.member_present,
+    ownerMembershipPresent: response.owner_membership_present,
+    firstHrInvitation: invitation
+      ? {
+          invitationPublicId: invitation.invitation_public_id,
+          inviteeEmailMasked: invitation.invitee_email_masked,
+          status: invitation.status,
+          effectiveStatus: invitation.effective_status,
+          expiresAt: invitation.expires_at ?? undefined,
+          lastSentAt: invitation.last_sent_at ?? undefined,
+          deliveryFailedAt: invitation.delivery_failed_at ?? undefined,
+        }
+      : undefined,
+  };
+}
+
+function mapOperationsPage<TBackend, TItem>(
+  response: BackendPage<TBackend>,
+  mapItem: (item: TBackend) => TItem,
+): AdminOperationsPage<TItem> {
+  return {
+    items: response.items.map(mapItem),
+    total: response.total,
+    page: response.page,
+    pageSize: response.page_size,
+    totalPages: response.total_pages,
+  };
+}
+
 function mapCourt(response: BackendCourtCheck): CourtCheck {
   return {
     publicId: response.public_id,
@@ -983,6 +1485,138 @@ function mapCourt(response: BackendCourtCheck): CourtCheck {
     updatedAt: response.updated_at,
     semanticNotice: response.semantic_notice,
   };
+}
+
+function mapInPerson(response: BackendInPersonVerification): InPersonVerificationReceipt {
+  return {
+    publicId: response.public_id,
+    organizationPublicId: response.organization_public_id,
+    personPublicId: response.person_public_id,
+    verificationType: response.verification_type,
+    method: response.method,
+    performedAt: response.performed_at,
+    performedByUserId: response.performed_by_user_id,
+    personMet: response.person_met ?? undefined,
+    relationship: response.relationship ?? undefined,
+    result: response.result,
+    notes: response.notes ?? undefined,
+    evidenceDocumentIds: response.evidence_document_ids,
+    changesCanonicalVerificationStatus: response.changes_canonical_verification_status,
+    permanentAddressCheckCredit: response.permanent_address_check_credit,
+    createdAt: response.created_at,
+  };
+}
+
+function mapVerificationReport(response: BackendVerificationReport): AdminVerificationReport {
+  return {
+    schemaVersion: response.schema_version,
+    header: {
+      personName: response.header.person_name,
+      role: response.header.role ?? undefined,
+      personId: response.header.person_id,
+      initiatedAt: response.header.initiated_at ?? undefined,
+      requestedByOrganization: response.header.requested_by_organization,
+      maskedEmail: response.header.masked_email ?? undefined,
+      maskedPhone: response.header.masked_phone ?? undefined,
+      consentAt: response.header.consent_at ?? undefined,
+      trustScore: response.header.trust_score ?? undefined,
+      reportUpdatedAt: response.header.report_updated_at,
+      reportStatus: response.header.report_status,
+    },
+    checkSummaries: response.check_summaries.map((item) => ({
+      check: item.check,
+      status: item.status,
+      updatedAt: item.updated_at ?? undefined,
+      displayText: item.display_text,
+    })),
+    identity: response.identity.map((item) => ({
+      declaredValues: item.declared_values,
+      verifiedValues: item.verified_values,
+      source: item.source ?? undefined,
+      reviewedAt: item.reviewed_at ?? undefined,
+      evidenceId: item.evidence_id ?? undefined,
+      status: item.status,
+      remarks: item.remarks ?? undefined,
+    })),
+    employment: response.employment.map((item) => ({
+      organization: item.organization,
+      maskedEmployeeId: item.masked_employee_id ?? undefined,
+      declaredTitle: item.declared_title ?? undefined,
+      confirmedTitle: item.confirmed_title ?? undefined,
+      declaredStartDate: item.declared_start_date ?? undefined,
+      declaredEndDate: item.declared_end_date ?? undefined,
+      confirmedStartDate: item.confirmed_start_date ?? undefined,
+      confirmedEndDate: item.confirmed_end_date ?? undefined,
+      employmentType: item.employment_type ?? undefined,
+      confirmedBy: item.confirmed_by ?? undefined,
+      source: item.source ?? undefined,
+      receivedAt: item.received_at ?? undefined,
+      evidenceId: item.evidence_id ?? undefined,
+      reviewer: item.reviewer ?? undefined,
+      remarks: item.remarks ?? undefined,
+      status: item.status,
+    })),
+    education: response.education.map((item) => ({
+      qualification: item.qualification ?? undefined,
+      institution: item.institution ?? undefined,
+      university: item.university ?? undefined,
+      completionYear: item.completion_year ?? undefined,
+      declaredValues: item.declared_values,
+      confirmedValues: item.confirmed_values,
+      source: item.source ?? undefined,
+      confirmationDate: item.confirmation_date ?? undefined,
+      evidenceId: item.evidence_id ?? undefined,
+      status: item.status,
+    })),
+    references: response.references.map((item) => ({
+      name: item.name ?? undefined,
+      titleOrRelationship: item.title_or_relationship ?? undefined,
+      organization: item.organization ?? undefined,
+      knownFor: item.known_for ?? undefined,
+      requestDate: item.request_date ?? undefined,
+      followUpDates: item.follow_up_dates,
+      responseDate: item.response_date ?? undefined,
+      status: item.status,
+      strengths: item.strengths ?? undefined,
+      developmentAreas: item.development_areas ?? undefined,
+      rehireResponse: item.rehire_response ?? undefined,
+      comments: item.comments ?? undefined,
+      evidenceId: item.evidence_id ?? undefined,
+    })),
+    address: response.address.map((item) => ({
+      declaredAddress: item.declared_address ?? undefined,
+      verificationMethod: item.verification_method ?? undefined,
+      verifiedAt: item.verified_at ?? undefined,
+      status: item.status,
+      scope: item.scope ?? undefined,
+      physicalVisitPerformed: item.physical_visit_performed,
+      evidenceId: item.evidence_id ?? undefined,
+    })),
+    courtSearch: response.court_search.map((item) => ({
+      safeSubjectDisplay: item.safe_subject_display ?? undefined,
+      scope: item.scope ?? undefined,
+      searchPeriod: item.search_period ?? undefined,
+      searchedAt: item.searched_at ?? undefined,
+      source: item.source ?? undefined,
+      finding: item.finding ?? undefined,
+      evidenceId: item.evidence_id ?? undefined,
+      reviewer: item.reviewer ?? undefined,
+      remarks: item.remarks ?? undefined,
+      limitations: item.limitations ?? undefined,
+      status: item.status,
+    })),
+    openItems: response.open_items.map((item) => ({
+      code: item.code,
+      check: item.check,
+      displayText: item.display_text,
+      requestPublicId: item.request_public_id ?? undefined,
+    })),
+    hrReviewRequired: response.hr_review_required,
+  };
+}
+
+function pageQuery(page: number, pageSize: number) {
+  return new URLSearchParams({ page: String(page), page_size: String(pageSize) }).toString();
 }
 
 function toSnakeProfile(input: ProfileMutationInput) {
