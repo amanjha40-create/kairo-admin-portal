@@ -40,12 +40,14 @@ describe("Admin Operations V1.1 UI safety", () => {
   it("exposes assisted operations without adding verification shortcuts", () => {
     const users = source("../../../routes/admin.users.index.tsx");
     const detail = source("../../../routes/admin.users.$userId.tsx");
-    const launcher = source("./candidate-verification-operations.tsx");
+    const actionBar = source("./candidate-detail-action-bar.tsx");
+    const launcher = source("./candidate-verification-operation-actions.tsx");
 
     expect(users).toContain("Create Candidate");
     expect(users).toContain("Edit Profile");
-    expect(detail).toContain("Upload / Review CV");
-    expect(detail).toContain("Verification Operations");
+    expect(detail).toContain("CandidateDetailActionBar");
+    expect(actionBar).toContain("Upload / Review CV");
+    expect(actionBar).toContain("Verification Operations");
     expect(launcher).toContain("Court / Criminal");
     expect(launcher).toContain("In-person");
     expect(launcher).toContain("Internal Report");

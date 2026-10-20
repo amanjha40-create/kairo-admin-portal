@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, MapPinCheck, ShieldAlert } from "lucide-react";
+import { useAdminAccess } from "@/features/admin/auth/admin-access";
+import { CandidateVerificationOperationActions } from "@/features/admin/components/candidate-verification-operation-actions";
 import {
   PersonVerificationOperationsDialog,
   type PersonVerificationOperationTab,
@@ -26,6 +27,8 @@ export function CandidateVerificationOperations({
   candidateName: string;
   organizations: CandidateOrganization[];
 }) {
+  const access = useAdminAccess();
+  const permissions = access.admin?.permissions ?? [];
   const [organizationId, setOrganizationId] = useState(organizations[0]?.id ?? "");
   const [initialTab, setInitialTab] = useState<PersonVerificationOperationTab>("court");
   const [open, setOpen] = useState(false);
@@ -99,26 +102,7 @@ export function CandidateVerificationOperations({
             description="This verification references an organization, but its linked person is not available in Company 360. No operation was inferred or created."
           />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <OperationButton
-              icon={<ShieldAlert className="size-4" />}
-              title="Court / Criminal"
-              description="Record a scoped Court-record check"
-              onClick={() => launch("court")}
-            />
-            <OperationButton
-              icon={<MapPinCheck className="size-4" />}
-              title="In-person"
-              description="Record an auditable observation"
-              onClick={() => launch("in-person")}
-            />
-            <OperationButton
-              icon={<FileText className="size-4" />}
-              title="Internal Report"
-              description="Read the authorized verification report"
-              onClick={() => launch("report")}
-            />
-          </div>
+          <CandidateVerificationOperationActions permissions={permissions} onLaunch={launch} />
         )}
       </WorkspaceSection>
 
@@ -130,31 +114,5 @@ export function CandidateVerificationOperations({
         initialTab={initialTab}
       />
     </div>
-  );
-}
-
-function OperationButton({
-  icon,
-  title,
-  description,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-lg border border-border bg-background p-3 text-left transition-colors hover:border-[#0FA8A5]/50 hover:bg-[#EAF8F6]/60"
-    >
-      <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
-        {icon}
-        {title}
-      </span>
-      <span className="mt-1 block text-[11px] text-muted-foreground">{description}</span>
-    </button>
   );
 }

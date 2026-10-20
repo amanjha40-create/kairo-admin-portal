@@ -1,16 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  KeyRound,
-  Mail,
-  Phone,
-  ShieldCheck,
-  ShieldMinus,
-  ShieldPlus,
-  ShieldX,
-} from "lucide-react";
+import { ArrowLeft, Mail, Phone, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -22,9 +13,11 @@ import {
 } from "@/components/ui/dialog";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { AssistedCandidateWorkspace } from "@/features/admin/components/assisted-candidate-workspace";
+import { CandidateDetailActionBar } from "@/features/admin/components/candidate-detail-action-bar";
 import { CandidateVerificationOperations } from "@/features/admin/components/candidate-verification-operations";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
+import { managedCandidateQueryOptions } from "@/features/admin/data/admin-operations";
 import {
   ADMIN_USER_ACCOUNT_STATUS_LABEL,
   createAdminUsersAdapter,
@@ -40,6 +33,10 @@ import {
   submitUserNoteMutation,
 } from "@/features/admin/lib/user-mutation-submit";
 import { buildTrustSafetyCreateHref } from "@/features/admin/lib/trust-safety";
+import {
+  getCandidateDetailCapabilities,
+  type ManagedCandidateState,
+} from "@/features/admin/workflow/candidate-detail-capabilities";
 import { hasPermission } from "@/features/admin/workflow/permissions";
 import { ApiError } from "@/lib/api/errors";
 
@@ -67,10 +64,16 @@ function UserDetailPage() {
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createAdminUsersAdapter(), []);
   const detailQuery = useQuery(userDetailQueryOptions(userId));
-  const canCreateRiskInvestigation = hasPermission(access.admin?.permissions ?? [], "risk.create");
+  const permissions = access.admin?.permissions ?? [];
+  const canReadManagedStatus = hasPermission(permissions, "create_person");
+  const managedCandidateQuery = useQuery({
+    ...managedCandidateQueryOptions(userId),
+    enabled: canReadManagedStatus,
+  });
   const [noteBody, setNoteBody] = useState("");
   const [dialog, setDialog] = useState<ActionDialogState>(null);
   const [reason, setReason] = useState("");
+  const accountActionInFlight = useRef(false);
 
   const refreshDetail = async () => {
     await queryClient.invalidateQueries({
@@ -168,6 +171,24 @@ function UserDetailPage() {
   }
 
   const activeSessions = user.sessions.filter((item) => item.status === "active");
+  const managedCandidateState: ManagedCandidateState = !canReadManagedStatus
+    ? "permission_denied"
+    : managedCandidateQuery.isPending
+      ? "checking"
+      : managedCandidateQuery.error instanceof ApiError &&
+          managedCandidateQuery.error.status === 404
+        ? "candidate_managed"
+        : managedCandidateQuery.error
+          ? "unavailable"
+          : managedCandidateQuery.data
+            ? "managed"
+            : "unavailable";
+  const capabilities = getCandidateDetailCapabilities({
+    permissions,
+    managedCandidateState,
+    accountCapabilities: user.capabilities,
+    activeSessionCount: activeSessions.length,
+  });
   const candidateOrganizations = Array.from(
     new Map(
       user.verifications
@@ -214,70 +235,14 @@ function UserDetailPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href="#assisted-profile"
-                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
-              >
-                Edit Profile
-              </a>
-              <a
-                href="#cv-review"
-                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
-              >
-                Upload / Review CV
-              </a>
-              <a
-                href="#account-activation"
-                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
-              >
-                Activation
-              </a>
-              <a
-                href="#verification-operations"
-                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
-              >
-                Verification Operations
-              </a>
-              {canCreateRiskInvestigation ? (
-                <a
-                  href={buildTrustSafetyCreateHref("user", user.id)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
-                >
-                  <ShieldCheck className="size-3.5" />
-                  Create investigation
-                </a>
-              ) : null}
-              {user.capabilities.sendPasswordReset ? (
-                <HeaderActionButton
-                  label="Send password reset"
-                  onClick={() => setDialog({ kind: "password-reset" })}
-                  icon={<KeyRound className="size-3.5" />}
-                />
-              ) : null}
-              {user.capabilities.revokeSessions && activeSessions.length > 0 ? (
-                <HeaderActionButton
-                  label="Revoke all sessions"
-                  onClick={() => setDialog({ kind: "revoke-all" })}
-                  icon={<ShieldX className="size-3.5" />}
-                />
-              ) : null}
-              {user.capabilities.suspend ? (
-                <HeaderActionButton
-                  label="Suspend account"
-                  onClick={() => setDialog({ kind: "suspend" })}
-                  icon={<ShieldMinus className="size-3.5" />}
-                  tone="warning"
-                />
-              ) : null}
-              {user.capabilities.restore ? (
-                <HeaderActionButton
-                  label="Restore account"
-                  onClick={() => setDialog({ kind: "restore" })}
-                  icon={<ShieldPlus className="size-3.5" />}
-                />
-              ) : null}
-            </div>
+            <CandidateDetailActionBar
+              capabilities={capabilities}
+              investigationHref={buildTrustSafetyCreateHref("user", user.id)}
+              onPasswordReset={() => setDialog({ kind: "password-reset" })}
+              onRevokeAllSessions={() => setDialog({ kind: "revoke-all" })}
+              onSuspend={() => setDialog({ kind: "suspend" })}
+              onRestore={() => setDialog({ kind: "restore" })}
+            />
           </div>
 
           {user.deletedAt ? (
@@ -654,37 +619,12 @@ function UserDetailPage() {
         reason={reason}
         onReasonChange={setReason}
         isSubmitting={actionMutation.isPending}
-        onConfirm={() => submitUserActionMutation(actionMutation)}
+        onConfirm={() => {
+          if (actionMutation.isPending) return;
+          submitUserActionMutation(actionMutation, accountActionInFlight);
+        }}
       />
     </>
-  );
-}
-
-function HeaderActionButton({
-  label,
-  onClick,
-  icon,
-  tone = "default",
-}: {
-  label: string;
-  onClick: () => void;
-  icon: React.ReactNode;
-  tone?: "default" | "warning";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        "inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium " +
-        (tone === "warning"
-          ? "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
-          : "border-border bg-background text-foreground hover:bg-accent")
-      }
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
 
@@ -746,6 +686,7 @@ function AccountActionDialog({
             type="button"
             onClick={onConfirm}
             disabled={isSubmitting || !canSubmit}
+            aria-busy={isSubmitting}
             className="inline-flex h-9 items-center justify-center rounded-md bg-[#0B2545] px-3 text-sm font-medium text-white hover:bg-[#0B2545]/92 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Working..." : copy.confirmLabel}

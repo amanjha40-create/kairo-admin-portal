@@ -49,7 +49,19 @@ export function AssistedCandidateWorkspace({
     enabled: canReadManagedStatus,
   });
 
-  if (!canReadManagedStatus && !canActivate && !canManageProfile) return null;
+  if (!canReadManagedStatus) {
+    return (
+      <WorkspaceSection
+        title="Assisted operations"
+        description="Admin-managed Candidate eligibility"
+      >
+        <EmptyState
+          title="Assisted operations access is restricted"
+          description="The create_person permission is required before managed-account eligibility can be checked. No assisted action is available."
+        />
+      </WorkspaceSection>
+    );
+  }
   if (candidateQuery.isPending) {
     return (
       <WorkspaceSection title="Assisted operations" description="Checking managed-account scope">

@@ -77,13 +77,32 @@ export function PersonVerificationOperationsDialog({
         {person ? (
           <>
             <div className="grid grid-cols-3 gap-1 rounded-md bg-muted/50 p-1">
-              <TabButton active={tab === "court"} onClick={() => setTab("court")}>
+              <TabButton
+                active={tab === "court"}
+                onClick={() => setTab("court")}
+                disabled={!canCourt}
+                title={!canCourt ? "The manage_court_check permission is required." : undefined}
+              >
                 <ShieldAlert className="size-4" /> Court-record check
               </TabButton>
-              <TabButton active={tab === "in-person"} onClick={() => setTab("in-person")}>
+              <TabButton
+                active={tab === "in-person"}
+                onClick={() => setTab("in-person")}
+                disabled={!canInPerson}
+                title={
+                  !canInPerson
+                    ? "The perform_in_person_verification permission is required."
+                    : undefined
+                }
+              >
                 <MapPinCheck className="size-4" /> In-person observation
               </TabButton>
-              <TabButton active={tab === "report"} onClick={() => setTab("report")}>
+              <TabButton
+                active={tab === "report"}
+                onClick={() => setTab("report")}
+                disabled={!canReport}
+                title={!canReport ? "The users.view permission is required." : undefined}
+              >
                 <FileText className="size-4" /> Verification report
               </TabButton>
             </div>
@@ -1041,17 +1060,23 @@ function InPersonReceipt({ receipt }: { receipt: InPersonVerificationReceipt }) 
 function TabButton({
   active,
   onClick,
+  disabled = false,
+  title,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  disabled?: boolean;
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex h-9 items-center justify-center gap-2 rounded text-xs font-medium ${active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex h-9 items-center justify-center gap-2 rounded text-xs font-medium disabled:cursor-not-allowed disabled:opacity-45 ${active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
     >
       {children}
     </button>
