@@ -3,14 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, FileText, LockKeyhole, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
+import { AssistedCareerEditor } from "@/features/admin/components/assisted-career-editor";
 import { EmptyState } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import {
   adminOperationsKeys,
   createAdminOperationsAdapter,
   managedCandidateQueryOptions,
-  type CareerClaimType,
   type ProfileMutationResult,
+  type ProfileMutationInput,
   type ResumeImportBatch,
   type ResumeImportAction,
   type ResumeParsedResult,
@@ -22,7 +23,21 @@ import { getOperationError } from "@/features/admin/lib/operation-error";
 import { hasPermission } from "@/features/admin/workflow/permissions";
 import { ApiError } from "@/lib/api/errors";
 
-export function AssistedCandidateWorkspace({ candidateId }: { candidateId: string }) {
+export interface AssistedProfileInitialValues {
+  fullName?: string;
+  phone?: string;
+  headline?: string;
+  currentRole?: string;
+  location?: string;
+}
+
+export function AssistedCandidateWorkspace({
+  candidateId,
+  initialProfile,
+}: {
+  candidateId: string;
+  initialProfile?: AssistedProfileInitialValues;
+}) {
   const access = useAdminAccess();
   const queryClient = useQueryClient();
   const permissions = access.admin?.permissions ?? [];
@@ -42,7 +57,19 @@ export function AssistedCandidateWorkspace({ candidateId }: { candidateId: strin
       </WorkspaceSection>
     );
   }
-  if (candidateQuery.error instanceof ApiError && candidateQuery.error.status === 404) return null;
+  if (candidateQuery.error instanceof ApiError && candidateQuery.error.status === 404) {
+    return (
+      <WorkspaceSection
+        title="Assisted profile"
+        description="This Candidate remains readable, but is not eligible for Admin-assisted mutation"
+      >
+        <EmptyState
+          title="Candidate-managed profile"
+          description="This account was not created through assisted onboarding. Profile mutation and activation controls remain unavailable; existing account and verification information is unchanged."
+        />
+      </WorkspaceSection>
+    );
+  }
   if (candidateQuery.error) {
     return (
       <WorkspaceSection title="Assisted operations" description="Managed Candidate status">
@@ -64,50 +91,60 @@ export function AssistedCandidateWorkspace({ candidateId }: { candidateId: strin
 
   return (
     <div className="space-y-4">
-      <WorkspaceSection
-        title="Account claim"
-        description="Admin-managed Candidate activation and truthful account state"
-      >
-        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-            <StatusField label="Claim state" value={claimStatusLabel(candidate.claimStatus)} />
-            <StatusField label="Contact" value={candidate.emailMasked} />
-            <StatusField
-              label="Password configured"
-              value={candidate.passwordConfigured ? "Yes" : "No"}
-            />
-            <StatusField
-              label="Activation expiry"
-              value={
-                candidate.activationExpiresAt
-                  ? formatDateTime(candidate.activationExpiresAt)
-                  : "Not sent"
-              }
-            />
+      <div id="account-activation" className="scroll-mt-20">
+        <WorkspaceSection
+          title="Account activation"
+          description="Admin-managed Candidate activation and truthful account state"
+        >
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+              <StatusField label="Claim state" value={claimStatusLabel(candidate.claimStatus)} />
+              <StatusField label="Contact" value={candidate.emailMasked} />
+              <StatusField
+                label="Password configured"
+                value={candidate.passwordConfigured ? "Yes" : "No"}
+              />
+              <StatusField
+                label="Activation expiry"
+                value={
+                  candidate.activationExpiresAt
+                    ? formatDateTime(candidate.activationExpiresAt)
+                    : "Not sent"
+                }
+              />
+            </div>
+            {canActivate ? (
+              <ActivationAction
+                candidateId={candidateId}
+                claimStatus={candidate.claimStatus}
+                resendAvailableAt={candidate.activationLastSentAt}
+                onComplete={refresh}
+              />
+            ) : (
+              <span className="text-xs text-muted-foreground">Activation permission required</span>
+            )}
           </div>
-          {canActivate ? (
-            <ActivationAction
-              candidateId={candidateId}
-              claimStatus={candidate.claimStatus}
-              resendAvailableAt={candidate.activationLastSentAt}
-              onComplete={refresh}
-            />
-          ) : (
-            <span className="text-xs text-muted-foreground">Activation permission required</span>
-          )}
-        </div>
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          <LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-[#0FA8A5]" />
-          Admin never sees or creates a password or activation token. The Candidate claims the
-          account through the single-use link and sets their own password.
-        </div>
-      </WorkspaceSection>
+          <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-[#0FA8A5]" />
+            Admin never sees or creates a password or activation token. The Candidate claims the
+            account through the single-use link and sets their own password.
+          </div>
+        </WorkspaceSection>
+      </div>
 
       {canManageProfile ? (
         <>
-          <ProfileEditor candidateId={candidateId} onComplete={refresh} />
-          <CareerEditor candidateId={candidateId} onComplete={refresh} />
-          <CvReviewWorkspace candidateId={candidateId} onComplete={refresh} />
+          <div id="assisted-profile" className="scroll-mt-20 space-y-4">
+            <ProfileEditor
+              candidateId={candidateId}
+              initialProfile={initialProfile}
+              onComplete={refresh}
+            />
+            <AssistedCareerEditor candidateId={candidateId} onComplete={refresh} />
+          </div>
+          <div id="cv-review" className="scroll-mt-20">
+            <CvReviewWorkspace candidateId={candidateId} onComplete={refresh} />
+          </div>
         </>
       ) : (
         <WorkspaceSection title="Assisted profile" description="Profile and CV operations">
@@ -173,27 +210,56 @@ function ActivationAction({
 
 function ProfileEditor({
   candidateId,
+  initialProfile,
   onComplete,
 }: {
   candidateId: string;
+  initialProfile?: AssistedProfileInitialValues;
   onComplete: () => Promise<void>;
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
-  const [headline, setHeadline] = useState("");
-  const [currentRole, setCurrentRole] = useState("");
-  const [location, setLocation] = useState("");
+  const [fullName, setFullName] = useState(initialProfile?.fullName ?? "");
+  const [phone, setPhone] = useState(initialProfile?.phone ?? "");
+  const [headline, setHeadline] = useState(initialProfile?.headline ?? "");
+  const [currentRole, setCurrentRole] = useState(initialProfile?.currentRole ?? "");
+  const [industry, setIndustry] = useState("");
+  const [yearsOfExperience, setYearsOfExperience] = useState("");
+  const [location, setLocation] = useState(initialProfile?.location ?? "");
+  const [locationCity, setLocationCity] = useState("");
+  const [locationRegion, setLocationRegion] = useState("");
+  const [locationCountry, setLocationCountry] = useState("");
   const [bio, setBio] = useState("");
-  const [source, setSource] = useState<"admin_entered" | "cv_extracted">("admin_entered");
   const [receipt, setReceipt] = useState<ProfileMutationResult | null>(null);
+  const profileInput = (): ProfileMutationInput => {
+    const input: ProfileMutationInput = { source: "admin_entered" };
+    const addOptionalChange = (
+      key: Exclude<keyof ProfileMutationInput, "fullName" | "yearsOfExperience" | "source">,
+      value: string,
+      initialValue = "",
+    ) => {
+      const next = value.trim();
+      if (next !== initialValue.trim()) input[key] = next || null;
+    };
+    const nextFullName = fullName.trim();
+    if (nextFullName && nextFullName !== (initialProfile?.fullName ?? "").trim()) {
+      input.fullName = nextFullName;
+    }
+    addOptionalChange("phone", phone, initialProfile?.phone);
+    addOptionalChange("headline", headline, initialProfile?.headline);
+    addOptionalChange("currentRole", currentRole, initialProfile?.currentRole);
+    addOptionalChange("industry", industry);
+    addOptionalChange("location", location, initialProfile?.location);
+    addOptionalChange("locationCity", locationCity);
+    addOptionalChange("locationRegion", locationRegion);
+    addOptionalChange("locationCountry", locationCountry.toUpperCase());
+    addOptionalChange("bio", bio);
+    if (yearsOfExperience.trim()) {
+      input.yearsOfExperience = Number.parseInt(yearsOfExperience, 10);
+    }
+    return input;
+  };
   const mutation = useMutation({
-    mutationFn: () =>
-      adapter.updateProfile(candidateId, {
-        ...(headline.trim() ? { headline: headline.trim() } : {}),
-        ...(currentRole.trim() ? { currentRole: currentRole.trim() } : {}),
-        ...(location.trim() ? { location: location.trim() } : {}),
-        ...(bio.trim() ? { bio: bio.trim() } : {}),
-        source,
-      }),
+    mutationFn: () => adapter.updateProfile(candidateId, profileInput()),
     onSuccess: async (result) => {
       setReceipt(result);
       toast.success("Profile changes recorded with provenance");
@@ -207,27 +273,32 @@ function ProfileEditor({
         ),
       ),
   });
-  const hasValue = [headline, currentRole, location, bio].some((value) => value.trim());
+  const hasValue = Object.keys(profileInput()).some((key) => key !== "source");
   return (
     <WorkspaceSection
       title="Assisted profile"
-      description="Allowed profile fields with append-only provenance"
+      description="Edit API42-supported profile fields with Admin-entered provenance"
     >
       <div className="grid gap-3 sm:grid-cols-2">
+        <SmallInput label="Full name" value={fullName} onChange={setFullName} />
+        <SmallInput label="Phone" value={phone} onChange={setPhone} />
         <SmallInput label="Headline" value={headline} onChange={setHeadline} />
         <SmallInput label="Current role" value={currentRole} onChange={setCurrentRole} />
+        <SmallInput label="Industry" value={industry} onChange={setIndustry} />
+        <SmallInput
+          label="Years of experience"
+          value={yearsOfExperience}
+          onChange={setYearsOfExperience}
+          type="number"
+        />
         <SmallInput label="Location" value={location} onChange={setLocation} />
-        <label className="space-y-1 text-xs font-medium">
-          Provenance
-          <select
-            value={source}
-            onChange={(event) => setSource(event.target.value as typeof source)}
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
-          >
-            <option value="admin_entered">Admin entered</option>
-            <option value="cv_extracted">Imported from CV</option>
-          </select>
-        </label>
+        <SmallInput label="City" value={locationCity} onChange={setLocationCity} />
+        <SmallInput label="State / region" value={locationRegion} onChange={setLocationRegion} />
+        <SmallInput
+          label="Country code"
+          value={locationCountry}
+          onChange={(value) => setLocationCountry(value.slice(0, 2))}
+        />
         <label className="space-y-1 text-xs font-medium sm:col-span-2">
           Bio
           <textarea
@@ -238,7 +309,12 @@ function ProfileEditor({
         </label>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <ProvenanceLegend />
+        <div className="space-y-1">
+          <ProvenanceLegend />
+          <p className="text-[11px] text-muted-foreground">
+            Changes are recorded as Admin entered and are not source verified.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => mutation.mutate()}
@@ -255,104 +331,6 @@ function ProfileEditor({
           {receipt.candidateConfirmationRequired ? "Yes" : "No"}.
         </p>
       ) : null}
-    </WorkspaceSection>
-  );
-}
-
-function CareerEditor({
-  candidateId,
-  onComplete,
-}: {
-  candidateId: string;
-  onComplete: () => Promise<void>;
-}) {
-  const adapter = useMemo(() => createAdminOperationsAdapter(), []);
-  const [claimType, setClaimType] = useState<CareerClaimType>("employment");
-  const [recordId, setRecordId] = useState("");
-  const [payload, setPayload] = useState("{}");
-  const [source, setSource] = useState<"admin_entered" | "cv_extracted">("admin_entered");
-  const mutation = useMutation({
-    mutationFn: () =>
-      adapter.mutateCareer(
-        candidateId,
-        { claimType, payload: JSON.parse(payload), source },
-        recordId.trim() || undefined,
-      ),
-    onSuccess: async (result) => {
-      toast.success(`${claimType} record saved as ${result.verificationStatus}`);
-      await onComplete();
-    },
-    onError: (error) =>
-      toast.error(
-        getOperationError(
-          error,
-          "The Career record could not be saved. Check the canonical fields.",
-        ),
-      ),
-  });
-  return (
-    <WorkspaceSection
-      title="Career record"
-      description="Create a canonical record without changing its verification status"
-    >
-      <div className="grid gap-3 md:grid-cols-[180px_180px_1fr_auto] md:items-end">
-        <label className="space-y-1 text-xs font-medium">
-          Claim type
-          <select
-            value={claimType}
-            onChange={(event) => setClaimType(event.target.value as CareerClaimType)}
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
-          >
-            {(["employment", "education", "internship", "freelance", "certification"] as const).map(
-              (type) => (
-                <option key={type} value={type}>
-                  {humanize(type)}
-                </option>
-              ),
-            )}
-          </select>
-        </label>
-        <label className="space-y-1 text-xs font-medium">
-          Existing record ID (optional)
-          <input
-            value={recordId}
-            onChange={(event) => setRecordId(event.target.value)}
-            placeholder="Leave blank to create"
-            className="h-9 w-full rounded-md border border-border bg-background px-3 font-mono text-xs"
-          />
-        </label>
-        <label className="space-y-1 text-xs font-medium">
-          Source
-          <select
-            value={source}
-            onChange={(event) => setSource(event.target.value as typeof source)}
-            className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs"
-          >
-            <option value="admin_entered">Admin entered</option>
-            <option value="cv_extracted">Imported from CV</option>
-          </select>
-        </label>
-        <label className="space-y-1 text-xs font-medium">
-          Canonical claim payload (JSON)
-          <textarea
-            value={payload}
-            onChange={(event) => setPayload(event.target.value)}
-            className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => mutation.mutate()}
-          disabled={mutation.isPending}
-          className="h-9 rounded-md bg-foreground px-3 text-xs font-medium text-background disabled:opacity-50"
-        >
-          {mutation.isPending ? "Saving..." : recordId.trim() ? "Update record" : "Create record"}
-        </button>
-      </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        Backend canonical validators remain authoritative. Admin entry never marks a Career record
-        Verified.
-      </p>
     </WorkspaceSection>
   );
 }
@@ -705,15 +683,18 @@ function SmallInput({
   label,
   value,
   onChange,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  type?: "text" | "number";
 }) {
   return (
     <label className="space-y-1 text-xs font-medium">
       {label}
       <input
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"

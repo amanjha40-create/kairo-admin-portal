@@ -118,11 +118,11 @@ function OrganizationDirectoryPage() {
               onClick={() => setCreateOpen(true)}
               className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/90"
             >
-              <Plus aria-hidden className="size-3.5" /> Create organization
+              <Plus aria-hidden className="size-3.5" /> Create Organization
             </button>
           ) : (
             <span className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-              Create organization permission required
+              Create Organization permission required
             </span>
           )}
           <Link

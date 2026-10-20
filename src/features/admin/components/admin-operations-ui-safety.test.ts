@@ -12,8 +12,8 @@ describe("Admin Operations V1.1 UI safety", () => {
 
     expect(createPerson).not.toMatch(/type=["']password["']/);
     expect(createOrganization).not.toMatch(/type=["']password["']/);
-    expect(createPerson).toContain("Create manually");
-    expect(createPerson).toContain("Import CV");
+    expect(createPerson).toContain("Enter Manually");
+    expect(createPerson).toContain("Upload CV");
     expect(createOrganization).toContain("Invite first HR owner");
   });
 
@@ -35,5 +35,20 @@ describe("Admin Operations V1.1 UI safety", () => {
     expect(operations).not.toContain("check1");
     expect(operations).not.toContain("check2");
     expect(operations).not.toContain("check3");
+  });
+
+  it("exposes assisted operations without adding verification shortcuts", () => {
+    const users = source("../../../routes/admin.users.index.tsx");
+    const detail = source("../../../routes/admin.users.$userId.tsx");
+    const launcher = source("./candidate-verification-operations.tsx");
+
+    expect(users).toContain("Create Candidate");
+    expect(users).toContain("Edit Profile");
+    expect(detail).toContain("Upload / Review CV");
+    expect(detail).toContain("Verification Operations");
+    expect(launcher).toContain("Court / Criminal");
+    expect(launcher).toContain("In-person");
+    expect(launcher).toContain("Internal Report");
+    expect(launcher).not.toContain("Mark person verified");
   });
 });

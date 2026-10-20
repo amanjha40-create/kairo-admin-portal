@@ -232,6 +232,135 @@ describe("Admin Operations V1.1 adapter", () => {
     expect(JSON.stringify(bodies)).not.toContain('"source_verified"');
   });
 
+  it("preserves omitted profile fields and sends explicit null only for an intentional clear", async () => {
+    const fetchImpl = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toEqual({
+        phone: null,
+        headline: "Updated headline",
+        source: "admin_entered",
+      });
+      return response({
+        candidate_id: CANDIDATE_ID,
+        claim_status: "admin_created_unclaimed",
+        updated_fields: ["headline", "phone"],
+        provenance_source: "admin_entered",
+        candidate_confirmation_required: true,
+      });
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+
+    await adapter.updateProfile(CANDIDATE_ID, {
+      phone: null,
+      headline: "Updated headline",
+      source: "admin_entered",
+    });
+  });
+
+  it("reads, updates, and soft-deletes extended Career records through API42", async () => {
+    const recordId = "44444444-4444-4444-8444-444444444444";
+    const requests: Array<{ method: string; path: string; search: string; body?: unknown }> = [];
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? "GET";
+      requests.push({
+        method,
+        path: url.pathname,
+        search: url.search,
+        ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+      });
+      if (method === "DELETE") {
+        return response({
+          candidate_id: CANDIDATE_ID,
+          claim_type: "project",
+          record_id: recordId,
+          deleted: true,
+        });
+      }
+      if (method === "PATCH") {
+        return response({
+          candidate_id: CANDIDATE_ID,
+          claim_type: "project",
+          record_id: recordId,
+          updated_fields: ["role"],
+          provenance_source: "admin_entered",
+          verification_status: "draft",
+        });
+      }
+      const item = {
+        candidate_id: CANDIDATE_ID,
+        claim_type: "project",
+        record: {
+          id: recordId,
+          user_id: CANDIDATE_ID,
+          title: "Canonical project",
+          role: "Lead",
+          description: null,
+          start_date: "2025-01-01",
+          end_date: null,
+          is_ongoing: true,
+          project_url: null,
+          repository_url: null,
+          organization_name: "Example",
+          verification_status: "draft",
+        },
+      };
+      if (url.pathname.endsWith("/career")) {
+        return response({ items: [item], total: 1, page: 1, page_size: 100, total_pages: 1 });
+      }
+      return response(item);
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+
+    const list = await adapter.listCareerRecords(CANDIDATE_ID, "project");
+    const detail = await adapter.getCareerRecord(CANDIDATE_ID, "project", recordId);
+    const updated = await adapter.mutateCareer(
+      CANDIDATE_ID,
+      { claimType: "project", payload: { role: null }, source: "admin_entered" },
+      recordId,
+    );
+    const removed = await adapter.deleteCareerRecord(CANDIDATE_ID, "project", recordId);
+
+    expect(list.items[0]).toMatchObject({
+      candidateId: CANDIDATE_ID,
+      claimType: "project",
+      recordId,
+      verificationStatus: "draft",
+      payload: { title: "Canonical project", role: "Lead" },
+    });
+    expect(list.items[0]?.payload).not.toHaveProperty("user_id");
+    expect(detail.recordId).toBe(recordId);
+    expect(updated.updatedFields).toEqual(["role"]);
+    expect(removed).toEqual({
+      candidateId: CANDIDATE_ID,
+      claimType: "project",
+      recordId,
+      deleted: true,
+    });
+    expect(requests).toEqual([
+      {
+        method: "GET",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career`,
+        search: "?claim_type=project&page=1&page_size=100",
+      },
+      {
+        method: "GET",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career/${recordId}`,
+        search: "?claim_type=project",
+      },
+      {
+        method: "PATCH",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career/${recordId}`,
+        search: "",
+        body: { claim_type: "project", payload: { role: null }, source: "admin_entered" },
+      },
+      {
+        method: "DELETE",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career/${recordId}`,
+        search: "?claim_type=project",
+      },
+    ]);
+  });
+
   it("runs the existing CV parser/review/import contract without auto-import", async () => {
     const apiPaths: string[] = [];
     const requestBodies: Array<Record<string, unknown>> = [];

@@ -21,7 +21,7 @@ import { ApiError } from "@/lib/api/errors";
 
 export const Route = createFileRoute("/admin/users/")({
   head: () => ({
-    meta: [{ title: "Users — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "People — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
   }),
   component: UsersDirectoryPage,
 });
@@ -114,7 +114,7 @@ function UsersDirectoryPage() {
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Users</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">People</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Candidate operations directory backed by the shared KairoID backend. Search by name,
             email, or public ID to inspect account state, trust, verifications, and passport
@@ -127,11 +127,11 @@ function UsersDirectoryPage() {
             onClick={() => setCreateOpen(true)}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/90"
           >
-            <UserPlus className="size-4" /> Create person
+            <UserPlus className="size-4" /> Create Candidate
           </button>
         ) : (
           <span className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-            Create person permission required
+            Create Candidate permission required
           </span>
         )}
       </header>
@@ -208,6 +208,7 @@ function UsersDirectoryPage() {
                     <th className="px-3 py-2 font-medium">Career</th>
                     <th className="px-3 py-2 font-medium">Passport</th>
                     <th className="px-3 py-2 font-medium">Activity</th>
+                    <th className="px-3 py-2 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-background">
@@ -257,6 +258,34 @@ function UsersDirectoryPage() {
                         {user.lastRelevantActivityAt
                           ? formatRelativeTime(user.lastRelevantActivityAt)
                           : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          <a
+                            href={`/admin/users/${user.id}`}
+                            className="rounded border border-border px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent"
+                          >
+                            View
+                          </a>
+                          <a
+                            href={`/admin/users/${user.id}#assisted-profile`}
+                            className="rounded border border-border px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent"
+                          >
+                            Edit Profile
+                          </a>
+                          <a
+                            href={`/admin/users/${user.id}#account-activation`}
+                            className="rounded border border-border px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent"
+                          >
+                            Activation
+                          </a>
+                          <a
+                            href={`/admin/users/${user.id}#verification-operations`}
+                            className="rounded border border-border px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent"
+                          >
+                            Verification
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -49,16 +49,16 @@ export interface CreateCandidateInput {
 
 export interface ProfileMutationInput {
   fullName?: string;
-  phone?: string;
-  currentRole?: string;
-  industry?: string;
-  yearsOfExperience?: number;
-  location?: string;
-  locationCity?: string;
-  locationRegion?: string;
-  locationCountry?: string;
-  headline?: string;
-  bio?: string;
+  phone?: string | null;
+  currentRole?: string | null;
+  industry?: string | null;
+  yearsOfExperience?: number | null;
+  location?: string | null;
+  locationCity?: string | null;
+  locationRegion?: string | null;
+  locationCountry?: string | null;
+  headline?: string | null;
+  bio?: string | null;
   source: Extract<ProvenanceSource, "admin_entered" | "cv_extracted">;
 }
 
@@ -70,8 +70,14 @@ export interface ProfileMutationResult {
   candidateConfirmationRequired: boolean;
 }
 
+export type ExtendedCareerClaimType = "portfolio" | "project" | "skill" | "gig_platform";
 export type CareerClaimType =
-  "employment" | "education" | "internship" | "freelance" | "certification";
+  | "employment"
+  | "education"
+  | "internship"
+  | "freelance"
+  | "certification"
+  | ExtendedCareerClaimType;
 
 export interface CareerMutationResult {
   candidateId: string;
@@ -80,6 +86,23 @@ export interface CareerMutationResult {
   updatedFields: string[];
   provenanceSource: ProvenanceSource;
   verificationStatus: string;
+}
+
+export interface AssistedCareerRecord {
+  candidateId: string;
+  claimType: ExtendedCareerClaimType;
+  recordId: string;
+  verificationStatus: string;
+  payload: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CareerDeleteResult {
+  candidateId: string;
+  claimType: ExtendedCareerClaimType;
+  recordId: string;
+  deleted: true;
 }
 
 export interface ResumeProcessReceipt {
@@ -545,6 +568,17 @@ interface BackendPage<T> {
   total_pages: number;
 }
 
+interface BackendCareerRecord {
+  candidate_id: string;
+  claim_type: ExtendedCareerClaimType;
+  record: Record<string, unknown> & {
+    id: string;
+    verification_status: string;
+    created_at?: string;
+    updated_at?: string;
+  };
+}
+
 interface BackendInPersonVerification {
   public_id: string;
   organization_public_id: string;
@@ -703,6 +737,22 @@ export interface AdminOperationsAdapter {
     },
     recordId?: string,
   ) => Promise<CareerMutationResult>;
+  listCareerRecords: (
+    candidateId: string,
+    claimType: ExtendedCareerClaimType,
+    page?: number,
+    pageSize?: number,
+  ) => Promise<AdminOperationsPage<AssistedCareerRecord>>;
+  getCareerRecord: (
+    candidateId: string,
+    claimType: ExtendedCareerClaimType,
+    recordId: string,
+  ) => Promise<AssistedCareerRecord>;
+  deleteCareerRecord: (
+    candidateId: string,
+    claimType: ExtendedCareerClaimType,
+    recordId: string,
+  ) => Promise<CareerDeleteResult>;
   uploadResume: (candidateId: string, file: File) => Promise<ResumeProcessReceipt>;
   getParsedResume: (candidateId: string, resumeId: string) => Promise<ResumeParsedResult>;
   createResumeReview: (candidateId: string, resumeId: string) => Promise<ResumeReviewSession>;
@@ -806,6 +856,27 @@ export const adminOperationsKeys = {
   all: () => ["admin", "operations-v1-1"] as const,
   candidate: (candidateId: string) =>
     [...adminOperationsKeys.all(), "candidate", candidateId] as const,
+  careerList: (candidateId: string, claimType: ExtendedCareerClaimType, page = 1, pageSize = 100) =>
+    [
+      ...adminOperationsKeys.all(),
+      "candidate",
+      candidateId,
+      "career",
+      claimType,
+      "list",
+      page,
+      pageSize,
+    ] as const,
+  careerDetail: (candidateId: string, claimType: ExtendedCareerClaimType, recordId: string) =>
+    [
+      ...adminOperationsKeys.all(),
+      "candidate",
+      candidateId,
+      "career",
+      claimType,
+      "detail",
+      recordId,
+    ] as const,
   provisioning: (organizationId: string) =>
     [...adminOperationsKeys.all(), "provisioning", organizationId] as const,
   courtList: (organizationId: string, personId: string, page = 1, pageSize = 100) =>
@@ -933,6 +1004,36 @@ export function createAdminOperationsAdapter(
         updatedFields: response.updated_fields,
         provenanceSource: response.provenance_source,
         verificationStatus: response.verification_status,
+      };
+    },
+    async listCareerRecords(candidateId, claimType, page = 1, pageSize = 100) {
+      const response = await api.request<BackendPage<BackendCareerRecord>>(
+        `${candidatePath(candidateId)}/career?claim_type=${encodeURIComponent(claimType)}&${pageQuery(page, pageSize)}`,
+      );
+      return mapOperationsPage(response, mapCareerRecord);
+    },
+    async getCareerRecord(candidateId, claimType, recordId) {
+      return mapCareerRecord(
+        await api.request<BackendCareerRecord>(
+          `${candidatePath(candidateId)}/career/${encodeURIComponent(recordId)}?claim_type=${encodeURIComponent(claimType)}`,
+        ),
+      );
+    },
+    async deleteCareerRecord(candidateId, claimType, recordId) {
+      const response = await api.request<{
+        candidate_id: string;
+        claim_type: ExtendedCareerClaimType;
+        record_id: string;
+        deleted: true;
+      }>(
+        `${candidatePath(candidateId)}/career/${encodeURIComponent(recordId)}?claim_type=${encodeURIComponent(claimType)}`,
+        { method: "DELETE" },
+      );
+      return {
+        candidateId: response.candidate_id,
+        claimType: response.claim_type,
+        recordId: response.record_id,
+        deleted: response.deleted,
       };
     },
     async uploadResume(candidateId, file) {
@@ -1292,6 +1393,46 @@ export function managedCandidateQueryOptions(
   });
 }
 
+export function assistedCareerRecordsQueryOptions(
+  candidateId: string,
+  claimType: ExtendedCareerClaimType,
+  page = 1,
+  pageSize = 100,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.careerList(candidateId, claimType, page, pageSize),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).listCareerRecords(
+        candidateId,
+        claimType,
+        page,
+        pageSize,
+      ),
+    retry: false,
+  });
+}
+
+export function assistedCareerRecordQueryOptions(
+  candidateId: string,
+  claimType: ExtendedCareerClaimType,
+  recordId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.careerDetail(candidateId, claimType, recordId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).getCareerRecord(
+        candidateId,
+        claimType,
+        recordId,
+      ),
+    retry: false,
+  });
+}
+
 export function organizationProvisioningQueryOptions(
   organizationId: string,
   config: AppEnvConfig = appEnv,
@@ -1454,6 +1595,26 @@ function mapActivation(response: BackendActivation): CandidateActivation {
     lastSentAt: response.last_sent_at,
     resendAvailableAt: response.resend_available_at,
     deliveryState: response.delivery_state,
+  };
+}
+
+function mapCareerRecord(response: BackendCareerRecord): AssistedCareerRecord {
+  const {
+    id,
+    verification_status,
+    created_at,
+    updated_at,
+    user_id: _userId,
+    ...payload
+  } = response.record;
+  return {
+    candidateId: response.candidate_id,
+    claimType: response.claim_type,
+    recordId: id,
+    verificationStatus: verification_status,
+    payload,
+    createdAt: typeof created_at === "string" ? created_at : undefined,
+    updatedAt: typeof updated_at === "string" ? updated_at : undefined,
   };
 }
 
@@ -1709,18 +1870,18 @@ function pageQuery(page: number, pageSize: number) {
 function toSnakeProfile(input: ProfileMutationInput) {
   return {
     ...(input.fullName ? { full_name: input.fullName } : {}),
-    ...(input.phone ? { phone: input.phone } : {}),
-    ...(input.currentRole ? { current_role: input.currentRole } : {}),
-    ...(input.industry ? { industry: input.industry } : {}),
+    ...(input.phone !== undefined ? { phone: input.phone } : {}),
+    ...(input.currentRole !== undefined ? { current_role: input.currentRole } : {}),
+    ...(input.industry !== undefined ? { industry: input.industry } : {}),
     ...(input.yearsOfExperience !== undefined
       ? { years_of_experience: input.yearsOfExperience }
       : {}),
-    ...(input.location ? { location: input.location } : {}),
-    ...(input.locationCity ? { location_city: input.locationCity } : {}),
-    ...(input.locationRegion ? { location_region: input.locationRegion } : {}),
-    ...(input.locationCountry ? { location_country: input.locationCountry } : {}),
-    ...(input.headline ? { headline: input.headline } : {}),
-    ...(input.bio ? { bio: input.bio } : {}),
+    ...(input.location !== undefined ? { location: input.location } : {}),
+    ...(input.locationCity !== undefined ? { location_city: input.locationCity } : {}),
+    ...(input.locationRegion !== undefined ? { location_region: input.locationRegion } : {}),
+    ...(input.locationCountry !== undefined ? { location_country: input.locationCountry } : {}),
+    ...(input.headline !== undefined ? { headline: input.headline } : {}),
+    ...(input.bio !== undefined ? { bio: input.bio } : {}),
     source: input.source,
   };
 }

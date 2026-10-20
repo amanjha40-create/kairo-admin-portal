@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { AssistedCandidateWorkspace } from "@/features/admin/components/assisted-candidate-workspace";
+import { CandidateVerificationOperations } from "@/features/admin/components/candidate-verification-operations";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import {
@@ -167,6 +168,21 @@ function UserDetailPage() {
   }
 
   const activeSessions = user.sessions.filter((item) => item.status === "active");
+  const candidateOrganizations = Array.from(
+    new Map(
+      user.verifications
+        .filter((item): item is typeof item & { organizationId: string } =>
+          Boolean(item.organizationId),
+        )
+        .map((item) => [
+          item.organizationId,
+          {
+            id: item.organizationId,
+            name: item.organizationName ?? `Organization ${item.organizationId.slice(0, 8)}`,
+          },
+        ]),
+    ).values(),
+  );
 
   return (
     <>
@@ -199,6 +215,30 @@ function UserDetailPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <a
+                href="#assisted-profile"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                Edit Profile
+              </a>
+              <a
+                href="#cv-review"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                Upload / Review CV
+              </a>
+              <a
+                href="#account-activation"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                Activation
+              </a>
+              <a
+                href="#verification-operations"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                Verification Operations
+              </a>
               {canCreateRiskInvestigation ? (
                 <a
                   href={buildTrustSafetyCreateHref("user", user.id)}
@@ -285,7 +325,22 @@ function UserDetailPage() {
               </div>
             </WorkspaceSection>
 
-            <AssistedCandidateWorkspace candidateId={userId} />
+            <AssistedCandidateWorkspace
+              candidateId={userId}
+              initialProfile={{
+                fullName: user.displayName,
+                phone: user.phone ?? undefined,
+                headline: user.headline ?? undefined,
+                currentRole: user.currentRole ?? undefined,
+                location: user.location ?? undefined,
+              }}
+            />
+
+            <CandidateVerificationOperations
+              candidateId={userId}
+              candidateName={user.displayName}
+              organizations={candidateOrganizations}
+            />
 
             <WorkspaceSection
               title="Trust"

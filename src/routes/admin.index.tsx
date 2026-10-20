@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import {
@@ -5,11 +6,16 @@ import {
   AlertTriangle,
   ArrowRight,
   Bell,
+  Building2,
   MailWarning,
   Rocket,
   Send,
+  ShieldAlert,
+  UserPlus,
   Zap,
 } from "lucide-react";
+import { CreateOrganizationDialog } from "@/features/admin/components/create-organization-dialog";
+import { CreatePersonDialog } from "@/features/admin/components/create-person-dialog";
 import { SectionHeader } from "@/features/admin/components/section-header";
 import { MetricCard } from "@/features/admin/components/metric-card";
 import { AttentionCard } from "@/features/admin/components/attention-card";
@@ -46,6 +52,7 @@ import {
   shouldShowOverviewDemoOperationalSections,
 } from "@/features/admin/lib/overview-operational-sections";
 import { cn } from "@/lib/utils";
+import { hasPermission } from "@/features/admin/workflow/permissions";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -63,6 +70,11 @@ export const Route = createFileRoute("/admin/")({
 
 function OverviewPage() {
   const access = useAdminAccess();
+  const [createCandidateOpen, setCreateCandidateOpen] = useState(false);
+  const [createOrganizationOpen, setCreateOrganizationOpen] = useState(false);
+  const permissions = access.admin?.permissions ?? [];
+  const canCreateCandidate = hasPermission(permissions, "create_person");
+  const canCreateOrganization = hasPermission(permissions, "create_organization");
   const overviewQuery = useQuery({
     ...overviewDashboardQueryOptions(),
     enabled: shouldEnableAdminProtectedQuery(access.state),
@@ -136,6 +148,44 @@ function OverviewPage() {
         </div>
         <DateRangeSelector />
       </header>
+
+      <section aria-labelledby="quick-actions-heading">
+        <SectionHeader
+          title="Quick actions"
+          description="Start common assisted operations without leaving the Overview."
+        />
+        <h2 id="quick-actions-heading" className="sr-only">
+          Quick actions
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <QuickAction
+            title="Create Candidate"
+            description="Enter a Candidate manually or upload a CV for review."
+            icon={<UserPlus className="size-4" />}
+            onClick={canCreateCandidate ? () => setCreateCandidateOpen(true) : undefined}
+            unavailableCopy="create_person permission required"
+          />
+          <QuickAction
+            title="Create Organization"
+            description="Create a canonical workspace and begin first-HR activation."
+            icon={<Building2 className="size-4" />}
+            onClick={canCreateOrganization ? () => setCreateOrganizationOpen(true) : undefined}
+            unavailableCopy="create_organization permission required"
+          />
+          <QuickActionLink
+            title="Find Candidate"
+            description="Search People and open assisted Candidate operations."
+            icon={<ArrowRight className="size-4" />}
+            href="/admin/users"
+          />
+          <QuickActionLink
+            title="Verification Operations"
+            description="Open canonical verification queues and case workspaces."
+            icon={<ShieldAlert className="size-4" />}
+            href="/admin/verifications"
+          />
+        </div>
+      </section>
 
       {!shouldEnableAdminProtectedQuery(access.state) || overviewQuery.isPending ? (
         <OverviewLoadingState />
@@ -552,7 +602,69 @@ function OverviewPage() {
           <ControlledPilotUnavailableState section="System" />
         )}
       </section>
+      <CreatePersonDialog open={createCandidateOpen} onOpenChange={setCreateCandidateOpen} />
+      <CreateOrganizationDialog
+        open={createOrganizationOpen}
+        onOpenChange={setCreateOrganizationOpen}
+      />
     </div>
+  );
+}
+
+function QuickAction({
+  title,
+  description,
+  icon,
+  onClick,
+  unavailableCopy,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  unavailableCopy: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      title={onClick ? undefined : unavailableCopy}
+      className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-[#0FA8A5]/50 hover:bg-[#EAF8F6]/50 disabled:cursor-not-allowed disabled:opacity-55"
+    >
+      <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        {icon}
+        {title}
+      </span>
+      <span className="mt-1 block text-xs text-muted-foreground">
+        {onClick ? description : unavailableCopy}
+      </span>
+    </button>
+  );
+}
+
+function QuickActionLink({
+  title,
+  description,
+  icon,
+  href,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  href: "/admin/users" | "/admin/verifications";
+}) {
+  return (
+    <Link
+      to={href}
+      className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-[#0FA8A5]/50 hover:bg-[#EAF8F6]/50"
+    >
+      <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        {icon}
+        {title}
+      </span>
+      <span className="mt-1 block text-xs text-muted-foreground">{description}</span>
+    </Link>
   );
 }
 

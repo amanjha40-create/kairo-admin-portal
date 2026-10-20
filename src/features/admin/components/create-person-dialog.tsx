@@ -56,9 +56,12 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
     onSuccess: async (candidate) => {
       setCreated(candidate);
       await queryClient.invalidateQueries({ queryKey: userKeys.all() });
-      toast.success(mode === "cv" ? "Person created and CV processing started" : "Person created");
+      toast.success(
+        mode === "cv" ? "Candidate created and CV review prepared" : "Candidate created",
+      );
     },
-    onError: (error) => toast.error(getOperationError(error, "The person could not be created.")),
+    onError: (error) =>
+      toast.error(getOperationError(error, "The Candidate could not be created.")),
   });
 
   const reset = () => {
@@ -85,7 +88,7 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
     >
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create person</DialogTitle>
+          <DialogTitle>Create Candidate</DialogTitle>
           <DialogDescription>
             Create an unclaimed Candidate record. The Candidate chooses their own password through
             the separate activation flow.
@@ -111,7 +114,7 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
                 params={{ userId: created.candidateId }}
                 className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
               >
-                Continue to person detail
+                Continue to Candidate detail
               </Link>
             </DialogFooter>
           </div>
@@ -129,10 +132,10 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
           >
             <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-1">
               <ModeButton active={mode === "manual"} onClick={() => setMode("manual")}>
-                <UserPlus className="size-4" /> Create manually
+                <UserPlus className="size-4" /> Enter Manually
               </ModeButton>
               <ModeButton active={mode === "cv"} onClick={() => setMode("cv")}>
-                <FileText className="size-4" /> Import CV
+                <FileText className="size-4" /> Upload CV
               </ModeButton>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -156,7 +159,7 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
             </div>
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               {mode === "cv"
-                ? "The CV is parsed into a draft. Nothing is imported until an Admin reviews, edits, selects, validates, and commits it."
+                ? "The CV is parsed into a draft. Nothing is imported until an Admin opens Candidate detail, reviews, edits, selects, validates, and commits it. Imported fields keep CV-extracted provenance."
                 : "Initial values are recorded as Admin entered and require Candidate confirmation. They are not independently verified."}
             </div>
             <DialogFooter>
@@ -171,7 +174,7 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
                     : "Creating..."
                   : mode === "cv"
                     ? "Create and process CV"
-                    : "Create person"}
+                    : "Create Candidate"}
               </button>
             </DialogFooter>
           </form>

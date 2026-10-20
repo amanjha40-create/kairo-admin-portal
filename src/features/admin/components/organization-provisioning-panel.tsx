@@ -61,7 +61,7 @@ export function OrganizationProvisioningPanel({ company }: { company: CompanyDet
 
   return (
     <WorkspaceSection
-      title="Organization activation"
+      title="First HR activation"
       description="Backend-authoritative first-owner membership and masked invitation state"
     >
       {!canInvite ? (
@@ -150,7 +150,7 @@ export function OrganizationProvisioningPanel({ company }: { company: CompanyDet
                       : "Recover first HR invitation"
                     : invitation
                       ? "Send new first HR invitation"
-                      : "Invite first HR owner"}
+                      : "Create / Invite First HR"}
               </button>
             </div>
           ) : null}

@@ -36,25 +36,33 @@ import { company360Keys, type CompanyPersonItem } from "@/features/admin/data/or
 import { getOperationError } from "@/features/admin/lib/operation-error";
 import { hasPermission } from "@/features/admin/workflow/permissions";
 
+export type PersonVerificationOperationTab = "court" | "in-person" | "report";
+
 export function PersonVerificationOperationsDialog({
   organizationId,
   person,
   open,
   onOpenChange,
+  initialTab = "court",
 }: {
   organizationId: string;
   person: CompanyPersonItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTab?: PersonVerificationOperationTab;
 }) {
   const access = useAdminAccess();
-  const [tab, setTab] = useState<"court" | "in-person" | "report">("court");
+  const [tab, setTab] = useState<PersonVerificationOperationTab>(initialTab);
   const canCourt = hasPermission(access.admin?.permissions ?? [], "manage_court_check");
   const canInPerson = hasPermission(
     access.admin?.permissions ?? [],
     "perform_in_person_verification",
   );
   const canReport = hasPermission(access.admin?.permissions ?? [], "users.view");
+
+  useEffect(() => {
+    if (open) setTab(initialTab);
+  }, [initialTab, open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

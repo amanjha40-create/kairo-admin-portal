@@ -153,7 +153,7 @@ export function CreateOrganizationDialog({
     >
       <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create organization</DialogTitle>
+          <DialogTitle>Create Organization</DialogTitle>
           <DialogDescription>
             Provision an organization without creating an owner or implying verified ownership.
           </DialogDescription>
@@ -210,7 +210,7 @@ export function CreateOrganizationDialog({
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-4 text-xs font-medium text-white disabled:opacity-50"
               >
                 <Building2 className="size-4" />
-                {createMutation.isPending ? "Creating..." : "Create organization"}
+                {createMutation.isPending ? "Creating..." : "Create Organization"}
               </button>
             </DialogFooter>
           </form>
