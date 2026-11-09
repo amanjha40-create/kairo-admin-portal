@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FileText, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,8 @@ import {
   createAdminOperationsAdapter,
   type ManagedCandidate,
 } from "@/features/admin/data/admin-operations";
+import { createAdminClientOperationsAdapter } from "@/features/admin/data/admin-client-operations";
+import { company360Keys, companyDirectoryQueryOptions } from "@/features/admin/data/organizations";
 import { userKeys } from "@/features/admin/data/users";
 import { getOperationError } from "@/features/admin/lib/operation-error";
 
@@ -26,6 +28,7 @@ interface CreatePersonDialogProps {
 export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogProps) {
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
+  const clientAdapter = useMemo(() => createAdminClientOperationsAdapter(), []);
   const [mode, setMode] = useState<"manual" | "cv">("manual");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -34,11 +37,31 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
   const [location, setLocation] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [created, setCreated] = useState<ManagedCandidate | null>(null);
+  const [createdClientPerson, setCreatedClientPerson] = useState<{
+    organizationId: string;
+    personId: string;
+    fullName: string;
+    emailMasked: string;
+  } | null>(null);
+  const [clientOrganizationId, setClientOrganizationId] = useState("");
   const [resumeStatus, setResumeStatus] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const clientsQuery = useQuery({
+    ...companyDirectoryQueryOptions({ page: 1, pageSize: 100, status: "all" }),
+    enabled: open,
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (clientOrganizationId) {
+        const person = await clientAdapter.createPerson(clientOrganizationId, {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          ...(phone.trim() ? { phone: phone.trim() } : {}),
+          relationship: "employee",
+        });
+        return { kind: "client" as const, person };
+      }
       const candidate = await adapter.createCandidate({
         fullName: fullName.trim(),
         email: email.trim(),
@@ -51,13 +74,24 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
         const receipt = await adapter.uploadResume(candidate.candidateId, file);
         setResumeStatus(receipt.status);
       }
-      return candidate;
+      return { kind: "candidate" as const, candidate };
     },
-    onSuccess: async (candidate) => {
-      setCreated(candidate);
-      await queryClient.invalidateQueries({ queryKey: userKeys.all() });
+    onSuccess: async (result) => {
+      if (result.kind === "client") {
+        setCreatedClientPerson(result.person);
+      } else {
+        setCreated(result.candidate);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: userKeys.all() }),
+        queryClient.invalidateQueries({ queryKey: company360Keys.all() }),
+      ]);
       toast.success(
-        mode === "cv" ? "Candidate created and CV review prepared" : "Candidate created",
+        result.kind === "client"
+          ? "Client Person created without a Candidate account"
+          : mode === "cv"
+            ? "Candidate created and CV review prepared"
+            : "Candidate created",
       );
     },
     onError: (error) =>
@@ -73,6 +107,8 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
     setLocation("");
     setFile(null);
     setCreated(null);
+    setCreatedClientPerson(null);
+    setClientOrganizationId("");
     setResumeStatus(null);
     setIdempotencyKey(crypto.randomUUID());
     mutation.reset();
@@ -95,7 +131,28 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
           </DialogDescription>
         </DialogHeader>
 
-        {created ? (
+        {createdClientPerson ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+              <p className="font-medium">{createdClientPerson.fullName} added to Client People</p>
+              <p className="mt-1 text-xs">Contact: {createdClientPerson.emailMasked}</p>
+              <p className="mt-1 text-xs">Candidate account: Not created</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The Person exists only in the selected Client workspace. Invite them as a Candidate
+              from Company 360 when account activation is appropriate.
+            </p>
+            <DialogFooter>
+              <Link
+                to="/admin/registry/organizations/$organizationId"
+                params={{ organizationId: createdClientPerson.organizationId }}
+                className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
+              >
+                Open Client
+              </Link>
+            </DialogFooter>
+          </div>
+        ) : created ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <p className="font-medium">{created.fullName ?? "Candidate"} created</p>
@@ -134,10 +191,36 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
               <ModeButton active={mode === "manual"} onClick={() => setMode("manual")}>
                 <UserPlus className="size-4" /> Enter Manually
               </ModeButton>
-              <ModeButton active={mode === "cv"} onClick={() => setMode("cv")}>
+              <ModeButton
+                active={mode === "cv"}
+                onClick={() => setMode("cv")}
+                disabled={Boolean(clientOrganizationId)}
+              >
                 <FileText className="size-4" /> Upload CV
               </ModeButton>
             </div>
+            <label className="block space-y-1 text-xs font-medium text-foreground">
+              Client (optional)
+              <select
+                value={clientOrganizationId}
+                onChange={(event) => {
+                  setClientOrganizationId(event.target.value);
+                  if (event.target.value) setMode("manual");
+                }}
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+              >
+                <option value="">Standalone Candidate</option>
+                {(clientsQuery.data?.items ?? []).map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+              <span className="block font-normal text-muted-foreground">
+                Options come only from Clients. Trust Registry organizations are intentionally not
+                selectable.
+              </span>
+            </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <LabeledInput label="Full name" value={fullName} onChange={setFullName} required />
               <LabeledInput label="Email" type="email" value={email} onChange={setEmail} required />
@@ -158,9 +241,11 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
               ) : null}
             </div>
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              {mode === "cv"
-                ? "The CV is parsed into a draft. Nothing is imported until an Admin opens Candidate detail, reviews, edits, selects, validates, and commits it. Imported fields keep CV-extracted provenance."
-                : "Initial values are recorded as Admin entered and require Candidate confirmation. They are not independently verified."}
+              {clientOrganizationId
+                ? "Creates a Client People record only. No Candidate login or invitation is created until an Admin explicitly sends Candidate activation."
+                : mode === "cv"
+                  ? "The CV is parsed into a draft. Nothing is imported until an Admin opens Candidate detail, reviews, edits, selects, validates, and commits it. Imported fields keep CV-extracted provenance."
+                  : "Initial values are recorded as Admin entered and require Candidate confirmation. They are not independently verified."}
             </div>
             <DialogFooter>
               <button
@@ -188,15 +273,18 @@ function ModeButton({
   active,
   onClick,
   children,
+  disabled = false,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`inline-flex h-9 items-center justify-center gap-2 rounded-md text-xs font-medium ${active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
     >
       {children}

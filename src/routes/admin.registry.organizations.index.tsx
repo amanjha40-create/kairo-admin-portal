@@ -20,10 +20,7 @@ import { hasPermission } from "@/features/admin/workflow/permissions";
 
 export const Route = createFileRoute("/admin/registry/organizations/")({
   head: () => ({
-    meta: [
-      { title: "Organizations — KairoID Admin" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
+    meta: [{ title: "Clients — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
   }),
   component: OrganizationDirectoryPage,
 });
@@ -98,17 +95,15 @@ function OrganizationDirectoryPage() {
         <div>
           <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
             <Link to="/admin/registry" className="hover:text-foreground hover:underline">
-              Registry
+              Organization Directory
             </Link>
             <span>/</span>
-            <span>Organizations</span>
+            <span>Clients</span>
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Client organizations
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Clients</h1>
           <p className="mt-0.5 max-w-3xl text-sm text-muted-foreground">
-            Search real KairoID workspaces and open a complete operational view of their people,
-            verification activity, and team.
+            KairoID tenant workspaces with People, verification operations, job roles, imports, and
+            team administration. This list is distinct from the broader Organization Directory.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -130,7 +125,7 @@ function OrganizationDirectoryPage() {
             className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
           >
             <Network aria-hidden className="size-3.5" />
-            Trust Registry
+            Organization Directory
           </Link>
         </div>
       </header>

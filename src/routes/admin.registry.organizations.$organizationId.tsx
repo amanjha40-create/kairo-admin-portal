@@ -17,6 +17,13 @@ import { AdminSearchField } from "@/features/admin/components/search-field";
 import { OrganizationProvisioningPanel } from "@/features/admin/components/organization-provisioning-panel";
 import { PersonVerificationOperationsDialog } from "@/features/admin/components/person-verification-operations-dialog";
 import {
+  AddClientPersonDialog,
+  CandidateActivationAction,
+  ClientJobRolesPanel,
+  ClientPeopleImportsPanel,
+  ClientTeamInvitationsPanel,
+} from "@/features/admin/components/client-operations-panels";
+import {
   EmptyState,
   ErrorState,
   LoadingSkeleton,
@@ -53,13 +60,16 @@ export const Route = createFileRoute("/admin/registry/organizations/$organizatio
   component: Company360Page,
 });
 
-type CompanyTab = "overview" | "people" | "verifications" | "team" | "activity";
+type CompanyTab =
+  "overview" | "people" | "verifications" | "team" | "job-roles" | "imports" | "activity";
 
 const TABS: Array<{ id: CompanyTab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "people", label: "People" },
   { id: "verifications", label: "Verifications" },
   { id: "team", label: "Team" },
+  { id: "job-roles", label: "Job roles" },
+  { id: "imports", label: "People imports" },
   { id: "activity", label: "Activity" },
 ];
 
@@ -102,6 +112,12 @@ function Company360Page() {
   const { organizationId } = Route.useParams();
   const access = useAdminAccess();
   const canView = hasPermission(access.admin?.permissions ?? [], "users.view");
+  const canManageClients = hasPermission(access.admin?.permissions ?? [], "registry.manage");
+  const canCreatePerson = hasPermission(access.admin?.permissions ?? [], "create_person");
+  const canActivatePerson = hasPermission(
+    access.admin?.permissions ?? [],
+    "send_candidate_activation",
+  );
   const [tab, setTab] = useState<CompanyTab>("overview");
   const [peopleSearch, setPeopleSearch] = useState("");
   const [peopleStatus, setPeopleStatus] = useState("all");
@@ -192,7 +208,7 @@ function Company360Page() {
             to="/admin/registry/organizations"
             className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
           >
-            Back to organizations
+            Back to Clients
           </Link>
         }
       />
@@ -211,7 +227,7 @@ function Company360Page() {
             to="/admin/registry/organizations"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft aria-hidden className="size-3.5" /> Organizations
+            <ArrowLeft aria-hidden className="size-3.5" /> Clients
           </Link>
           <div className="flex items-center gap-2">
             <StatusChip value={company.accountStatus} />
@@ -287,6 +303,8 @@ function Company360Page() {
             setVerificationPage(1);
             setTab("verifications");
           }}
+          canCreatePerson={canCreatePerson}
+          canActivatePerson={canActivatePerson}
           onPage={setPeoplePage}
           onPageSize={(value) => {
             setPeoplePageSize(value);
@@ -330,23 +348,38 @@ function Company360Page() {
         />
       ) : null}
       {tab === "team" ? (
-        <TeamTab
-          query={teamQuery}
-          search={teamSearch}
-          status={teamStatus}
-          onSearch={(value) => {
-            setTeamSearch(value);
-            setTeamPage(1);
-          }}
-          onStatus={(value) => {
-            setTeamStatus(value);
-            setTeamPage(1);
-          }}
-          onPage={setTeamPage}
-          onPageSize={(value) => {
-            setTeamPageSize(value);
-            setTeamPage(1);
-          }}
+        <div className="flex flex-col gap-4">
+          <TeamTab
+            query={teamQuery}
+            search={teamSearch}
+            status={teamStatus}
+            onSearch={(value) => {
+              setTeamSearch(value);
+              setTeamPage(1);
+            }}
+            onStatus={(value) => {
+              setTeamStatus(value);
+              setTeamPage(1);
+            }}
+            onPage={setTeamPage}
+            onPageSize={(value) => {
+              setTeamPageSize(value);
+              setTeamPage(1);
+            }}
+          />
+          <ClientTeamInvitationsPanel
+            organizationId={organizationId}
+            canManage={canManageClients}
+          />
+        </div>
+      ) : null}
+      {tab === "job-roles" ? (
+        <ClientJobRolesPanel organizationId={organizationId} canManage={canManageClients} />
+      ) : null}
+      {tab === "imports" ? (
+        <ClientPeopleImportsPanel
+          organizationId={organizationId}
+          canManage={canManageClients && canCreatePerson}
         />
       ) : null}
       {tab === "activity" ? <ActivityTab query={activityQuery} onPage={setActivityPage} /> : null}
@@ -444,6 +477,8 @@ function PeopleTab({
   onSearch,
   onStatus,
   onOpenRequests,
+  canCreatePerson,
+  canActivatePerson,
   onPage,
   onPageSize,
 }: {
@@ -454,14 +489,27 @@ function PeopleTab({
   onSearch: (value: string) => void;
   onStatus: (value: string) => void;
   onOpenRequests: (name: string) => void;
+  canCreatePerson: boolean;
+  canActivatePerson: boolean;
   onPage: (page: number) => void;
   onPageSize: (size: number) => void;
 }) {
   const [operationsPerson, setOperationsPerson] = useState<CompanyPersonItem | null>(null);
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
   return (
     <WorkspaceSection
       title="People"
-      description="Candidates and people associated with this workspace."
+      description="Client People records. Candidate accounts exist only after explicit activation."
+      action={
+        <button
+          type="button"
+          disabled={!canCreatePerson}
+          onClick={() => setAddPersonOpen(true)}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
+        >
+          <Users aria-hidden className="size-3.5" /> Add Person
+        </button>
+      }
     >
       <div className="mb-3 flex flex-wrap gap-2">
         <AdminSearchField
@@ -503,14 +551,28 @@ function PeopleTab({
               formatDate(person.lastActivityAt),
               <div key="actions" className="flex items-center gap-2">
                 {person.linkedUserId ? (
-                  <Link
-                    to="/admin/users/$userId"
-                    params={{ userId: person.linkedUserId }}
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    View person
-                  </Link>
+                  <>
+                    <Link
+                      to="/admin/users/$userId"
+                      params={{ userId: person.linkedUserId }}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      Candidate
+                    </Link>
+                    <Link
+                      to="/admin/verifications/permanent-address/$candidateId"
+                      params={{ candidateId: person.linkedUserId }}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      Address review
+                    </Link>
+                  </>
                 ) : null}
+                <CandidateActivationAction
+                  organizationId={organizationId}
+                  person={person}
+                  allowed={canActivatePerson}
+                />
                 <button
                   type="button"
                   onClick={() => onOpenRequests(person.displayName)}
@@ -542,6 +604,11 @@ function PeopleTab({
         onOpenChange={(open) => {
           if (!open) setOperationsPerson(null);
         }}
+      />
+      <AddClientPersonDialog
+        organizationId={organizationId}
+        open={addPersonOpen}
+        onOpenChange={setAddPersonOpen}
       />
     </WorkspaceSection>
   );

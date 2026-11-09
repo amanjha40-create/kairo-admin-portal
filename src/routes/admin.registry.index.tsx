@@ -24,7 +24,10 @@ import { hasPermission } from "@/features/admin/workflow/permissions";
 
 export const Route = createFileRoute("/admin/registry/")({
   head: () => ({
-    meta: [{ title: "Registry — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [
+      { title: "Organization Directory — KairoID Admin" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
   }),
   component: RegistryPage,
 });
@@ -140,10 +143,17 @@ function RegistryPage() {
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Registry</h1>
+          <div className="mb-1 flex items-center gap-2">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              Organization Directory
+            </h1>
+            <span className="rounded bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-900">
+              Trust Registry
+            </span>
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Canonical organization truth for verifications, resolution, duplicate handling, and
-            shared operational identity across KairoID.
+            Canonical identity records for employers, institutions, resolution, and duplicate
+            handling. A directory record is not necessarily a KairoID Client.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -152,7 +162,7 @@ function RegistryPage() {
               to="/admin/registry/organizations"
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/92"
             >
-              Client organizations
+              Clients
               <ArrowRight aria-hidden className="size-3.5" />
             </Link>
           ) : null}
@@ -163,7 +173,7 @@ function RegistryPage() {
               className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
             >
               <Plus aria-hidden className="size-3.5" />
-              Create registry organization
+              Create directory organization
             </button>
           ) : null}
         </div>
