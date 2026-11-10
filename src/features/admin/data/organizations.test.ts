@@ -87,6 +87,7 @@ describe("Company 360 data adapter", () => {
             name: "XYZ Pharma",
             domain: "xyzpharma.test",
             organization_type: "employer",
+            registry_record_public_id: "77777777-7777-7777-7777-777777777777",
             account_status: "active",
             verification_state: "verified",
             is_workspace_customer: true,
@@ -119,7 +120,32 @@ describe("Company 360 data adapter", () => {
       verifiedCount: 241,
       pendingCount: 31,
       isWorkspaceCustomer: true,
+      registryRecordId: "77777777-7777-7777-7777-777777777777",
     });
+  });
+
+  it("links a Client Workspace to an explicitly selected canonical identity", async () => {
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe(
+        "/api/v1/internal/trust-registry/organizations/11111111-1111-1111-1111-111111111111/resolve-registry",
+      );
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        registry_record_public_id: "77777777-7777-7777-7777-777777777777",
+        resolution_method: "manual",
+        resolution_metadata: { source: "admin_client_workspace" },
+      });
+      return jsonResponse({ registry_record_public_id: "77777777-7777-7777-7777-777777777777" });
+    });
+    const adapter = createCompany360DataAdapter(productionConfig(), options(fetchImpl));
+
+    await adapter.linkCanonicalIdentity(
+      "11111111-1111-1111-1111-111111111111",
+      "77777777-7777-7777-7777-777777777777",
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("maps Company 360 overview without inventing unsupported metrics", async () => {

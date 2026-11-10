@@ -153,7 +153,8 @@ function RegistryPage() {
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Canonical identity records for employers, institutions, resolution, and duplicate
-            handling. A directory record is not necessarily a KairoID Client.
+            handling. These are real-world identities, not customer workspaces. A directory record
+            may exist without a KairoID Client Workspace.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -162,7 +163,7 @@ function RegistryPage() {
               to="/admin/registry/organizations"
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/92"
             >
-              Clients
+              Client Workspaces
               <ArrowRight aria-hidden className="size-3.5" />
             </Link>
           ) : null}

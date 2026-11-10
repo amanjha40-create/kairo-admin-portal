@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 describe("Admin Operations Hub client workflows", () => {
-  it("keeps Clients distinct from the Trust Registry", () => {
+  it("keeps Client Workspaces distinct from canonical Organization Directory identities", () => {
     const createPerson = source("./create-person-dialog.tsx");
+    const linkIdentity = source("./link-canonical-identity-dialog.tsx");
     const directory = source("../../../routes/admin.registry.index.tsx");
     const clients = source("../../../routes/admin.registry.organizations.index.tsx");
 
@@ -13,8 +14,12 @@ describe("Admin Operations Hub client workflows", () => {
     expect(createPerson).not.toContain("registryListQueryOptions");
     expect(createPerson).toContain("Options come only from Clients");
     expect(directory).toContain("Organization Directory");
-    expect(directory).toContain("not necessarily a KairoID Client");
-    expect(clients).toContain("This list is distinct from the broader Organization Directory");
+    expect(directory).toContain("real-world identities, not customer workspaces");
+    expect(clients).toContain("Client Workspaces");
+    expect(clients).toContain("A workspace link is explicit");
+    expect(linkIdentity).toContain("Shared names or domains are not");
+    expect(linkIdentity).toContain("sufficient evidence");
+    expect(linkIdentity).toContain("not merge, delete, or rename");
   });
 
   it("imports People before Candidate activation and links Permanent Address review", () => {

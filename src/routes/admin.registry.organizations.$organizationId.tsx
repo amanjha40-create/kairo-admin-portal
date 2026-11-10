@@ -8,12 +8,15 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
+  Link2,
   ShieldAlert,
+  Unlink2,
   Users,
 } from "lucide-react";
 import { appEnv } from "@/config/env";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { AdminSearchField } from "@/features/admin/components/search-field";
+import { LinkCanonicalIdentityDialog } from "@/features/admin/components/link-canonical-identity-dialog";
 import { OrganizationProvisioningPanel } from "@/features/admin/components/organization-provisioning-panel";
 import { PersonVerificationOperationsDialog } from "@/features/admin/components/person-verification-operations-dialog";
 import {
@@ -135,6 +138,7 @@ function Company360Page() {
   const [teamPage, setTeamPage] = useState(1);
   const [teamPageSize, setTeamPageSize] = useState(20);
   const [activityPage, setActivityPage] = useState(1);
+  const [linkIdentityOpen, setLinkIdentityOpen] = useState(false);
 
   const enabled = canView && !appEnv.adminDemoMode;
   const detailQuery = useQuery({ ...companyDetailQueryOptions(organizationId), enabled });
@@ -208,7 +212,7 @@ function Company360Page() {
             to="/admin/registry/organizations"
             className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
           >
-            Back to Clients
+            Back to Client Workspaces
           </Link>
         }
       />
@@ -227,7 +231,7 @@ function Company360Page() {
             to="/admin/registry/organizations"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft aria-hidden className="size-3.5" /> Clients
+            <ArrowLeft aria-hidden className="size-3.5" /> Client Workspaces
           </Link>
           <div className="flex items-center gap-2">
             <StatusChip value={company.accountStatus} />
@@ -250,15 +254,35 @@ function Company360Page() {
               <span>{formatLabel(company.organizationType)}</span>
             </div>
           </div>
-          {company.registryRecordId ? (
-            <Link
-              to="/admin/registry/$organizationId"
-              params={{ organizationId: company.registryRecordId }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
-            >
-              Registry record <ExternalLink aria-hidden className="size-3" />
-            </Link>
-          ) : null}
+          <div className="flex flex-col items-end gap-1.5">
+            {company.registryRecordId ? (
+              <Link
+                to="/admin/registry/$organizationId"
+                params={{ organizationId: company.registryRecordId }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
+              >
+                <Link2 aria-hidden className="size-3.5" /> Canonical identity linked
+                <ExternalLink aria-hidden className="size-3" />
+              </Link>
+            ) : canManageClients ? (
+              <button
+                type="button"
+                onClick={() => setLinkIdentityOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-950 hover:bg-amber-100"
+              >
+                <Unlink2 aria-hidden className="size-3.5" /> Link canonical identity
+              </button>
+            ) : (
+              <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-950">
+                <Unlink2 aria-hidden className="size-3.5" /> Canonical identity not linked
+              </span>
+            )}
+            <span className="text-[10px] text-muted-foreground">
+              {company.registryRecordId
+                ? "Organization Directory record"
+                : "Review an authoritative match before linking"}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -383,6 +407,12 @@ function Company360Page() {
         />
       ) : null}
       {tab === "activity" ? <ActivityTab query={activityQuery} onPage={setActivityPage} /> : null}
+      <LinkCanonicalIdentityDialog
+        open={linkIdentityOpen}
+        organizationId={organizationId}
+        organizationName={company.name}
+        onOpenChange={setLinkIdentityOpen}
+      />
     </div>
   );
 }

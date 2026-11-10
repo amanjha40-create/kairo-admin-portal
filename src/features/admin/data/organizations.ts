@@ -19,6 +19,7 @@ export interface CompanyDirectoryItem {
   name: string;
   domain?: string;
   organizationType: string;
+  registryRecordId?: string;
   accountStatus: string;
   verificationState: string;
   isWorkspaceCustomer: boolean;
@@ -158,6 +159,7 @@ interface BackendCompanyItem {
   name: string;
   domain: string | null;
   organization_type: string;
+  registry_record_public_id: string | null;
   account_status: string;
   verification_state: string;
   is_workspace_customer: boolean;
@@ -278,6 +280,7 @@ export interface Company360DataAdapter {
     id: string,
     params?: CompanyPeopleParams,
   ) => Promise<CompanyPage<CompanyActivityItem>>;
+  linkCanonicalIdentity: (id: string, registryRecordId: string) => Promise<void>;
 }
 
 const DEFAULT_PAGE = 1;
@@ -319,6 +322,7 @@ export function createCompany360DataAdapter(
       listVerifications: unavailable,
       listTeam: unavailable,
       listActivity: unavailable,
+      linkCanonicalIdentity: unavailable,
     };
   }
 
@@ -385,6 +389,19 @@ export function createCompany360DataAdapter(
         buildCompanySectionPath(id, "activity", normalized),
       );
       return mapPage(response, mapActivity);
+    },
+    async linkCanonicalIdentity(id, registryRecordId) {
+      await api.request(
+        `/api/v1/internal/trust-registry/organizations/${encodeURIComponent(id)}/resolve-registry`,
+        {
+          method: "POST",
+          body: {
+            registry_record_public_id: registryRecordId,
+            resolution_method: "manual",
+            resolution_metadata: { source: "admin_client_workspace" },
+          },
+        },
+      );
     },
   };
 }
@@ -561,6 +578,7 @@ function mapCompanyItem(item: BackendCompanyItem): CompanyDirectoryItem {
     name: item.name,
     domain: item.domain ?? undefined,
     organizationType: item.organization_type,
+    registryRecordId: item.registry_record_public_id ?? undefined,
     accountStatus: item.account_status,
     verificationState: item.verification_state,
     isWorkspaceCustomer: item.is_workspace_customer,
