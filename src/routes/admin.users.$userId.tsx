@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Mail, Phone, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { CandidateVerificationOperations } from "@/features/admin/components/can
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import { managedCandidateQueryOptions } from "@/features/admin/data/admin-operations";
+import { companyDetailQueryOptions } from "@/features/admin/data/organizations";
 import {
   ADMIN_USER_ACCOUNT_STATUS_LABEL,
   createAdminUsersAdapter,
@@ -69,6 +70,31 @@ function UserDetailPage() {
   const managedCandidateQuery = useQuery({
     ...managedCandidateQueryOptions(userId),
     enabled: canReadManagedStatus,
+  });
+  const organizationReferences = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          (detailQuery.data?.verifications ?? [])
+            .filter((item): item is typeof item & { organizationId: string } =>
+              Boolean(item.organizationId),
+            )
+            .map((item) => [
+              item.organizationId,
+              {
+                id: item.organizationId,
+                name: item.organizationName ?? `Organization ${item.organizationId.slice(0, 8)}`,
+              },
+            ]),
+        ).values(),
+      ),
+    [detailQuery.data?.verifications],
+  );
+  const organizationQueries = useQueries({
+    queries: organizationReferences.map((organization) => ({
+      ...companyDetailQueryOptions(organization.id),
+      enabled: Boolean(detailQuery.data),
+    })),
   });
   const [noteBody, setNoteBody] = useState("");
   const [dialog, setDialog] = useState<ActionDialogState>(null);
@@ -189,20 +215,8 @@ function UserDetailPage() {
     accountCapabilities: user.capabilities,
     activeSessionCount: activeSessions.length,
   });
-  const candidateOrganizations = Array.from(
-    new Map(
-      user.verifications
-        .filter((item): item is typeof item & { organizationId: string } =>
-          Boolean(item.organizationId),
-        )
-        .map((item) => [
-          item.organizationId,
-          {
-            id: item.organizationId,
-            name: item.organizationName ?? `Organization ${item.organizationId.slice(0, 8)}`,
-          },
-        ]),
-    ).values(),
+  const candidateOrganizations = organizationReferences.filter(
+    (_, index) => organizationQueries[index]?.data?.isWorkspaceCustomer === true,
   );
 
   return (
@@ -305,6 +319,7 @@ function UserDetailPage() {
               candidateId={userId}
               candidateName={user.displayName}
               organizations={candidateOrganizations}
+              organizationsLoading={organizationQueries.some((query) => query.isPending)}
             />
 
             <WorkspaceSection

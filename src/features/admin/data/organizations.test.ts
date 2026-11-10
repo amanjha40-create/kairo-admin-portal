@@ -211,6 +211,43 @@ describe("Company 360 data adapter", () => {
     expect(requests.items[0]?.id).toBe("44444444-4444-4444-4444-444444444444");
   });
 
+  it("maps persisted organization activity with safe actor and on-behalf attribution", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        backendPage([
+          {
+            public_id: "55555555-5555-5555-5555-555555555555",
+            occurred_at: "2026-10-04T08:00:00Z",
+            event_type: "team_invitation_accepted",
+            source: "organization_activity",
+            actor_name: "Client Owner",
+            actor_role: "user",
+            actor_email_masked: "ow***@xyzpharma.test",
+            organization_name: "XYZ Pharma",
+            on_behalf_of_organization_name: "XYZ Pharma",
+            subject_public_id: "66666666-6666-6666-6666-666666666666",
+            previous_status: "pending",
+            new_status: "accepted",
+          },
+        ]),
+      ),
+    );
+    const adapter = createCompany360DataAdapter(productionConfig(), options(fetchImpl));
+
+    const activity = await adapter.listActivity("11111111-1111-1111-1111-111111111111");
+
+    expect(activity.items[0]).toMatchObject({
+      eventType: "team_invitation_accepted",
+      actorName: "Client Owner",
+      actorEmailMasked: "ow***@xyzpharma.test",
+      organizationName: "XYZ Pharma",
+      onBehalfOfOrganizationName: "XYZ Pharma",
+      previousStatus: "pending",
+      newStatus: "accepted",
+    });
+    expect(JSON.stringify(activity.items[0])).not.toContain("token");
+  });
+
   it("returns empty backend pages without mock fallback", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(backendPage([])));
     const adapter = createCompany360DataAdapter(productionConfig(), options(fetchImpl));

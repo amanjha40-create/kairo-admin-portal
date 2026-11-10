@@ -968,6 +968,10 @@ function ActivityList({
           <div className="text-xs font-medium text-foreground">{formatLabel(item.eventType)}</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
             {item.actorName ?? "System"}
+            {item.actorRole ? ` · ${formatLabel(item.actorRole)}` : ""}
+            {item.onBehalfOfOrganizationName
+              ? ` · on behalf of ${item.onBehalfOfOrganizationName}`
+              : ` · ${item.organizationName}`}
             {item.newStatus ? ` · ${formatLabel(item.newStatus)}` : ""} ·{" "}
             {formatDate(item.occurredAt)}
           </div>

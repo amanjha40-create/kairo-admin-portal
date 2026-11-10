@@ -116,6 +116,9 @@ export interface CompanyActivityItem {
   source: string;
   actorName?: string;
   actorRole?: string;
+  actorEmailMasked?: string;
+  organizationName: string;
+  onBehalfOfOrganizationName?: string;
   subjectId?: string;
   previousStatus?: string;
   newStatus?: string;
@@ -252,6 +255,9 @@ interface BackendCompanyActivity {
   source: string;
   actor_name: string | null;
   actor_role: string | null;
+  actor_email_masked: string | null;
+  organization_name: string;
+  on_behalf_of_organization_name: string | null;
   subject_public_id: string | null;
   previous_status: string | null;
   new_status: string | null;
@@ -646,6 +652,9 @@ function mapActivity(item: BackendCompanyActivity): CompanyActivityItem {
     source: item.source,
     actorName: item.actor_name ?? undefined,
     actorRole: item.actor_role ?? undefined,
+    actorEmailMasked: item.actor_email_masked ?? undefined,
+    organizationName: item.organization_name,
+    onBehalfOfOrganizationName: item.on_behalf_of_organization_name ?? undefined,
     subjectId: item.subject_public_id ?? undefined,
     previousStatus: item.previous_status ?? undefined,
     newStatus: item.new_status ?? undefined,

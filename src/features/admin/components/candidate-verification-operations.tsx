@@ -22,10 +22,12 @@ export function CandidateVerificationOperations({
   candidateId,
   candidateName,
   organizations,
+  organizationsLoading = false,
 }: {
   candidateId: string;
   candidateName: string;
   organizations: CandidateOrganization[];
+  organizationsLoading?: boolean;
 }) {
   const access = useAdminAccess();
   const permissions = access.admin?.permissions ?? [];
@@ -82,7 +84,9 @@ export function CandidateVerificationOperations({
           ) : null
         }
       >
-        {organizations.length === 0 ? (
+        {organizationsLoading ? (
+          <p className="text-xs text-muted-foreground">Loading canonical client organizations...</p>
+        ) : organizations.length === 0 ? (
           <EmptyState
             title="No organization-linked verification"
             description="Court, in-person, and internal report operations become available after the Candidate is linked to a canonical organization person."

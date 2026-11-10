@@ -23,4 +23,13 @@ describe("Company 360 route", () => {
       expect((Route as { options?: { loader?: unknown } }).options?.loader).toBeUndefined();
     });
   });
+
+  it("renders canonical on-behalf attribution for organization activity", () => {
+    const source = readFileSync(
+      new URL("./admin.registry.organizations.$organizationId.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("onBehalfOfOrganizationName");
+    expect(source).toContain("on behalf of");
+  });
 });
