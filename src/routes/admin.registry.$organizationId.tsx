@@ -330,7 +330,7 @@ function RegistryOrgDetail() {
         <div className="flex flex-col gap-4">
           <WorkspaceSection
             title="Overview"
-            description="Canonical registry identity, operational state, and update history."
+            description="Organization record details, operational state, and update history."
           >
             <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
               <OverviewField label="Registry public ID" value={org.id} mono />
