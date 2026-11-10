@@ -195,7 +195,7 @@ export function ClientTeamInvitationsPanel({
   return (
     <Panel
       title="Team invitations"
-      description="Invite Client workspace members on the Client's behalf. Delivery uses the canonical invitation flow."
+      description="Invite HR and other team members to the Client workspace. Candidate invitations are sent separately from People."
       action={
         <button
           type="button"
@@ -274,7 +274,7 @@ export function ClientTeamInvitationsPanel({
           ),
         ])}
         loading={query.isPending}
-        empty="No team invitations recorded."
+        empty="No team invitations yet. Invite an HR or workspace team member when access is needed."
       />
     </Panel>
   );
@@ -321,7 +321,7 @@ export function ClientJobRolesPanel({
   return (
     <Panel
       title="Client job roles"
-      description="Canonical roles used for Client People and employment operations."
+      description="Roles used for Client People and employment operations."
       action={
         <button
           type="button"
@@ -398,7 +398,7 @@ export function ClientJobRolesPanel({
           ),
         ])}
         loading={query.isPending}
-        empty="No client job roles recorded."
+        empty="No job roles yet. Add a role before assigning it to imported or added People."
       />
     </Panel>
   );
@@ -510,7 +510,7 @@ export function ClientPeopleImportsPanel({
           formatDate(item.createdAt),
         ])}
         loading={query.isPending}
-        empty="No Client People imports recorded."
+        empty="No People imports yet. Download the template, upload a CSV, review the preview, then confirm the import."
       />
     </Panel>
   );

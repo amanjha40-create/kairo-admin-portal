@@ -62,7 +62,7 @@ export function OrganizationProvisioningPanel({ company }: { company: CompanyDet
   return (
     <WorkspaceSection
       title="First HR activation"
-      description="Backend-authoritative first-owner membership and masked invitation state"
+      description="First-owner membership and masked invitation status"
     >
       {!canInvite ? (
         <p className="text-xs text-muted-foreground">invite_first_hr permission required.</p>

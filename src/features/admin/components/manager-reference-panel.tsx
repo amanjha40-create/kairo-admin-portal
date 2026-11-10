@@ -127,7 +127,7 @@ export function ManagerReferencePanel({
     <WorkspaceSection
       id="employment-references"
       title="References"
-      description="Backend-authoritative HR and reporting manager reference state for this employment."
+      description="Current HR and reporting manager reference state for this employment."
     >
       {isLoading ? (
         <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">

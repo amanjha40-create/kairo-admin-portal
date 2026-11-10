@@ -124,27 +124,93 @@ describe("Company 360 data adapter", () => {
     });
   });
 
-  it("links a Client Workspace to an explicitly selected canonical identity", async () => {
+  it("connects a Client to an explicitly selected company record", async () => {
     const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
       const url = new URL(String(input));
       expect(url.pathname).toBe(
-        "/api/v1/internal/trust-registry/organizations/11111111-1111-1111-1111-111111111111/resolve-registry",
+        "/api/v1/admin/organizations/11111111-1111-1111-1111-111111111111/company-record/connect",
       );
       expect(init?.method).toBe("POST");
       expect(JSON.parse(String(init?.body))).toEqual({
         registry_record_public_id: "77777777-7777-7777-7777-777777777777",
-        resolution_method: "manual",
-        resolution_metadata: { source: "admin_client_workspace" },
+        idempotency_key: "99999999-9999-9999-9999-999999999999",
       });
-      return jsonResponse({ registry_record_public_id: "77777777-7777-7777-7777-777777777777" });
+      return jsonResponse({
+        organization_public_id: "11111111-1111-1111-1111-111111111111",
+        registry_record_public_id: "77777777-7777-7777-7777-777777777777",
+        registry_record_name: "XYZ Pharma Ltd",
+        registry_record_organization_type: "employer",
+        registry_record_primary_domain: "xyzpharma.test",
+        lifecycle_status: "draft",
+        trust_status: "unreviewed",
+        created: false,
+        already_connected: false,
+      });
     });
     const adapter = createCompany360DataAdapter(productionConfig(), options(fetchImpl));
 
-    await adapter.linkCanonicalIdentity(
+    const result = await adapter.connectCompanyRecord(
       "11111111-1111-1111-1111-111111111111",
       "77777777-7777-7777-7777-777777777777",
+      "99999999-9999-9999-9999-999999999999",
     );
 
+    expect(result.recordName).toBe("XYZ Pharma Ltd");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates a Draft unverified company record and connects it atomically", async () => {
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe(
+        "/api/v1/admin/organizations/11111111-1111-1111-1111-111111111111/company-record/create-and-connect",
+      );
+      expect(JSON.parse(String(init?.body))).toEqual({
+        idempotency_key: "99999999-9999-9999-9999-999999999999",
+        legal_name: "XYZ Pharma Private Limited",
+        display_name: "XYZ Pharma",
+        organization_type: "employer",
+        country: "IN",
+        state_province: "Karnataka",
+        website: "https://xyzpharma.test",
+        primary_domain: "xyzpharma.test",
+      });
+      return jsonResponse(
+        {
+          organization_public_id: "11111111-1111-1111-1111-111111111111",
+          registry_record_public_id: "77777777-7777-7777-7777-777777777777",
+          registry_record_name: "XYZ Pharma",
+          registry_record_organization_type: "employer",
+          registry_record_primary_domain: "xyzpharma.test",
+          lifecycle_status: "draft",
+          trust_status: "unreviewed",
+          created: true,
+          already_connected: false,
+        },
+        201,
+      );
+    });
+    const adapter = createCompany360DataAdapter(productionConfig(), options(fetchImpl));
+
+    const result = await adapter.createAndConnectCompanyRecord(
+      "11111111-1111-1111-1111-111111111111",
+      {
+        idempotencyKey: "99999999-9999-9999-9999-999999999999",
+        legalName: "XYZ Pharma Private Limited",
+        displayName: "XYZ Pharma",
+        organizationType: "employer",
+        country: "IN",
+        stateProvince: "Karnataka",
+        website: "https://xyzpharma.test",
+        primaryDomain: "xyzpharma.test",
+      },
+    );
+
+    expect(result).toMatchObject({
+      created: true,
+      lifecycleStatus: "draft",
+      trustStatus: "unreviewed",
+    });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 

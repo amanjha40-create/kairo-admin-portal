@@ -1273,8 +1273,8 @@ function ProductionOrganizationSection({
       await adapter.resolveOrganization(caseId, result.id);
       toast.success("Organization resolved", {
         description: continuesOutreach
-          ? "The canonical organization was attached and verifier outreach continued."
-          : "The canonical organization was attached. Admin approval is still required for outreach.",
+          ? "The organization record was connected and verifier outreach continued."
+          : "The organization record was connected. Admin approval is still required for outreach.",
       });
       setSelectedOrganization(null);
       await onRefresh();
@@ -1290,7 +1290,7 @@ function ProductionOrganizationSection({
   async function createCanonicalOrganization() {
     if (isMutating) return;
     if (!canonicalDraft.name.trim() || !/^[A-Za-z]{2}$/.test(canonicalDraft.country.trim())) {
-      toast.error("Canonical organization is incomplete", {
+      toast.error("Organization record is incomplete", {
         description: "Canonical name and a two-letter country code are required.",
       });
       return;
@@ -1307,7 +1307,7 @@ function ProductionOrganizationSection({
         domain: canonicalDraft.domain.trim() || undefined,
         registryRecordId: canonicalDraft.registryRecordId,
       });
-      toast.success("Canonical organization created", {
+      toast.success("Organization record created", {
         description: continuesOutreach
           ? "The organization was attached and verifier outreach continued."
           : "The organization was attached. Admin approval is still required for outreach.",
@@ -1315,7 +1315,7 @@ function ProductionOrganizationSection({
       setCreationOpen(false);
       await onRefresh();
     } catch (error) {
-      toast.error("Canonical organization creation failed", {
+      toast.error("Organization record creation failed", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
     } finally {
@@ -1338,7 +1338,7 @@ function ProductionOrganizationSection({
           </div>
         ) : !resolutionComplete ? (
           <div className="rounded-md border border-border bg-muted/40 p-3 text-muted-foreground">
-            No outreach will be sent until a canonical organization is resolved.
+            No outreach will be sent until an organization record is selected.
           </div>
         ) : null}
         <div>
@@ -1349,7 +1349,7 @@ function ProductionOrganizationSection({
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Current canonical organization
+            Current organization record
           </p>
           <p className="text-foreground">
             {detail.organization.matched?.canonicalName ?? "Not resolved yet"}
@@ -1373,13 +1373,13 @@ function ProductionOrganizationSection({
         </div>
         {!hasSearched ? (
           <p className="text-[11px] text-muted-foreground">
-            Search the canonical organization directory by name, alias, domain, or identifier.
+            Search the Organization Directory by name, alias, domain, or identifier.
           </p>
         ) : results.length === 0 ? (
           <div className="space-y-2 rounded-md border border-dashed border-border p-3">
             <p className="text-[11px] text-muted-foreground">
-              No canonical organization matched this search. Review the Registry-backed details
-              before creating a new canonical organization.
+              No organization record matched this search. Review the available details before
+              creating a new organization record.
             </p>
             <button
               type="button"
@@ -1387,7 +1387,7 @@ function ProductionOrganizationSection({
               disabled={isMutating || resolutionComplete}
               className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground hover:bg-accent"
             >
-              Create canonical organization
+              Create organization record
             </button>
           </div>
         ) : (
@@ -1435,7 +1435,7 @@ function ProductionOrganizationSection({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Select canonical organization?</AlertDialogTitle>
+            <AlertDialogTitle>Select organization record?</AlertDialogTitle>
             <AlertDialogDescription>
               {selectedOrganization?.name} will be attached to this verification request.
               {continuesOutreach

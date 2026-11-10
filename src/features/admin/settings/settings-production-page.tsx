@@ -697,7 +697,7 @@ export function AdminSettingsProductionPage() {
                         ? "No administrators match these filters"
                         : "No internal admins found"
                     }
-                    description="Only backend-authoritative Admin/staff accounts are listed here."
+                    description="Only active Admin and staff accounts are listed here."
                     action={
                       adminQuery || adminRole !== "all" || adminStatus !== "all" ? (
                         <button

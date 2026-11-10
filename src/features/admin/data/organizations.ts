@@ -20,6 +20,7 @@ export interface CompanyDirectoryItem {
   domain?: string;
   organizationType: string;
   registryRecordId?: string;
+  registryRecordName?: string;
   accountStatus: string;
   verificationState: string;
   isWorkspaceCustomer: boolean;
@@ -51,6 +52,9 @@ export interface CompanyDetail {
   teamSize: number;
   peopleCount: number;
   registryRecordId?: string;
+  registryRecordName?: string;
+  registryRecordOrganizationType?: string;
+  registryRecordPrimaryDomain?: string;
   createdAt: string;
   updatedAt: string;
   lastActivityAt?: string;
@@ -160,6 +164,7 @@ interface BackendCompanyItem {
   domain: string | null;
   organization_type: string;
   registry_record_public_id: string | null;
+  registry_record_name: string | null;
   account_status: string;
   verification_state: string;
   is_workspace_customer: boolean;
@@ -191,6 +196,9 @@ interface BackendCompanyDetail {
   team_size: number;
   people_count: number;
   registry_record_public_id: string | null;
+  registry_record_name: string | null;
+  registry_record_organization_type: string | null;
+  registry_record_primary_domain: string | null;
   created_at: string;
   updated_at: string;
   last_activity_at: string | null;
@@ -280,7 +288,50 @@ export interface Company360DataAdapter {
     id: string,
     params?: CompanyPeopleParams,
   ) => Promise<CompanyPage<CompanyActivityItem>>;
-  linkCanonicalIdentity: (id: string, registryRecordId: string) => Promise<void>;
+  connectCompanyRecord: (
+    id: string,
+    registryRecordId: string,
+    idempotencyKey: string,
+  ) => Promise<CompanyRecordConnection>;
+  createAndConnectCompanyRecord: (
+    id: string,
+    input: CompanyRecordCreateInput,
+  ) => Promise<CompanyRecordConnection>;
+}
+
+export interface CompanyRecordCreateInput {
+  idempotencyKey: string;
+  legalName: string;
+  displayName?: string;
+  organizationType: string;
+  country: string;
+  stateProvince?: string;
+  website?: string;
+  primaryDomain?: string;
+}
+
+export interface CompanyRecordConnection {
+  organizationId: string;
+  recordId: string;
+  recordName: string;
+  organizationType: string;
+  primaryDomain?: string;
+  lifecycleStatus: string;
+  trustStatus: string;
+  created: boolean;
+  alreadyConnected: boolean;
+}
+
+interface BackendCompanyRecordConnection {
+  organization_public_id: string;
+  registry_record_public_id: string;
+  registry_record_name: string;
+  registry_record_organization_type: string;
+  registry_record_primary_domain: string | null;
+  lifecycle_status: string;
+  trust_status: string;
+  created: boolean;
+  already_connected: boolean;
 }
 
 const DEFAULT_PAGE = 1;
@@ -322,7 +373,8 @@ export function createCompany360DataAdapter(
       listVerifications: unavailable,
       listTeam: unavailable,
       listActivity: unavailable,
-      linkCanonicalIdentity: unavailable,
+      connectCompanyRecord: unavailable,
+      createAndConnectCompanyRecord: unavailable,
     };
   }
 
@@ -390,18 +442,37 @@ export function createCompany360DataAdapter(
       );
       return mapPage(response, mapActivity);
     },
-    async linkCanonicalIdentity(id, registryRecordId) {
-      await api.request(
-        `/api/v1/internal/trust-registry/organizations/${encodeURIComponent(id)}/resolve-registry`,
+    async connectCompanyRecord(id, registryRecordId, idempotencyKey) {
+      const response = await api.request<BackendCompanyRecordConnection>(
+        `/api/v1/admin/organizations/${encodeURIComponent(id)}/company-record/connect`,
         {
           method: "POST",
           body: {
             registry_record_public_id: registryRecordId,
-            resolution_method: "manual",
-            resolution_metadata: { source: "admin_client_workspace" },
+            idempotency_key: idempotencyKey,
           },
         },
       );
+      return mapCompanyRecordConnection(response);
+    },
+    async createAndConnectCompanyRecord(id, input) {
+      const response = await api.request<BackendCompanyRecordConnection>(
+        `/api/v1/admin/organizations/${encodeURIComponent(id)}/company-record/create-and-connect`,
+        {
+          method: "POST",
+          body: {
+            idempotency_key: input.idempotencyKey,
+            legal_name: input.legalName,
+            display_name: input.displayName,
+            organization_type: input.organizationType,
+            country: input.country,
+            state_province: input.stateProvince,
+            website: input.website,
+            primary_domain: input.primaryDomain,
+          },
+        },
+      );
+      return mapCompanyRecordConnection(response);
     },
   };
 }
@@ -579,6 +650,7 @@ function mapCompanyItem(item: BackendCompanyItem): CompanyDirectoryItem {
     domain: item.domain ?? undefined,
     organizationType: item.organization_type,
     registryRecordId: item.registry_record_public_id ?? undefined,
+    registryRecordName: item.registry_record_name ?? undefined,
     accountStatus: item.account_status,
     verificationState: item.verification_state,
     isWorkspaceCustomer: item.is_workspace_customer,
@@ -612,9 +684,26 @@ function mapCompanyDetail(item: BackendCompanyDetail): CompanyDetail {
     teamSize: item.team_size,
     peopleCount: item.people_count,
     registryRecordId: item.registry_record_public_id ?? undefined,
+    registryRecordName: item.registry_record_name ?? undefined,
+    registryRecordOrganizationType: item.registry_record_organization_type ?? undefined,
+    registryRecordPrimaryDomain: item.registry_record_primary_domain ?? undefined,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
     lastActivityAt: item.last_activity_at ?? undefined,
+  };
+}
+
+function mapCompanyRecordConnection(item: BackendCompanyRecordConnection): CompanyRecordConnection {
+  return {
+    organizationId: item.organization_public_id,
+    recordId: item.registry_record_public_id,
+    recordName: item.registry_record_name,
+    organizationType: item.registry_record_organization_type,
+    primaryDomain: item.registry_record_primary_domain ?? undefined,
+    lifecycleStatus: item.lifecycle_status,
+    trustStatus: item.trust_status,
+    created: item.created,
+    alreadyConnected: item.already_connected,
   };
 }
 

@@ -16,7 +16,7 @@ import {
 import { appEnv } from "@/config/env";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
 import { AdminSearchField } from "@/features/admin/components/search-field";
-import { LinkCanonicalIdentityDialog } from "@/features/admin/components/link-canonical-identity-dialog";
+import { ConnectCompanyRecordDialog } from "@/features/admin/components/connect-company-record-dialog";
 import { OrganizationProvisioningPanel } from "@/features/admin/components/organization-provisioning-panel";
 import { PersonVerificationOperationsDialog } from "@/features/admin/components/person-verification-operations-dialog";
 import {
@@ -138,7 +138,7 @@ function Company360Page() {
   const [teamPage, setTeamPage] = useState(1);
   const [teamPageSize, setTeamPageSize] = useState(20);
   const [activityPage, setActivityPage] = useState(1);
-  const [linkIdentityOpen, setLinkIdentityOpen] = useState(false);
+  const [connectRecordOpen, setConnectRecordOpen] = useState(false);
 
   const enabled = canView && !appEnv.adminDemoMode;
   const detailQuery = useQuery({ ...companyDetailQueryOptions(organizationId), enabled });
@@ -212,7 +212,7 @@ function Company360Page() {
             to="/admin/registry/organizations"
             className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
           >
-            Back to Client Workspaces
+            Back to Clients
           </Link>
         }
       />
@@ -231,7 +231,7 @@ function Company360Page() {
             to="/admin/registry/organizations"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft aria-hidden className="size-3.5" /> Client Workspaces
+            <ArrowLeft aria-hidden className="size-3.5" /> Clients
           </Link>
           <div className="flex items-center gap-2">
             <StatusChip value={company.accountStatus} />
@@ -261,26 +261,27 @@ function Company360Page() {
                 params={{ organizationId: company.registryRecordId }}
                 className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
               >
-                <Link2 aria-hidden className="size-3.5" /> Canonical identity linked
+                <Link2 aria-hidden className="size-3.5" />
+                {company.registryRecordName ?? "Connected company record"}
                 <ExternalLink aria-hidden className="size-3" />
               </Link>
             ) : canManageClients ? (
               <button
                 type="button"
-                onClick={() => setLinkIdentityOpen(true)}
+                onClick={() => setConnectRecordOpen(true)}
                 className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-950 hover:bg-amber-100"
               >
-                <Unlink2 aria-hidden className="size-3.5" /> Link canonical identity
+                <Unlink2 aria-hidden className="size-3.5" /> Connect company record
               </button>
             ) : (
               <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-950">
-                <Unlink2 aria-hidden className="size-3.5" /> Canonical identity not linked
+                <Unlink2 aria-hidden className="size-3.5" /> Company record not connected
               </span>
             )}
             <span className="text-[10px] text-muted-foreground">
               {company.registryRecordId
-                ? "Organization Directory record"
-                : "Review an authoritative match before linking"}
+                ? `${formatLabel(company.registryRecordOrganizationType ?? "organization")} · ${company.registryRecordPrimaryDomain ?? "No primary domain"}`
+                : "Optional: connect this Client to its Organization Directory record"}
             </span>
           </div>
         </div>
@@ -407,11 +408,14 @@ function Company360Page() {
         />
       ) : null}
       {tab === "activity" ? <ActivityTab query={activityQuery} onPage={setActivityPage} /> : null}
-      <LinkCanonicalIdentityDialog
-        open={linkIdentityOpen}
+      <ConnectCompanyRecordDialog
+        open={connectRecordOpen}
         organizationId={organizationId}
         organizationName={company.name}
-        onOpenChange={setLinkIdentityOpen}
+        organizationType={company.organizationType}
+        domain={company.domain}
+        website={company.website}
+        onOpenChange={setConnectRecordOpen}
       />
     </div>
   );
@@ -473,7 +477,7 @@ function OverviewTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <WorkspaceSection title="Organization details" description="Canonical workspace metadata.">
+        <WorkspaceSection title="Organization details" description="Client workspace details.">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
             <Detail label="Account status" value={formatLabel(company.accountStatus)} />
             <Detail label="Onboarding" value={formatLabel(company.onboardingStatus)} />
@@ -488,10 +492,7 @@ function OverviewTab({
             <Detail label="Last activity" value={formatDate(company.lastActivityAt)} />
           </dl>
         </WorkspaceSection>
-        <WorkspaceSection
-          title="Recent activity"
-          description="Backend audit events for this organization."
-        >
+        <WorkspaceSection title="Recent activity" description="Recorded activity for this Client.">
           <ActivityList items={activity ?? []} compact />
         </WorkspaceSection>
       </div>
@@ -762,7 +763,7 @@ function TeamTab({
   return (
     <WorkspaceSection
       title="Workspace team"
-      description="Current organization members and canonical workspace roles."
+      description="Current Client team members and their workspace roles."
     >
       <div className="mb-3 flex flex-wrap gap-2">
         <AdminSearchField
@@ -957,7 +958,7 @@ function Breakdown({ title, values }: { title: string; values: Record<string, nu
   const entries = Object.entries(values).sort((left, right) => right[1] - left[1]);
   const max = Math.max(...entries.map(([, value]) => value), 1);
   return (
-    <WorkspaceSection title={title} description="Exact backend taxonomy and counts.">
+    <WorkspaceSection title={title} description="Current recorded statuses and counts.">
       {entries.length === 0 ? (
         <EmptyState title="No verification data" />
       ) : (

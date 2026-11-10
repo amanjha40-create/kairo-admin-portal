@@ -20,10 +20,7 @@ import { hasPermission } from "@/features/admin/workflow/permissions";
 
 export const Route = createFileRoute("/admin/registry/organizations/")({
   head: () => ({
-    meta: [
-      { title: "Client Workspaces — KairoID Admin" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
+    meta: [{ title: "Clients — KairoID Admin" }, { name: "robots", content: "noindex, nofollow" }],
   }),
   component: OrganizationDirectoryPage,
 });
@@ -101,15 +98,13 @@ function OrganizationDirectoryPage() {
               Organization Directory
             </Link>
             <span>/</span>
-            <span>Client Workspaces</span>
+            <span>Clients</span>
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Client Workspaces
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Clients</h1>
           <p className="mt-0.5 max-w-3xl text-sm text-muted-foreground">
-            KairoID customer workspaces with People, verification operations, job roles, imports,
-            and team administration. Each workspace may link to one canonical identity in the
-            Organization Directory.
+            Customer workspaces with People, verification operations, job roles, imports, Candidate
+            invitations, and team administration. A Client may optionally connect to its real-world
+            company record in Organization Directory.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -119,11 +114,11 @@ function OrganizationDirectoryPage() {
               onClick={() => setCreateOpen(true)}
               className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/90"
             >
-              <Plus aria-hidden className="size-3.5" /> Create Client Workspace
+              <Plus aria-hidden className="size-3.5" /> Create Client
             </button>
           ) : (
             <span className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-              Create Client Workspace permission required
+              Create Client permission required
             </span>
           )}
           <Link
@@ -144,7 +139,7 @@ function OrganizationDirectoryPage() {
               className="mb-1.5 block text-xs font-medium text-foreground"
               htmlFor="company-search"
             >
-              Search client workspaces
+              Search Clients
             </label>
             <AdminSearchField
               value={search}
@@ -193,11 +188,11 @@ function OrganizationDirectoryPage() {
       </div>
 
       <WorkspaceSection
-        title="Client workspaces"
+        title="Clients"
         description={
           query.data
-            ? `${query.data.total} matching workspace${query.data.total === 1 ? "" : "s"}. Counts are backend-derived.`
-            : "Backend-driven organization directory."
+            ? `${query.data.total} matching Client${query.data.total === 1 ? "" : "s"}.`
+            : "Customer workspaces and their current operational status."
         }
       >
         {query.isPending ? <LoadingSkeleton rows={8} /> : null}
@@ -222,7 +217,7 @@ function OrganizationDirectoryPage() {
             description={
               hasFilters
                 ? "Try another company name, domain, identifier, or clear the filters."
-                : "No client workspaces are currently available."
+                : "No Clients are currently available. Create a Client to begin adding People, team members, roles, or verification work."
             }
           />
         ) : null}
@@ -238,7 +233,7 @@ function OrganizationDirectoryPage() {
                     <th className="px-3 py-2 font-medium">Verified</th>
                     <th className="px-3 py-2 font-medium">Pending</th>
                     <th className="px-3 py-2 font-medium">Workspace status</th>
-                    <th className="px-3 py-2 font-medium">Canonical identity</th>
+                    <th className="px-3 py-2 font-medium">Company record</th>
                     <th className="px-3 py-2 text-right font-medium">Open</th>
                   </tr>
                 </thead>
@@ -279,7 +274,10 @@ function OrganizationDirectoryPage() {
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <CanonicalIdentityStatus registryRecordId={company.registryRecordId} />
+                        <CompanyRecordStatus
+                          registryRecordId={company.registryRecordId}
+                          registryRecordName={company.registryRecordName}
+                        />
                       </td>
                       <td className="px-3 py-3 text-right">
                         <Link
@@ -311,23 +309,29 @@ function OrganizationDirectoryPage() {
 
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
         <Database aria-hidden className="size-4 text-[#0FA8A5]" />
-        Client Workspaces hold customer operations. Organization Directory holds canonical identity
-        records used for routing, resolution, and duplicate handling. A workspace link is explicit,
-        never inferred from a shared name or domain.
+        Clients hold customer operations. Organization Directory holds real-world company and
+        institution records, including non-customers. Connections are explicit and never inferred
+        from a shared name or domain.
       </div>
       <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
 
-function CanonicalIdentityStatus({ registryRecordId }: { registryRecordId?: string }) {
+function CompanyRecordStatus({
+  registryRecordId,
+  registryRecordName,
+}: {
+  registryRecordId?: string;
+  registryRecordName?: string;
+}) {
   if (!registryRecordId) {
     return (
       <div className="flex min-w-[150px] flex-col items-start gap-1">
         <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-inset ring-amber-200">
-          <Unlink2 aria-hidden className="size-3" /> Not linked
+          <Unlink2 aria-hidden className="size-3" /> Not connected
         </span>
-        <span className="text-[10px] text-muted-foreground">Review before linking</span>
+        <span className="text-[10px] text-muted-foreground">Connect from Client details</span>
       </div>
     );
   }
@@ -339,10 +343,10 @@ function CanonicalIdentityStatus({ registryRecordId }: { registryRecordId?: stri
       className="inline-flex min-w-[150px] flex-col items-start gap-1 hover:underline"
     >
       <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200">
-        <Link2 aria-hidden className="size-3" /> Linked
+        <Link2 aria-hidden className="size-3" /> Connected
       </span>
       <span className="font-mono text-[10px] text-muted-foreground">
-        {registryRecordId.slice(0, 8)}
+        {registryRecordName ?? registryRecordId.slice(0, 8)}
       </span>
     </Link>
   );

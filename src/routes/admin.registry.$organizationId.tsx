@@ -444,7 +444,7 @@ function RegistryOrgDetail() {
 
           <WorkspaceSection
             title="Relationships"
-            description="Canonical organization relationships projected from the shared registry."
+            description="Relationships recorded for this organization record."
             action={
               !appEnv.adminDemoMode && canManageRegistry ? (
                 <ToggleAction
@@ -494,7 +494,7 @@ function RegistryOrgDetail() {
 
           <WorkspaceSection
             title="Verification activity"
-            description="Verification requests currently linked to this canonical registry record."
+            description="Verification requests currently linked to this organization record."
           >
             {org.verificationRequests.length === 0 ? (
               <EmptyState title="No linked verifications" />
@@ -540,12 +540,12 @@ function RegistryOrgDetail() {
 
           <WorkspaceSection
             title="Linked organizations"
-            description="Workspace organizations currently resolved to this canonical registry record."
+            description="Client workspaces currently connected to this organization record."
           >
             {org.linkedOrganizations.length === 0 ? (
               <EmptyState
                 title="No linked organizations"
-                description="No HR or Institution workspaces currently reference this canonical organization."
+                description="No HR or Institution workspaces currently connect to this organization record."
               />
             ) : (
               <ul className="divide-y divide-border">
@@ -577,7 +577,7 @@ function RegistryOrgDetail() {
         <div className="flex flex-col gap-4">
           <WorkspaceSection
             title="Capabilities"
-            description="Authoritative capability flags for this canonical organization."
+            description="Capabilities recorded for this organization."
             action={
               !appEnv.adminDemoMode && canManageRegistry ? (
                 <ToggleAction
@@ -674,7 +674,7 @@ function RegistryOrgDetail() {
 
           <WorkspaceSection
             title="Merge history"
-            description="Audited consolidation events for this canonical record."
+            description="Audited consolidation events for this organization record."
             action={
               !appEnv.adminDemoMode && canManageRegistry ? (
                 <ToggleAction

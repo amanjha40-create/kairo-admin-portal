@@ -89,7 +89,7 @@ export function OrganizationResolutionPanel({ detail, outreach }: Props) {
             </p>
           </div>
         ) : (
-          <p className="text-[11px] text-muted-foreground">No canonical organization matched.</p>
+          <p className="text-[11px] text-muted-foreground">No organization record matched.</p>
         )}
 
         {organization.duplicateWarning ? (

@@ -42,7 +42,7 @@ export function CanonicalOrganizationDialog({
       <DialogContent className="max-w-xl">
         <form className="space-y-4" onSubmit={(event) => void submit(event)}>
           <DialogHeader>
-            <DialogTitle>Create canonical organization</DialogTitle>
+            <DialogTitle>Create organization record</DialogTitle>
             <DialogDescription>
               Review the authoritative organization details before creation. This does not create an
               Admin-owned workspace membership.
@@ -157,7 +157,7 @@ export function CanonicalOrganizationDialog({
                 ? "Creating..."
                 : continuesOutreach
                   ? "Create organization and send invitation"
-                  : "Create canonical organization"}
+                  : "Create organization record"}
             </button>
           </DialogFooter>
         </form>

@@ -116,7 +116,7 @@ export function PermanentAddressWorkspace({
         <WorkspaceSection
           id="permanent-address-summary"
           title="Permanent Address"
-          description="Current backend-authoritative verification state."
+          description="Current verification state."
           action={<SourceBadge source="kairo_derived" />}
         >
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

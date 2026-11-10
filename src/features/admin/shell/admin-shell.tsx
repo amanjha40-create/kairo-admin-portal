@@ -15,6 +15,7 @@ import {
   Users,
   X,
   Building2,
+  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -40,7 +41,6 @@ interface NavItem {
   description: string;
 }
 
-// PERMANENT navigation — do not add, remove or rename entries.
 const NAV: NavItem[] = [
   {
     label: "Overview",
@@ -61,10 +61,16 @@ const NAV: NavItem[] = [
     description: "Candidate accounts and profiles",
   },
   {
-    label: "Registry",
-    to: "/admin/registry",
+    label: "Clients",
+    to: "/admin/registry/organizations",
     icon: Building2,
-    description: "Organizations and canonical records",
+    description: "Customer workspaces, People and operations",
+  },
+  {
+    label: "Organization Directory",
+    to: "/admin/registry",
+    icon: Landmark,
+    description: "Real-world company and institution records",
   },
   {
     label: "Communications",

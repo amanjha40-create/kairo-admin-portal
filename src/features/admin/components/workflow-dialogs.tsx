@@ -301,7 +301,7 @@ export function OutreachDialog({
       }
       consequenceSummary={
         requiresOrganizationResolution
-          ? "Approves the Admin review and moves the request to canonical organization resolution. No outreach will be sent until a canonical organization is resolved."
+          ? "Approves the Admin review and moves the request to organization-record resolution. No outreach will be sent until an organization record is selected."
           : "Approves the request for backend dispatch into verifier outreach."
       }
       eligibility={eligibility}
@@ -316,7 +316,7 @@ export function OutreachDialog({
         appEnv.adminDemoMode
           ? "Dispatch approved in this session. No email has been sent."
           : requiresOrganizationResolution
-            ? "Outreach has not started and will remain blocked until a canonical organization is resolved."
+            ? "Outreach has not started and will remain blocked until an organization record is selected."
             : "The backend will advance the request using the deployed verification workflow."
       }
       onSubmit={async () => {
@@ -333,7 +333,7 @@ export function OutreachDialog({
             requiresOrganizationResolution ? "Admin review approved" : "Approved for dispatch",
             {
               description: requiresOrganizationResolution
-                ? "Canonical organization resolution is required before outreach can start."
+                ? "An organization record must be selected before outreach can start."
                 : "The backend will move the request into verifier outreach.",
             },
           );

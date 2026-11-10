@@ -89,12 +89,10 @@ export function CandidateVerificationOperations({
         ) : organizations.length === 0 ? (
           <EmptyState
             title="No organization-linked verification"
-            description="Court, in-person, and internal report operations become available after the Candidate is linked to a canonical organization person."
+            description="Court, in-person, and internal report operations become available after the Candidate is linked to an organization People record."
           />
         ) : peopleQuery.isPending ? (
-          <p className="text-xs text-muted-foreground">
-            Loading the canonical organization person...
-          </p>
+          <p className="text-xs text-muted-foreground">Loading the organization People record...</p>
         ) : peopleQuery.error ? (
           <p className="text-xs text-red-700">
             The organization person could not be loaded. No operation is available until the
@@ -102,7 +100,7 @@ export function CandidateVerificationOperations({
           </p>
         ) : !person ? (
           <EmptyState
-            title="Canonical organization person not found"
+            title="Organization People record not found"
             description="This verification references an organization, but its linked person is not available in Company 360. No operation was inferred or created."
           />
         ) : (

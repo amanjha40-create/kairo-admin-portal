@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 describe("Admin Operations Hub client workflows", () => {
-  it("keeps Client Workspaces distinct from canonical Organization Directory identities", () => {
+  it("keeps Clients distinct from Organization Directory company records", () => {
     const createPerson = source("./create-person-dialog.tsx");
-    const linkIdentity = source("./link-canonical-identity-dialog.tsx");
+    const connectRecord = source("./connect-company-record-dialog.tsx");
     const directory = source("../../../routes/admin.registry.index.tsx");
     const clients = source("../../../routes/admin.registry.organizations.index.tsx");
 
@@ -14,12 +14,12 @@ describe("Admin Operations Hub client workflows", () => {
     expect(createPerson).not.toContain("registryListQueryOptions");
     expect(createPerson).toContain("Options come only from Clients");
     expect(directory).toContain("Organization Directory");
-    expect(directory).toContain("real-world identities, not customer workspaces");
-    expect(clients).toContain("Client Workspaces");
-    expect(clients).toContain("A workspace link is explicit");
-    expect(linkIdentity).toContain("Shared names or domains are not");
-    expect(linkIdentity).toContain("sufficient evidence");
-    expect(linkIdentity).toContain("not merge, delete, or rename");
+    expect(directory).toContain("Real-world company and institution records");
+    expect(clients).toContain("Clients hold customer operations");
+    expect(clients).toContain("Connections are explicit");
+    expect(connectRecord).toContain("Create company record");
+    expect(connectRecord).toContain("not merge workspaces or change People");
+    expect(connectRecord).toContain("Draft company record created and connected");
   });
 
   it("imports People before Candidate activation and links Permanent Address review", () => {

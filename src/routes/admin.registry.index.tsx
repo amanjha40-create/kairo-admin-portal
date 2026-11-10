@@ -152,9 +152,9 @@ function RegistryPage() {
             </span>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Canonical identity records for employers, institutions, resolution, and duplicate
-            handling. These are real-world identities, not customer workspaces. A directory record
-            may exist without a KairoID Client Workspace.
+            Real-world company and institution records used for identification, routing, and
+            duplicate handling. These are separate from customer workspaces, and a record may exist
+            without a KairoID Client.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -163,7 +163,7 @@ function RegistryPage() {
               to="/admin/registry/organizations"
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/92"
             >
-              Client Workspaces
+              Clients
               <ArrowRight aria-hidden className="size-3.5" />
             </Link>
           ) : null}
@@ -174,7 +174,7 @@ function RegistryPage() {
               className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-accent"
             >
               <Plus aria-hidden className="size-3.5" />
-              Create directory organization
+              Create organization record
             </button>
           ) : null}
         </div>
@@ -194,7 +194,7 @@ function RegistryPage() {
         <Metric
           label="Unresolved orgs"
           value={metrics.unresolvedOrganizations}
-          sub="Needs canonical resolution"
+          sub="Needs an organization record"
         />
         <Metric
           label="Duplicate review"
@@ -265,11 +265,11 @@ function RegistryPage() {
         </div>
         {result.total === 0 ? (
           <EmptyState
-            title={hasFilters ? "No organizations match" : "No registry organizations yet"}
+            title={hasFilters ? "No organizations match" : "No organization records yet"}
             description={
               hasFilters
                 ? "Try clearing filters or the search box."
-                : "Registry records will appear here once the backend returns admin projections."
+                : "Create an organization record when a real-world employer or institution needs to be identified."
             }
           />
         ) : (
@@ -380,8 +380,8 @@ function CreateRegistryForm({
 
   return (
     <WorkspaceSection
-      title="Create registry organization"
-      description="Create a canonical operational organization record for resolution and verification routing."
+      title="Create organization record"
+      description="Create a Draft, unverified record for a real-world company or institution."
     >
       <form
         className="grid gap-3 md:grid-cols-2"
