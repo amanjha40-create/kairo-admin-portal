@@ -243,9 +243,21 @@ function UserDetailPage() {
               <p className="mt-0.5 text-xs text-muted-foreground">Candidate account {user.id}</p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <AccountStatusChip status={user.accountStatus} />
-                <VerificationChip label="Email verified" ok={user.emailVerified} />
-                <VerificationChip label="Phone verified" ok={user.phoneVerified} />
-                <VerificationChip label="Onboarding complete" ok={user.onboardingCompleted} />
+                <VerificationChip
+                  trueLabel="Email verified"
+                  falseLabel="Email not verified"
+                  ok={user.emailVerified}
+                />
+                <VerificationChip
+                  trueLabel="Phone verified"
+                  falseLabel="Phone not verified"
+                  ok={user.phoneVerified}
+                />
+                <VerificationChip
+                  trueLabel="Onboarding complete"
+                  falseLabel="Onboarding incomplete"
+                  ok={user.onboardingCompleted}
+                />
               </div>
             </div>
 
@@ -879,7 +891,15 @@ function AccountStatusChip({ status }: { status: AdminUserAccountStatus }) {
   );
 }
 
-function VerificationChip({ label, ok }: { label: string; ok: boolean }) {
+function VerificationChip({
+  trueLabel,
+  falseLabel,
+  ok,
+}: {
+  trueLabel: string;
+  falseLabel: string;
+  ok: boolean;
+}) {
   return (
     <span
       className={
@@ -890,7 +910,7 @@ function VerificationChip({ label, ok }: { label: string; ok: boolean }) {
       }
     >
       {ok ? <ShieldCheck aria-hidden className="size-3" /> : null}
-      {label}
+      {ok ? trueLabel : falseLabel}
     </span>
   );
 }
