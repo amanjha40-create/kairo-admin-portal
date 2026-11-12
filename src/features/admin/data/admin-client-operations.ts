@@ -182,7 +182,13 @@ export function createAdminClientOperationsAdapter() {
   return {
     async createPerson(
       organizationId: string,
-      input: { fullName: string; email: string; phone?: string; relationship: string },
+      input: {
+        fullName: string;
+        email: string;
+        phone?: string;
+        relationship: string;
+        joiningDate?: string;
+      },
     ) {
       const row = await api().request<BackendClientPerson>(
         `/api/v1/admin/operations/organizations/${organizationId}/people`,
@@ -193,13 +199,22 @@ export function createAdminClientOperationsAdapter() {
             email: input.email,
             phone: input.phone,
             relationship: input.relationship,
+            joining_date: input.joiningDate,
           },
         },
       );
       return mapPerson(row);
     },
     async activatePerson(organizationId: string, personId: string, idempotencyKey: string) {
-      return api().request<{ delivery_state: string; expires_at: string }>(
+      return api().request<{
+        candidate_id: string;
+        claim_status: string;
+        email_masked: string;
+        expires_at: string;
+        last_sent_at: string;
+        resend_available_at: string;
+        delivery_state: string;
+      }>(
         `/api/v1/admin/operations/organizations/${organizationId}/people/${personId}/candidate-activation`,
         { method: "POST", body: { idempotency_key: idempotencyKey } },
       );

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, FileText, LockKeyhole, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,8 @@ import { WorkspaceSection } from "@/features/admin/components/workspace-section"
 import {
   adminOperationsKeys,
   createAdminOperationsAdapter,
+  managedResumesQueryOptions,
+  managedResumeStatusQueryOptions,
   managedCandidateQueryOptions,
   type ProfileMutationResult,
   type ProfileMutationInput,
@@ -182,6 +184,7 @@ function ActivationAction({
   onComplete: () => Promise<void>;
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
+  const queryClient = useQueryClient();
   const isResend = claimStatus === "activation_pending";
   const mutation = useMutation({
     mutationFn: () =>
@@ -355,6 +358,7 @@ function CvReviewWorkspace({
   onComplete: () => Promise<void>;
 }) {
   const adapter = useMemo(() => createAdminOperationsAdapter(), []);
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ResumeParsedResult | null>(null);
@@ -363,22 +367,42 @@ function CvReviewWorkspace({
   const [batch, setBatch] = useState<ResumeImportBatch | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [importIdempotencyKey] = useState(() => crypto.randomUUID());
+  const resumesQuery = useQuery(managedResumesQueryOptions(candidateId));
+  const persistedResume = resumesQuery.data?.items[0];
+  const activeResumeId = resumeId ?? persistedResume?.id ?? null;
+  const statusQuery = useQuery({
+    ...managedResumeStatusQueryOptions(candidateId, activeResumeId ?? "unavailable"),
+    enabled: Boolean(activeResumeId),
+  });
+  const parsedQuery = useQuery({
+    queryKey: [...adminOperationsKeys.resumes(candidateId), activeResumeId, "parsed-result"],
+    queryFn: () => adapter.getParsedResume(candidateId, activeResumeId!),
+    enabled: Boolean(activeResumeId) && statusQuery.data?.status === "needs_review",
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (parsedQuery.data) setParsed(parsedQuery.data);
+  }, [parsedQuery.data]);
 
   const upload = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Choose a CV first.");
       return adapter.uploadResume(candidateId, file);
     },
-    onSuccess: (receipt) => {
+    onSuccess: async (receipt) => {
       setResumeId(receipt.resumeId);
+      setParsed(null);
+      setReview(null);
+      await queryClient.invalidateQueries({ queryKey: adminOperationsKeys.resumes(candidateId) });
       toast.success("CV uploaded; parsing started");
     },
     onError: (error) => toast.error(getOperationError(error, "The CV could not be processed.")),
   });
   const loadParsed = useMutation({
     mutationFn: async () => {
-      if (!resumeId) throw new Error("Upload a CV first.");
-      return adapter.getParsedResume(candidateId, resumeId);
+      if (!activeResumeId) throw new Error("Upload a CV first.");
+      return adapter.getParsedResume(candidateId, activeResumeId);
     },
     onSuccess: setParsed,
     onError: (error) =>
@@ -386,8 +410,8 @@ function CvReviewWorkspace({
   });
   const createReview = useMutation({
     mutationFn: async () => {
-      if (!resumeId) throw new Error("Upload a CV first.");
-      return adapter.createResumeReview(candidateId, resumeId);
+      if (!activeResumeId) throw new Error("Upload a CV first.");
+      return adapter.createResumeReview(candidateId, activeResumeId);
     },
     onSuccess: (session) => {
       setReview(session);
@@ -479,7 +503,9 @@ function CvReviewWorkspace({
         </ActionButton>
         <ActionButton
           onClick={() => loadParsed.mutate()}
-          disabled={!resumeId || loadParsed.isPending}
+          disabled={
+            !activeResumeId || statusQuery.data?.status !== "needs_review" || loadParsed.isPending
+          }
         >
           <RefreshCw className="size-3.5" /> Refresh parsed draft
         </ActionButton>
@@ -490,6 +516,26 @@ function CvReviewWorkspace({
           Open review
         </ActionButton>
       </div>
+
+      {activeResumeId ? (
+        <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
+          <div className="font-medium">
+            CV processing:{" "}
+            {humanize(statusQuery.data?.status ?? persistedResume?.processingStatus ?? "loading")}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            {persistedResume?.originalFilename ?? "Uploaded CV"}. Processing state is loaded from
+            the backend and survives refresh.
+          </div>
+          {statusQuery.data?.status === "failed" ? (
+            <div className="mt-2 text-destructive">
+              Parsing failed. Upload the file again or check the resume worker before retrying.
+            </div>
+          ) : null}
+        </div>
+      ) : resumesQuery.isPending ? (
+        <p className="mt-3 text-xs text-muted-foreground">Checking previous CV uploads...</p>
+      ) : null}
 
       {parsed ? (
         <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">

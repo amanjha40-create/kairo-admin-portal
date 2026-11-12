@@ -12,8 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  adminOperationsKeys,
   createAdminOperationsAdapter,
-  type ManagedCandidate,
 } from "@/features/admin/data/admin-operations";
 import { createAdminClientOperationsAdapter } from "@/features/admin/data/admin-client-operations";
 import { company360Keys, companyDirectoryQueryOptions } from "@/features/admin/data/organizations";
@@ -33,18 +33,21 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [headline, setHeadline] = useState("");
-  const [location, setLocation] = useState("");
+  const [relationship, setRelationship] = useState("candidate");
+  const [joiningDate, setJoiningDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [created, setCreated] = useState<ManagedCandidate | null>(null);
-  const [createdClientPerson, setCreatedClientPerson] = useState<{
+  const [created, setCreated] = useState<{
     organizationId: string;
     personId: string;
     fullName: string;
     emailMasked: string;
+    candidateId?: string;
+    deliveryState?: string;
+    cvStatus?: string;
+    activationError?: string;
+    cvError?: string;
   } | null>(null);
   const [clientOrganizationId, setClientOrganizationId] = useState("");
-  const [resumeStatus, setResumeStatus] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const clientsQuery = useQuery({
     ...companyDirectoryQueryOptions({ page: 1, pageSize: 100, status: "all" }),
@@ -53,45 +56,61 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (clientOrganizationId) {
-        const person = await clientAdapter.createPerson(clientOrganizationId, {
-          fullName: fullName.trim(),
-          email: email.trim(),
-          ...(phone.trim() ? { phone: phone.trim() } : {}),
-          relationship: "employee",
-        });
-        return { kind: "client" as const, person };
-      }
-      const candidate = await adapter.createCandidate({
+      if (!clientOrganizationId) throw new Error("Select the Client sending this invitation.");
+      const person = await clientAdapter.createPerson(clientOrganizationId, {
         fullName: fullName.trim(),
         email: email.trim(),
         ...(phone.trim() ? { phone: phone.trim() } : {}),
-        ...(headline.trim() ? { headline: headline.trim() } : {}),
-        ...(location.trim() ? { location: location.trim() } : {}),
-        idempotencyKey,
+        relationship,
+        ...(relationship === "future_employee" && joiningDate ? { joiningDate } : {}),
       });
-      if (mode === "cv" && file) {
-        const receipt = await adapter.uploadResume(candidate.candidateId, file);
-        setResumeStatus(receipt.status);
+      let activation;
+      try {
+        activation = await clientAdapter.activatePerson(
+          clientOrganizationId,
+          person.personId,
+          idempotencyKey,
+        );
+      } catch (error) {
+        return {
+          ...person,
+          activationError: getOperationError(
+            error,
+            "The Person was added, but the Candidate invitation was not sent.",
+          ),
+        };
       }
-      return { kind: "candidate" as const, candidate };
+      let cvStatus: string | undefined;
+      let cvError: string | undefined;
+      if (mode === "cv" && file) {
+        try {
+          const receipt = await adapter.uploadResume(activation.candidate_id, file);
+          cvStatus = receipt.status;
+        } catch (error) {
+          cvError = getOperationError(
+            error,
+            "The invitation was sent, but the CV could not be uploaded. Retry from Candidate detail.",
+          );
+        }
+      }
+      return {
+        ...person,
+        candidateId: activation.candidate_id,
+        deliveryState: activation.delivery_state,
+        cvStatus,
+        cvError,
+      };
     },
     onSuccess: async (result) => {
-      if (result.kind === "client") {
-        setCreatedClientPerson(result.person);
-      } else {
-        setCreated(result.candidate);
-      }
+      setCreated(result);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: userKeys.all() }),
         queryClient.invalidateQueries({ queryKey: company360Keys.all() }),
+        queryClient.invalidateQueries({ queryKey: adminOperationsKeys.invitations() }),
       ]);
-      toast.success(
-        result.kind === "client"
-          ? "Client Person created without a Candidate account"
-          : mode === "cv"
-            ? "Candidate created and CV review prepared"
-            : "Candidate created",
+      const activationError = "activationError" in result ? result.activationError : undefined;
+      toast[activationError ? "error" : "success"](
+        activationError ?? "Candidate invitation queued",
       );
     },
     onError: (error) =>
@@ -103,13 +122,11 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
     setFullName("");
     setEmail("");
     setPhone("");
-    setHeadline("");
-    setLocation("");
+    setRelationship("candidate");
+    setJoiningDate("");
     setFile(null);
     setCreated(null);
-    setCreatedClientPerson(null);
     setClientOrganizationId("");
-    setResumeStatus(null);
     setIdempotencyKey(crypto.randomUUID());
     mutation.reset();
   };
@@ -124,55 +141,52 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
     >
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Candidate</DialogTitle>
+          <DialogTitle>Invite Candidate</DialogTitle>
           <DialogDescription>
-            Create an unclaimed Candidate record. The Candidate chooses their own password through
-            the separate activation flow.
+            Add the Person to a Client, send a single-use activation link on that Client&apos;s
+            behalf, and optionally start CV review.
           </DialogDescription>
         </DialogHeader>
 
-        {createdClientPerson ? (
+        {created ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
-              <p className="font-medium">{createdClientPerson.fullName} added to Client People</p>
-              <p className="mt-1 text-xs">Contact: {createdClientPerson.emailMasked}</p>
-              <p className="mt-1 text-xs">Candidate account: Not created</p>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The Person exists only in the selected Client workspace. Invite them as a Candidate
-              from Company 360 when account activation is appropriate.
-            </p>
-            <DialogFooter>
-              <Link
-                to="/admin/registry/organizations/$organizationId"
-                params={{ organizationId: createdClientPerson.organizationId }}
-                className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
-              >
-                Open Client
-              </Link>
-            </DialogFooter>
-          </div>
-        ) : created ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-              <p className="font-medium">{created.fullName ?? "Candidate"} created</p>
-              <p className="mt-1 text-xs">Account state: Admin-created / unclaimed</p>
+              <p className="font-medium">{created.fullName} added to Client People</p>
               <p className="mt-1 text-xs">Contact: {created.emailMasked}</p>
-              {resumeStatus ? (
-                <p className="mt-1 text-xs">CV processing status: {resumeStatus}</p>
+              <p className="mt-1 text-xs">
+                Candidate invitation:{" "}
+                {created.activationError ?? created.deliveryState ?? "Not sent"}
+              </p>
+              {created.cvStatus ? (
+                <p className="mt-1 text-xs">CV processing: {created.cvStatus}</p>
+              ) : null}
+              {created.cvError ? (
+                <p className="mt-1 text-xs text-amber-900">{created.cvError}</p>
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
-              No password, activation token, or verified identity state was created by this action.
+              The Candidate sets their own password through the emailed link. The Client
+              relationship and any CV data remain unverified until their respective review workflows
+              complete.
             </p>
             <DialogFooter>
-              <Link
-                to="/admin/users/$userId"
-                params={{ userId: created.candidateId }}
-                className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
-              >
-                Continue to Candidate detail
-              </Link>
+              {created.candidateId ? (
+                <Link
+                  to="/admin/users/$userId"
+                  params={{ userId: created.candidateId }}
+                  className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
+                >
+                  Open Candidate
+                </Link>
+              ) : (
+                <Link
+                  to="/admin/registry/organizations/$organizationId"
+                  params={{ organizationId: created.organizationId }}
+                  className="inline-flex h-9 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
+                >
+                  Open Client to retry
+                </Link>
+              )}
             </DialogFooter>
           </div>
         ) : (
@@ -191,25 +205,19 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
               <ModeButton active={mode === "manual"} onClick={() => setMode("manual")}>
                 <UserPlus className="size-4" /> Enter Manually
               </ModeButton>
-              <ModeButton
-                active={mode === "cv"}
-                onClick={() => setMode("cv")}
-                disabled={Boolean(clientOrganizationId)}
-              >
+              <ModeButton active={mode === "cv"} onClick={() => setMode("cv")}>
                 <FileText className="size-4" /> Upload CV
               </ModeButton>
             </div>
             <label className="block space-y-1 text-xs font-medium text-foreground">
-              Client (optional)
+              Client
               <select
+                required
                 value={clientOrganizationId}
-                onChange={(event) => {
-                  setClientOrganizationId(event.target.value);
-                  if (event.target.value) setMode("manual");
-                }}
+                onChange={(event) => setClientOrganizationId(event.target.value)}
                 className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
               >
-                <option value="">Standalone Candidate</option>
+                <option value="">Select the Client sending this invitation</option>
                 {(clientsQuery.data?.items ?? []).map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
@@ -225,8 +233,28 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
               <LabeledInput label="Full name" value={fullName} onChange={setFullName} required />
               <LabeledInput label="Email" type="email" value={email} onChange={setEmail} required />
               <LabeledInput label="Mobile (optional)" value={phone} onChange={setPhone} />
-              <LabeledInput label="Headline (optional)" value={headline} onChange={setHeadline} />
-              <LabeledInput label="Location (optional)" value={location} onChange={setLocation} />
+              <label className="space-y-1 text-xs font-medium text-foreground">
+                Relationship
+                <select
+                  value={relationship}
+                  onChange={(event) => setRelationship(event.target.value)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                >
+                  <option value="candidate">Candidate</option>
+                  <option value="future_employee">Future employee</option>
+                  <option value="employee">Employee</option>
+                  <option value="contractor">Contractor</option>
+                </select>
+              </label>
+              {relationship === "future_employee" ? (
+                <LabeledInput
+                  label="Joining date"
+                  type="date"
+                  value={joiningDate}
+                  onChange={setJoiningDate}
+                  required
+                />
+              ) : null}
               {mode === "cv" ? (
                 <label className="space-y-1 text-xs font-medium text-foreground">
                   CV (PDF or DOCX)
@@ -241,25 +269,35 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
               ) : null}
             </div>
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              {clientOrganizationId
-                ? "Creates a Client People record only. No Candidate login or invitation is created until an Admin explicitly sends Candidate activation."
-                : mode === "cv"
-                  ? "The CV is parsed into a draft. Nothing is imported until an Admin opens Candidate detail, reviews, edits, selects, validates, and commits it. Imported fields keep CV-extracted provenance."
-                  : "Initial values are recorded as Admin entered and require Candidate confirmation. They are not independently verified."}
+              {mode === "cv"
+                ? "The invitation is sent on behalf of the selected Client. The CV is parsed into a draft and remains unverified until an Admin reviews and commits selected fields."
+                : "The invitation is sent on behalf of the selected Client. Relationship and profile values remain unverified until their canonical review workflows complete."}
+              {relationship === "future_employee" ? (
+                <span className="mt-1 block">
+                  Future employee changes to Employee when the joining date arrives. Document
+                  uploads do not change employment status.
+                </span>
+              ) : null}
             </div>
             <DialogFooter>
               <button
                 type="submit"
-                disabled={mutation.isPending || !fullName.trim() || !email.trim()}
+                disabled={
+                  mutation.isPending ||
+                  !clientOrganizationId ||
+                  !fullName.trim() ||
+                  !email.trim() ||
+                  (relationship === "future_employee" && !joiningDate)
+                }
                 className="inline-flex h-9 items-center rounded-md bg-foreground px-4 text-xs font-medium text-background disabled:opacity-50"
               >
                 {mutation.isPending
                   ? mode === "cv"
-                    ? "Creating and uploading..."
-                    : "Creating..."
+                    ? "Inviting and uploading..."
+                    : "Inviting..."
                   : mode === "cv"
-                    ? "Create and process CV"
-                    : "Create Candidate"}
+                    ? "Invite Candidate and process CV"
+                    : "Invite Candidate"}
               </button>
             </DialogFooter>
           </form>

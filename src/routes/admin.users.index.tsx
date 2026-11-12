@@ -16,6 +16,7 @@ import {
   type AdminUserSortBy,
 } from "@/features/admin/data/users";
 import { formatRelativeTime } from "@/features/admin/lib/format";
+import { pendingCandidateInvitationsQueryOptions } from "@/features/admin/data/admin-operations";
 import { hasPermission } from "@/features/admin/workflow/permissions";
 import { ApiError } from "@/lib/api/errors";
 
@@ -49,6 +50,11 @@ function UsersDirectoryPage() {
   const [sortBy, setSortBy] = useState<AdminUserSortBy>("created_at");
   const [createOpen, setCreateOpen] = useState(false);
   const canCreatePerson = hasPermission(access.admin?.permissions ?? [], "create_person");
+  const canSendActivation = hasPermission(
+    access.admin?.permissions ?? [],
+    "send_candidate_activation",
+  );
+  const canInviteCandidate = canCreatePerson && canSendActivation;
 
   const listQuery = useQuery(
     userListQueryOptions({
@@ -60,6 +66,10 @@ function UsersDirectoryPage() {
       sortOrder: sortBy === "full_name" || sortBy === "email" ? "asc" : "desc",
     }),
   );
+  const invitationsQuery = useQuery({
+    ...pendingCandidateInvitationsQueryOptions(),
+    enabled: hasPermission(access.admin?.permissions ?? [], "users.view"),
+  });
 
   const onQueryChange = (next: string) => {
     setQuery(next);
@@ -121,20 +131,100 @@ function UsersDirectoryPage() {
             readiness.
           </p>
         </div>
-        {canCreatePerson ? (
+        {canInviteCandidate ? (
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white hover:bg-[#0B2545]/90"
           >
-            <UserPlus className="size-4" /> Create Candidate
+            <UserPlus className="size-4" /> Invite Candidate
           </button>
         ) : (
           <span className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-            Create Candidate permission required
+            Candidate invitation permission required
           </span>
         )}
       </header>
+
+      <WorkspaceSection
+        title="Invited Candidates"
+        description="Candidates whose Client invitation has been sent but not yet accepted."
+      >
+        {invitationsQuery.isPending ? (
+          <LoadingSkeleton rows={3} />
+        ) : invitationsQuery.error ? (
+          <ErrorState
+            title="Invitations unavailable"
+            description="Candidate invitation history could not be loaded. No invitation state was inferred."
+            action={
+              <button
+                type="button"
+                onClick={() => void invitationsQuery.refetch()}
+                className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background"
+              >
+                Try again
+              </button>
+            }
+          />
+        ) : invitationsQuery.data?.length ? (
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="min-w-full divide-y divide-border text-xs">
+              <thead className="bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Candidate</th>
+                  <th className="px-3 py-2 font-medium">Invited on behalf of</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Sent</th>
+                  <th className="px-3 py-2 font-medium">Expires</th>
+                  <th className="px-3 py-2 font-medium">Open</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border bg-background">
+                {invitationsQuery.data.map((invitation) => (
+                  <tr key={invitation.invitationId}>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-foreground">
+                        {invitation.candidateName ?? "Invited Candidate"}
+                      </div>
+                      <div className="text-[11px] font-mono text-muted-foreground">
+                        {invitation.emailMasked}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {invitation.organizationName ?? "Client attribution unavailable"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium">
+                        {invitation.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {formatRelativeTime(invitation.sentAt)}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {new Date(invitation.expiresAt).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        to="/admin/users/$userId"
+                        params={{ userId: invitation.candidateId }}
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            title="No pending Candidate invitations"
+            description="Invitations sent from the Invite Candidate flow will appear here until accepted."
+          />
+        )}
+      </WorkspaceSection>
 
       <WorkspaceSection
         title="Directory"

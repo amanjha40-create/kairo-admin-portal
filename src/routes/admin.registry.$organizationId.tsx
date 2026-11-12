@@ -159,6 +159,10 @@ function RegistryOrgDetail() {
       await router.navigate({ to: "/admin/registry" });
     },
   });
+  const verifyMutation = useMutation({
+    mutationFn: () => adapter.verifyOrganization(organizationId),
+    onSuccess: refreshRegistry,
+  });
 
   if (!shouldEnableAdminProtectedQuery(access.state)) {
     return <AdminAccessChecking />;
@@ -215,6 +219,9 @@ function RegistryOrgDetail() {
     );
   }
 
+  const hasVerifiedEvidence =
+    org.domains.some((item) => item.isVerified) || org.identifiers.some((item) => item.isVerified);
+
   const mutationError =
     aliasMutation.error ||
     domainMutation.error ||
@@ -222,6 +229,7 @@ function RegistryOrgDetail() {
     capabilityMutation.error ||
     relationshipMutation.error ||
     mergeMutation.error ||
+    verifyMutation.error ||
     null;
 
   return (
@@ -304,6 +312,34 @@ function RegistryOrgDetail() {
       {mutationError ? (
         <div className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
           {mutationError.message}
+        </div>
+      ) : null}
+
+      {org.state !== "verified" ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="font-semibold">Organization trust review is incomplete</div>
+          <p className="mt-1">
+            Linking a Client or uploading documents does not verify this record. An authorized
+            reviewer must first verify a domain or authoritative identifier, then explicitly mark
+            the active organization record as trusted.
+          </p>
+          {!appEnv.adminDemoMode && canManageRegistry ? (
+            <button
+              type="button"
+              disabled={!hasVerifiedEvidence || verifyMutation.isPending}
+              onClick={() => verifyMutation.mutate()}
+              title={
+                hasVerifiedEvidence
+                  ? "Mark this active organization record as trusted"
+                  : "Verify a domain or identifier first"
+              }
+              className="mt-2 inline-flex h-8 items-center rounded-md bg-amber-950 px-3 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {verifyMutation.isPending
+                ? "Saving trust review..."
+                : "Mark organization record verified"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

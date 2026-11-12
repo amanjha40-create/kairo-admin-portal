@@ -593,6 +593,63 @@ describe("registry data adapter", () => {
     expect(detail?.aliases.length).toBeGreaterThanOrEqual(0);
   });
 
+  it("marks an organization verified only through the explicit active/trusted review", async () => {
+    const storage = createMemoryStorage();
+    seedTokens(storage);
+    const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      requests.push({
+        method: init?.method ?? "GET",
+        path: url.pathname,
+        ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+      });
+      if (init?.method === "PATCH") {
+        return jsonResponse({ ok: true });
+      }
+      return jsonResponse({
+        ...registryRecord(),
+        domains: [
+          {
+            public_id: "44444444-4444-4444-8444-444444444444",
+            domain: "university.kairo.test",
+            is_primary: true,
+            is_verified: true,
+            source_type: "manual",
+            source_metadata: {},
+            created_at: "2026-11-12T08:00:00Z",
+            updated_at: "2026-11-12T08:00:00Z",
+          },
+        ],
+        alias_items: [],
+        identifiers: [],
+        capabilities: [],
+        relationships: [],
+        verification_requests: [],
+        linked_organizations: [],
+        merge_history: [],
+        contacts: [],
+        activity: [],
+      });
+    });
+    const adapter = createRegistryDataAdapter(createProductionConfig(), {
+      production: {
+        storage,
+        fetchImpl,
+        now: () => new Date("2026-07-28T12:00:00Z"),
+      },
+    });
+
+    const verified = await adapter.verifyOrganization("11111111-1111-1111-1111-111111111111");
+
+    expect(verified.state).toBe("verified");
+    expect(requests[0]).toEqual({
+      method: "PATCH",
+      path: "/api/v1/admin/trust-registry/11111111-1111-1111-1111-111111111111",
+      body: { lifecycle_status: "active", trust_status: "trusted" },
+    });
+  });
+
   it("never reads demo registry data when production mode is enabled", async () => {
     const storage = createMemoryStorage();
     seedTokens(storage);

@@ -253,6 +253,7 @@ interface RegistryDataAdapter {
   getMetrics: () => Promise<RegistryMetrics>;
   getOrganization: (id: string) => Promise<RegistryOrganization | undefined>;
   createOrganization: (payload: RegistryCreatePayload) => Promise<RegistryOrganization>;
+  verifyOrganization: (id: string) => Promise<RegistryOrganization>;
   addAlias: (id: string, payload: RegistryAliasCreatePayload) => Promise<RegistryOrganization>;
   addDomain: (id: string, payload: RegistryDomainCreatePayload) => Promise<RegistryOrganization>;
   addIdentifier: (
@@ -567,6 +568,7 @@ export function createRegistryDataAdapter(
       getMetrics: options.demoMetricsLoader ?? loadDemoMetrics,
       getOrganization: options.demoDetailLoader ?? loadDemoOrganization,
       createOrganization: unsupportedMutation,
+      verifyOrganization: unsupportedMutation,
       addAlias: unsupportedMutation,
       addDomain: unsupportedMutation,
       addIdentifier: unsupportedMutation,
@@ -641,6 +643,13 @@ export function createRegistryDataAdapter(
         },
       });
       return requireRegistryDetail(api, created.public_id);
+    },
+    async verifyOrganization(id) {
+      await api.request(`/api/v1/admin/trust-registry/${id}`, {
+        method: "PATCH",
+        body: { lifecycle_status: "active", trust_status: "trusted" },
+      });
+      return requireRegistryDetail(api, id);
     },
     async addAlias(id, payload) {
       await api.request(`/api/v1/admin/trust-registry/${id}/aliases`, {

@@ -111,6 +111,30 @@ export interface ResumeProcessReceipt {
   status: string;
 }
 
+export interface ManagedResume {
+  id: string;
+  originalFilename: string;
+  contentType: string;
+  fileSizeBytes: number;
+  uploadStatus: string;
+  processingStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PendingCandidateInvitation {
+  invitationId: string;
+  candidateId: string;
+  candidateName?: string;
+  emailMasked: string;
+  organizationId?: string;
+  organizationName?: string;
+  personId?: string;
+  status: "pending" | "expired" | "revoked" | "delivery_failed";
+  sentAt: string;
+  expiresAt: string;
+}
+
 export interface ResumeParsedResult {
   resumeId: string;
   jobId: string;
@@ -724,6 +748,7 @@ export interface AdminOperationsAdapter {
   getCandidate: (candidateId: string) => Promise<ManagedCandidate>;
   sendActivation: (candidateId: string) => Promise<CandidateActivation>;
   resendActivation: (candidateId: string) => Promise<CandidateActivation>;
+  listPendingInvitations: () => Promise<PendingCandidateInvitation[]>;
   updateProfile: (
     candidateId: string,
     input: ProfileMutationInput,
@@ -754,6 +779,8 @@ export interface AdminOperationsAdapter {
     recordId: string,
   ) => Promise<CareerDeleteResult>;
   uploadResume: (candidateId: string, file: File) => Promise<ResumeProcessReceipt>;
+  listResumes: (candidateId: string) => Promise<AdminOperationsPage<ManagedResume>>;
+  getResumeStatus: (candidateId: string, resumeId: string) => Promise<ResumeProcessReceipt>;
   getParsedResume: (candidateId: string, resumeId: string) => Promise<ResumeParsedResult>;
   createResumeReview: (candidateId: string, resumeId: string) => Promise<ResumeReviewSession>;
   updateReviewItem: (
@@ -854,8 +881,13 @@ export interface AdminOperationsAdapter {
 
 export const adminOperationsKeys = {
   all: () => ["admin", "operations-v1-1"] as const,
+  invitations: () => [...adminOperationsKeys.all(), "candidate-invitations"] as const,
   candidate: (candidateId: string) =>
     [...adminOperationsKeys.all(), "candidate", candidateId] as const,
+  resumes: (candidateId: string) =>
+    [...adminOperationsKeys.all(), "candidate", candidateId, "resumes"] as const,
+  resumeStatus: (candidateId: string, resumeId: string) =>
+    [...adminOperationsKeys.resumes(candidateId), resumeId, "status"] as const,
   careerList: (candidateId: string, claimType: ExtendedCareerClaimType, page = 1, pageSize = 100) =>
     [
       ...adminOperationsKeys.all(),
@@ -958,6 +990,34 @@ export function createAdminOperationsAdapter(
           method: "POST",
         }),
       );
+    },
+    async listPendingInvitations() {
+      const rows = await api.request<
+        Array<{
+          invitation_id: string;
+          candidate_id: string;
+          candidate_name: string | null;
+          email_masked: string;
+          organization_id: string | null;
+          organization_name: string | null;
+          person_id: string | null;
+          status: PendingCandidateInvitation["status"];
+          sent_at: string;
+          expires_at: string;
+        }>
+      >("/api/v1/admin/operations/candidate-invitations");
+      return rows.map((row) => ({
+        invitationId: row.invitation_id,
+        candidateId: row.candidate_id,
+        candidateName: row.candidate_name ?? undefined,
+        emailMasked: row.email_masked,
+        organizationId: row.organization_id ?? undefined,
+        organizationName: row.organization_name ?? undefined,
+        personId: row.person_id ?? undefined,
+        status: row.status,
+        sentAt: row.sent_at,
+        expiresAt: row.expires_at,
+      }));
     },
     async updateProfile(candidateId, input) {
       const response = await api.request<{
@@ -1065,6 +1125,46 @@ export function createAdminOperationsAdapter(
         { method: "POST" },
       );
       return { resumeId: receipt.resume_id, jobId: receipt.job_id, status: receipt.status };
+    },
+    async listResumes(candidateId) {
+      const response = await api.request<{
+        items: Array<{
+          id: string;
+          original_filename: string;
+          content_type: string;
+          file_size_bytes: number;
+          upload_status: string;
+          processing_status: string;
+          created_at: string;
+          updated_at: string;
+        }>;
+        total: number;
+        page: number;
+        page_size: number;
+        total_pages: number;
+      }>(`${candidatePath(candidateId)}/resumes?page=1&page_size=20`);
+      return {
+        items: response.items.map((row) => ({
+          id: row.id,
+          originalFilename: row.original_filename,
+          contentType: row.content_type,
+          fileSizeBytes: row.file_size_bytes,
+          uploadStatus: row.upload_status,
+          processingStatus: row.processing_status,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        total: response.total,
+        page: response.page,
+        pageSize: response.page_size,
+        totalPages: response.total_pages,
+      };
+    },
+    async getResumeStatus(candidateId, resumeId) {
+      const response = await api.request<{ resume_id: string; job_id: string; status: string }>(
+        `${candidatePath(candidateId)}/resumes/${encodeURIComponent(resumeId)}/status`,
+      );
+      return { resumeId: response.resume_id, jobId: response.job_id, status: response.status };
     },
     async getParsedResume(candidateId, resumeId) {
       const response = await api.request<{
@@ -1390,6 +1490,47 @@ export function managedCandidateQueryOptions(
     queryKey: adminOperationsKeys.candidate(candidateId),
     queryFn: () => createAdminOperationsAdapter(config, options).getCandidate(candidateId),
     retry: false,
+  });
+}
+
+export function pendingCandidateInvitationsQueryOptions(
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.invitations(),
+    queryFn: () => createAdminOperationsAdapter(config, options).listPendingInvitations(),
+    retry: false,
+  });
+}
+
+export function managedResumesQueryOptions(
+  candidateId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.resumes(candidateId),
+    queryFn: () => createAdminOperationsAdapter(config, options).listResumes(candidateId),
+    retry: false,
+  });
+}
+
+export function managedResumeStatusQueryOptions(
+  candidateId: string,
+  resumeId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.resumeStatus(candidateId, resumeId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).getResumeStatus(candidateId, resumeId),
+    retry: false,
+    refetchInterval: (query) =>
+      ["queued", "extracting", "extracted", "parsing"].includes(query.state.data?.status ?? "")
+        ? 2_000
+        : false,
   });
 }
 

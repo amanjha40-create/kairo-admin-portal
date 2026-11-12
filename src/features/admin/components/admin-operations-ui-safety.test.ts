@@ -43,8 +43,14 @@ describe("Admin Operations V1.1 UI safety", () => {
     const actionBar = source("./candidate-detail-action-bar.tsx");
     const launcher = source("./candidate-verification-operation-actions.tsx");
 
-    expect(users).toContain("Create Candidate");
+    expect(users).toContain("Invite Candidate");
+    expect(users).toContain("Invited Candidates");
+    expect(users).toContain("Invited on behalf of");
     expect(users).toContain("Edit Profile");
+    expect(source("./create-person-dialog.tsx")).toContain("Upload CV");
+    expect(source("./create-person-dialog.tsx")).not.toContain(
+      "disabled={Boolean(clientOrganizationId)}",
+    );
     expect(detail).toContain("CandidateDetailActionBar");
     expect(actionBar).toContain("Upload / Review CV");
     expect(actionBar).toContain("Verification Operations");

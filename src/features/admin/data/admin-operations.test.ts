@@ -745,6 +745,85 @@ describe("Admin Operations V1.1 adapter", () => {
     expect(receipt.permanentAddressCheckCredit).toBe(0);
   });
 
+  it("reads Client-attributed pending invitations without exposing activation tokens", async () => {
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      expect(new URL(String(input)).pathname).toBe(
+        "/api/v1/admin/operations/candidate-invitations",
+      );
+      return response([
+        {
+          invitation_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          candidate_id: CANDIDATE_ID,
+          candidate_name: "Invited Candidate",
+          email_masked: "i***@example.com",
+          organization_id: ORGANIZATION_ID,
+          organization_name: "Godress",
+          person_id: PERSON_ID,
+          status: "pending",
+          sent_at: "2026-11-12T08:00:00Z",
+          expires_at: "2026-11-14T08:00:00Z",
+        },
+      ]);
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+
+    const invitations = await adapter.listPendingInvitations();
+
+    expect(invitations[0]).toMatchObject({
+      candidateId: CANDIDATE_ID,
+      organizationId: ORGANIZATION_ID,
+      organizationName: "Godress",
+      personId: PERSON_ID,
+      status: "pending",
+    });
+    expect(JSON.stringify(invitations)).not.toMatch(/activation.*token|opaque|password/i);
+  });
+
+  it("rehydrates persisted CV processing state after a hard refresh", async () => {
+    const requests: string[] = [];
+    const resumeId = "44444444-4444-4444-8444-444444444444";
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(String(input));
+      requests.push(`${url.pathname}${url.search}`);
+      if (url.pathname.endsWith(`/${resumeId}/status`)) {
+        return response({ resume_id: resumeId, job_id: "job-1", status: "needs_review" });
+      }
+      return response({
+        items: [
+          {
+            id: resumeId,
+            original_filename: "candidate.pdf",
+            content_type: "application/pdf",
+            file_size_bytes: 1024,
+            upload_status: "uploaded",
+            processing_status: "needs_review",
+            created_at: "2026-11-12T08:00:00Z",
+            updated_at: "2026-11-12T08:01:00Z",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+
+    const resumes = await adapter.listResumes(CANDIDATE_ID);
+    const status = await adapter.getResumeStatus(CANDIDATE_ID, resumeId);
+
+    expect(resumes.items[0]).toMatchObject({
+      id: resumeId,
+      originalFilename: "candidate.pdf",
+      processingStatus: "needs_review",
+    });
+    expect(status).toMatchObject({ resumeId, status: "needs_review" });
+    expect(requests).toEqual([
+      `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/resumes?page=1&page_size=20`,
+      `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/resumes/${resumeId}/status`,
+    ]);
+  });
+
   it("validates private evidence before upload without weakening backend enforcement", () => {
     expect(
       validateEvidenceFile(new File(["pdf"], "record.pdf", { type: "application/pdf" })),
