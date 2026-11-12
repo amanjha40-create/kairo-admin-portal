@@ -8,7 +8,8 @@ describe("Admin security headers", () => {
   it("limits production connections to the configured production API origin", () => {
     const policy = buildAdminContentSecurityPolicy("https://api.kairoid.com", "production");
 
-    expect(policy).toContain("connect-src 'self' https://api.kairoid.com");
+    expect(policy).toContain("connect-src 'self' https://api.kairoid.com https://s3.amazonaws.com");
+    expect(policy).toContain("https://*.s3.us-east-1.amazonaws.com");
     expect(policy).toContain("frame-src 'self' https://s3.amazonaws.com");
     expect(policy).toContain("https://*.s3.us-east-1.amazonaws.com");
     expect(policy).toContain("img-src 'self' data: blob: https://s3.amazonaws.com");
@@ -24,7 +25,9 @@ describe("Admin security headers", () => {
   });
 
   it("keeps local Demo Mode available without an API origin", () => {
-    expect(buildAdminContentSecurityPolicy("", "development")).toContain("connect-src 'self'");
+    expect(buildAdminContentSecurityPolicy("", "development")).toContain(
+      "connect-src 'self' https://s3.amazonaws.com",
+    );
   });
 
   it("marks SSR responses private and non-cacheable", async () => {
@@ -39,7 +42,7 @@ describe("Admin security headers", () => {
       "private, no-store, max-age=0, must-revalidate",
     );
     expect(secured.headers.get("content-security-policy")).toContain(
-      "connect-src 'self' https://api.kairoid.com",
+      "connect-src 'self' https://api.kairoid.com https://s3.amazonaws.com",
     );
     expect(secured.headers.get("x-frame-options")).toBe("DENY");
   });

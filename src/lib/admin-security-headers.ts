@@ -29,7 +29,9 @@ export function buildAdminContentSecurityPolicy(
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    apiOrigin ? `connect-src 'self' ${apiOrigin}` : "connect-src 'self'",
+    apiOrigin
+      ? `connect-src 'self' ${apiOrigin} ${PRIVATE_S3_MEDIA_SOURCES}`
+      : `connect-src 'self' ${PRIVATE_S3_MEDIA_SOURCES}`,
     `img-src 'self' data: blob: ${PRIVATE_S3_MEDIA_SOURCES}`,
     `frame-src 'self' ${PRIVATE_S3_MEDIA_SOURCES}`,
     "font-src 'self' data:",
