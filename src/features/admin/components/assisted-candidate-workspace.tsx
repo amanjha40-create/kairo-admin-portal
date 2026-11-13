@@ -23,6 +23,12 @@ import {
 import { userKeys } from "@/features/admin/data/users";
 import { getOperationError } from "@/features/admin/lib/operation-error";
 import { hasPermission } from "@/features/admin/workflow/permissions";
+import {
+  getResumeReviewSummary,
+  getResumeReviewUpdateInput,
+  isImportableResumeClaimType,
+  resumeReviewBlockerLabel,
+} from "@/features/admin/workflow/resume-review";
 import { ApiError } from "@/lib/api/errors";
 
 export interface AssistedProfileInitialValues {
@@ -474,17 +480,12 @@ function CvReviewWorkspace({
     mutationFn: async (itemId: string) => {
       const item = review?.items.find((entry) => entry.id === itemId);
       if (!review || !item) throw new Error("Review item is unavailable.");
-      return adapter.updateReviewItem(candidateId, review.id, item.id, {
-        expectedVersion: item.version,
-        selected: item.selected,
-        editedPayload: JSON.parse(drafts[item.id] ?? "{}"),
-        importAction: item.importAction,
-        targetRecordId: item.targetRecordId,
-        confirmDistinctRole:
-          item.claimType === "employment" &&
-          item.importAction === "create_new" &&
-          item.duplicateStatus !== "no_match",
-      });
+      return adapter.updateReviewItem(
+        candidateId,
+        review.id,
+        item.id,
+        getResumeReviewUpdateInput(item, drafts[item.id] ?? "{}"),
+      );
     },
     onSuccess: (item) => {
       setReview((current) =>
@@ -529,6 +530,8 @@ function CvReviewWorkspace({
     onError: (error) =>
       toast.error(getOperationError(error, "The selected CV data could not be imported.")),
   });
+  const reviewSummary = review ? getResumeReviewSummary(review.items, plan) : null;
+  const planByItem = new Map((plan?.items ?? []).map((item) => [item.itemId, item] as const));
 
   return (
     <WorkspaceSection
@@ -603,124 +606,194 @@ function CvReviewWorkspace({
 
       {review ? (
         <div className="mt-4 space-y-3">
-          {review.items.map((item) => (
-            <div key={item.id} className="rounded-md border border-border bg-background p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="inline-flex items-center gap-2 text-xs font-medium">
-                  <input
-                    type="checkbox"
-                    checked={item.selected}
-                    onChange={(event) =>
-                      setReview((current) =>
-                        current
-                          ? {
-                              ...current,
-                              items: current.items.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, selected: event.target.checked }
-                                  : entry,
-                              ),
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                  {humanize(item.claimType)} · Imported from CV
-                </label>
-                <span className="text-[11px] text-muted-foreground">
-                  {item.confidence === undefined
-                    ? "Confidence unavailable"
-                    : `${Math.round(item.confidence * 100)}% confidence`}
-                </span>
-              </div>
-              <textarea
-                value={drafts[item.id] ?? "{}"}
-                onChange={(event) =>
-                  setDrafts((current) => ({ ...current, [item.id]: event.target.value }))
-                }
-                className="mt-2 min-h-28 w-full rounded-md border border-border bg-muted/20 px-3 py-2 font-mono text-[11px]"
-              />
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <label className="space-y-1 text-[11px] font-medium">
-                  Import decision
-                  <select
-                    value={item.importAction}
-                    onChange={(event) =>
-                      setReview((current) =>
-                        current
-                          ? {
-                              ...current,
-                              items: current.items.map((entry) =>
-                                entry.id === item.id
-                                  ? {
-                                      ...entry,
-                                      importAction: event.target.value as ResumeImportAction,
-                                    }
-                                  : entry,
-                              ),
-                            }
-                          : current,
-                      )
-                    }
-                    className="h-8 w-full rounded-md border border-border bg-background px-2"
-                  >
-                    <option value="create_new">Create new record</option>
-                    <option value="link_existing">Link existing record</option>
-                    <option value="update_existing">Update existing record</option>
-                    <option value="skip">Skip</option>
-                  </select>
-                </label>
-                <label className="space-y-1 text-[11px] font-medium">
-                  Target record ID (for link/update)
-                  <input
-                    value={item.targetRecordId ?? ""}
-                    onChange={(event) =>
-                      setReview((current) =>
-                        current
-                          ? {
-                              ...current,
-                              items: current.items.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, targetRecordId: event.target.value || undefined }
-                                  : entry,
-                              ),
-                            }
-                          : current,
-                      )
-                    }
-                    className="h-8 w-full rounded-md border border-border bg-background px-2 font-mono"
-                  />
-                </label>
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Duplicate assessment: {humanize(item.duplicateStatus)}. A distinct Employment create
-                decision is explicitly confirmed when saved.
-              </p>
-              {item.duplicateCandidates.length ? (
-                <details className="mt-2 text-[11px] text-muted-foreground">
-                  <summary className="cursor-pointer font-medium">
-                    {item.duplicateCandidates.length} possible existing match(es)
-                  </summary>
-                  <pre className="mt-1 max-h-36 overflow-auto rounded bg-muted p-2">
-                    {JSON.stringify(item.duplicateCandidates, null, 2)}
-                  </pre>
-                </details>
-              ) : null}
-              {item.conflictWarnings.length ? (
-                <p className="mt-2 text-[11px] text-amber-700">{item.conflictWarnings.join(" ")}</p>
-              ) : null}
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => saveItem.mutate(item.id)}
-                  disabled={saveItem.isPending}
-                  className="h-7 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent"
+          {reviewSummary ? (
+            <div className="grid gap-2 sm:grid-cols-5" aria-label="CV review summary">
+              {[
+                ["Detected", reviewSummary.detected],
+                ["Selected", reviewSummary.selected],
+                ["Excluded", reviewSummary.excluded],
+                ["Needs attention", reviewSummary.blocked],
+                ["Unsupported", reviewSummary.unsupported],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-md border border-border bg-muted/20 p-2 text-xs"
                 >
-                  Save selection and edits
-                </button>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {label}
+                  </div>
+                  <div className="mt-1 text-base font-semibold">{value}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {plan && !plan.ready && plan.items.some((item) => item.blockers.length) ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+              <div className="font-medium">Items that need attention</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {plan.items
+                  .filter((item) => item.blockers.length)
+                  .map((item) => (
+                    <a
+                      key={item.itemId}
+                      href={`#resume-review-${item.itemId}`}
+                      className="rounded border border-amber-300 bg-white px-2 py-1 font-medium hover:bg-amber-100"
+                    >
+                      {humanize(item.claimType)}: {item.blockers.length}
+                    </a>
+                  ))}
               </div>
             </div>
-          ))}
+          ) : null}
+          {review.items.map((item) => {
+            const importable = isImportableResumeClaimType(item.claimType);
+            const itemPlan = planByItem.get(item.id);
+            return (
+              <div
+                id={`resume-review-${item.id}`}
+                key={item.id}
+                className="scroll-mt-20 rounded-md border border-border bg-background p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="inline-flex items-center gap-2 text-xs font-medium">
+                    <input
+                      type="checkbox"
+                      checked={importable && item.selected}
+                      disabled={!importable}
+                      onChange={(event) =>
+                        setReview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                items: current.items.map((entry) =>
+                                  entry.id === item.id
+                                    ? { ...entry, selected: event.target.checked }
+                                    : entry,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                    {humanize(item.claimType)} · Imported from CV
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">
+                    {item.confidence === undefined
+                      ? "Confidence unavailable"
+                      : `${Math.round(item.confidence * 100)}% confidence`}
+                  </span>
+                </div>
+                {!importable ? (
+                  <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-[11px] text-amber-900">
+                    {item.claimType === "profile"
+                      ? "Profile suggestions are reviewed in the Profile section and cannot be imported as Career records."
+                      : "This parsed claim type is not supported for Career import. Its source payload remains visible for an honest review, but it must be excluded."}
+                  </div>
+                ) : null}
+                <textarea
+                  value={drafts[item.id] ?? "{}"}
+                  onChange={(event) =>
+                    setDrafts((current) => ({ ...current, [item.id]: event.target.value }))
+                  }
+                  className="mt-2 min-h-28 w-full rounded-md border border-border bg-muted/20 px-3 py-2 font-mono text-[11px]"
+                />
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1 text-[11px] font-medium">
+                    Import decision
+                    <select
+                      value={importable ? item.importAction : "skip"}
+                      disabled={!importable}
+                      onChange={(event) =>
+                        setReview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                items: current.items.map((entry) =>
+                                  entry.id === item.id
+                                    ? {
+                                        ...entry,
+                                        importAction: event.target.value as ResumeImportAction,
+                                      }
+                                    : entry,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                      className="h-8 w-full rounded-md border border-border bg-background px-2"
+                    >
+                      {importable ? <option value="create_new">Create new record</option> : null}
+                      {importable ? (
+                        <option value="link_existing">Link existing record</option>
+                      ) : null}
+                      {importable ? (
+                        <option value="update_existing">Update existing record</option>
+                      ) : null}
+                      <option value="skip">Skip</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-[11px] font-medium">
+                    Target record ID (for link/update)
+                    <input
+                      value={item.targetRecordId ?? ""}
+                      onChange={(event) =>
+                        setReview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                items: current.items.map((entry) =>
+                                  entry.id === item.id
+                                    ? { ...entry, targetRecordId: event.target.value || undefined }
+                                    : entry,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                      className="h-8 w-full rounded-md border border-border bg-background px-2 font-mono"
+                      disabled={!importable || item.importAction === "skip"}
+                    />
+                  </label>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Duplicate assessment: {humanize(item.duplicateStatus)}. A distinct Employment
+                  create decision is explicitly confirmed when saved.
+                </p>
+                {item.duplicateCandidates.length ? (
+                  <details className="mt-2 text-[11px] text-muted-foreground">
+                    <summary className="cursor-pointer font-medium">
+                      {item.duplicateCandidates.length} possible existing match(es)
+                    </summary>
+                    <pre className="mt-1 max-h-36 overflow-auto rounded bg-muted p-2">
+                      {JSON.stringify(item.duplicateCandidates, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+                {item.conflictWarnings.length ? (
+                  <p className="mt-2 text-[11px] text-amber-700">
+                    {item.conflictWarnings.join(" ")}
+                  </p>
+                ) : null}
+                {itemPlan?.blockers.length ? (
+                  <ul className="mt-2 list-disc space-y-1 rounded border border-amber-200 bg-amber-50 px-6 py-2 text-[11px] text-amber-900">
+                    {itemPlan.blockers.map((blocker) => (
+                      <li key={blocker}>{resumeReviewBlockerLabel(blocker)}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => saveItem.mutate(item.id)}
+                    disabled={saveItem.isPending}
+                    className="h-7 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent"
+                  >
+                    {importable ? "Save selection and edits" : "Confirm exclusion"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-[11px] text-muted-foreground">
               Source-verified records are protected by the backend and cannot be replaced by CV

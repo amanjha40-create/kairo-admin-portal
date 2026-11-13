@@ -32,7 +32,9 @@ import { AdminEnvironmentNotice } from "../components/admin-environment-notice";
 import { AdminNotificationBell } from "../components/admin-notification-bell";
 import { useAdminAccess } from "../auth/admin-access";
 import { useAdminAuth } from "../auth/admin-auth";
+import type { WorkflowPermission } from "../workflow/types";
 import { KairoLogo } from "@/features/branding/kairo-logo";
+import { ADMIN_NAV, visibleAdminNavItems as visibleAdminNavDefinitions } from "./admin-navigation";
 
 interface NavItem {
   label: string;
@@ -41,56 +43,23 @@ interface NavItem {
   description: string;
 }
 
-const NAV: NavItem[] = [
-  {
-    label: "Overview",
-    to: "/admin",
-    icon: LayoutDashboard,
-    description: "Growth, operations and urgent activity",
-  },
-  {
-    label: "Verifications",
-    to: "/admin/verifications",
-    icon: ShieldCheck,
-    description: "Verification queue, cases and tasks",
-  },
-  {
-    label: "Users",
-    to: "/admin/users",
-    icon: Users,
-    description: "Candidate accounts and profiles",
-  },
-  {
-    label: "Clients",
-    to: "/admin/registry/organizations",
-    icon: Building2,
-    description: "Customer workspaces, People and operations",
-  },
-  {
-    label: "Organization Directory",
-    to: "/admin/registry",
-    icon: Landmark,
-    description: "Real-world company and institution records",
-  },
-  {
-    label: "Communications",
-    to: "/admin/communications",
-    icon: MessageSquare,
-    description: "Outreach, email delivery and templates",
-  },
-  {
-    label: "Risk",
-    to: "/admin/risk",
-    icon: ShieldAlert,
-    description: "Trust & Safety investigations, duplicates, document anomalies",
-  },
-  {
-    label: "System",
-    to: "/admin/system",
-    icon: SlidersHorizontal,
-    description: "Platform health, roles and configuration",
-  },
-];
+const NAV_ICONS: Record<string, typeof LayoutDashboard> = {
+  Overview: LayoutDashboard,
+  Verifications: ShieldCheck,
+  Users,
+  Clients: Building2,
+  "Organization Directory": Landmark,
+  Communications: MessageSquare,
+  Risk: ShieldAlert,
+  System: SlidersHorizontal,
+};
+
+export function visibleAdminNavItems(permissions: WorkflowPermission[]): NavItem[] {
+  return visibleAdminNavDefinitions(permissions).map((item) => ({
+    ...item,
+    icon: NAV_ICONS[item.label] ?? LayoutDashboard,
+  }));
+}
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -122,6 +91,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           pathname={pathname}
           onCollapseToggle={() => setCollapsed((c) => !c)}
           admin={admin}
+          navItems={visibleAdminNavItems(admin?.permissions ?? [])}
           onLogout={handleLogout}
         />
       </aside>
@@ -155,6 +125,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               collapsed={false}
               pathname={pathname}
               admin={admin}
+              navItems={visibleAdminNavItems(admin?.permissions ?? [])}
               onNavigate={() => setMobileOpen(false)}
               onLogout={handleLogout}
             />
@@ -257,13 +228,21 @@ function SidebarInner({
   onCollapseToggle,
   onNavigate,
   admin,
+  navItems,
   onLogout,
 }: {
   collapsed: boolean;
   pathname: string;
   onCollapseToggle?: () => void;
   onNavigate?: () => void;
-  admin?: { name: string; role: string; initials: string; email: string };
+  admin?: {
+    name: string;
+    role: string;
+    initials: string;
+    email: string;
+    permissions: WorkflowPermission[];
+  };
+  navItems: NavItem[];
   onLogout?: () => void;
 }) {
   return (
@@ -279,7 +258,7 @@ function SidebarInner({
 
       <nav className="flex-1 overflow-y-auto p-2" aria-label="Sections">
         <ul className="space-y-0.5">
-          {NAV.map((item) => {
+          {navItems.map((item) => {
             const active = isActive(pathname, item.to);
             const Icon = item.icon;
             return (
@@ -396,8 +375,11 @@ function BrandMarkCompact() {
 
 function matchNav(pathname: string): NavItem {
   // Prefer the most-specific match, falling back to Overview.
-  const sorted = [...NAV].sort((a, b) => b.to.length - a.to.length);
-  return sorted.find((n) => isActive(pathname, n.to)) ?? NAV[0];
+  const sorted = ADMIN_NAV.map((item) => ({
+    ...item,
+    icon: NAV_ICONS[item.label] ?? LayoutDashboard,
+  })).sort((a, b) => b.to.length - a.to.length);
+  return sorted.find((n) => isActive(pathname, n.to)) ?? sorted[0];
 }
 
 function isActive(pathname: string, to: string): boolean {
