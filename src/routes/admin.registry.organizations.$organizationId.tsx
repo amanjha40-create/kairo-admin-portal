@@ -331,6 +331,7 @@ function Company360Page() {
           }}
           canCreatePerson={canCreatePerson}
           canActivatePerson={canActivatePerson}
+          clientReady={company.isWorkspaceCustomer}
           canManageEmployment={canManageClients}
           onPage={setPeoplePage}
           onPageSize={(value) => {
@@ -512,6 +513,7 @@ function PeopleTab({
   onOpenRequests,
   canCreatePerson,
   canActivatePerson,
+  clientReady,
   canManageEmployment,
   onPage,
   onPageSize,
@@ -525,6 +527,7 @@ function PeopleTab({
   onOpenRequests: (name: string) => void;
   canCreatePerson: boolean;
   canActivatePerson: boolean;
+  clientReady: boolean;
   canManageEmployment: boolean;
   onPage: (page: number) => void;
   onPageSize: (size: number) => void;
@@ -612,6 +615,7 @@ function PeopleTab({
                   organizationId={organizationId}
                   person={person}
                   allowed={canActivatePerson}
+                  clientReady={clientReady}
                 />
                 <ClientPersonEmploymentAction
                   organizationId={organizationId}

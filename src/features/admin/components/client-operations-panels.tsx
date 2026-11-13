@@ -168,10 +168,12 @@ export function CandidateActivationAction({
   organizationId,
   person,
   allowed,
+  clientReady,
 }: {
   organizationId: string;
   person: CompanyPersonItem;
   allowed: boolean;
+  clientReady: boolean;
 }) {
   const adapter = useMemo(() => createAdminClientOperationsAdapter(), []);
   const queryClient = useQueryClient();
@@ -187,6 +189,16 @@ export function CandidateActivationAction({
   });
   const canRetry = person.linkedUserId && person.invitationStatus === "not_invited";
   if (person.linkedUserId && !canRetry) return null;
+  if (!clientReady) {
+    return (
+      <span
+        className="text-xs text-muted-foreground"
+        title="Add an active Client team member before sending Candidate invitations."
+      >
+        Invitation unavailable until Client setup is complete
+      </span>
+    );
+  }
   return (
     <button
       type="button"

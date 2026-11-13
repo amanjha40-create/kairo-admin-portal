@@ -30,6 +30,10 @@ describe("Admin Operations Hub client workflows", () => {
 
     expect(panels).toContain("CSV import never creates Candidate accounts");
     expect(panels).toContain("Invite as Candidate");
+    expect(panels).toContain("Invitation unavailable until Client setup is complete");
+    expect(panels).toContain(
+      "Add an active Client team member before sending Candidate invitations",
+    );
     expect(panels).toContain("Employment assignment");
     expect(panels).toContain("does not overwrite their global Candidate profile");
     expect(panels).toContain("Client job role updated");
@@ -39,6 +43,7 @@ describe("Admin Operations Hub client workflows", () => {
     expect(panels).toContain("creates a Client People record only");
     expect(company).toContain("/admin/verifications/permanent-address/$candidateId");
     expect(company).toContain("Client People records");
+    expect(company).toContain("clientReady={company.isWorkspaceCustomer}");
   });
 
   it("uses only canonical Admin client-operation endpoints", () => {
