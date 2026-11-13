@@ -12,7 +12,9 @@ describe("Admin Operations Hub client workflows", () => {
 
     expect(createPerson).toContain("companyDirectoryQueryOptions");
     expect(createPerson).not.toContain("registryListQueryOptions");
-    expect(createPerson).toContain("Options come only from Clients");
+    expect(createPerson).toContain('status: "active"');
+    expect(createPerson).toContain("Options include only active Clients with workspace access");
+    expect(createPerson).toContain("setup-incomplete Clients are intentionally not selectable");
     expect(directory).toContain("Organization Directory");
     expect(directory).toContain("Real-world company and institution records");
     expect(clients).toContain("Clients hold customer operations");

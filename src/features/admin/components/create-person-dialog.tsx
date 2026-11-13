@@ -50,7 +50,7 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
   const [clientOrganizationId, setClientOrganizationId] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const clientsQuery = useQuery({
-    ...companyDirectoryQueryOptions({ page: 1, pageSize: 100, status: "all" }),
+    ...companyDirectoryQueryOptions({ page: 1, pageSize: 100, status: "active" }),
     enabled: open,
   });
 
@@ -217,7 +217,7 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
                 onChange={(event) => setClientOrganizationId(event.target.value)}
                 className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
               >
-                <option value="">Select the Client sending this invitation</option>
+                <option value="">Select an active Client sending this invitation</option>
                 {(clientsQuery.data?.items ?? []).map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
@@ -225,8 +225,9 @@ export function CreatePersonDialog({ open, onOpenChange }: CreatePersonDialogPro
                 ))}
               </select>
               <span className="block font-normal text-muted-foreground">
-                Options come only from Clients. Trust Registry organizations are intentionally not
-                selectable.
+                Options include only active Clients with workspace access. Organization Directory
+                records and setup-incomplete Clients are intentionally not selectable because they
+                cannot send Candidate invitations.
               </span>
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
