@@ -73,15 +73,27 @@ export function AssistedCandidateWorkspace({
   }
   if (candidateQuery.error instanceof ApiError && candidateQuery.error.status === 404) {
     return (
-      <WorkspaceSection
-        title="Assisted profile"
-        description="This Candidate remains readable, but is not eligible for Admin-assisted mutation"
-      >
-        <EmptyState
-          title="Candidate-managed profile"
-          description="This account was not created through assisted onboarding. Profile mutation and activation controls remain unavailable; existing account and verification information is unchanged."
-        />
-      </WorkspaceSection>
+      <div className="space-y-4">
+        <WorkspaceSection
+          title="Assisted profile"
+          description="Candidate-managed account boundaries"
+        >
+          <EmptyState
+            title="Candidate-managed profile"
+            description="Activation and direct Career mutation remain unavailable. Authorized CV review can still import Candidate-provided drafts without publishing or verifying them."
+          />
+        </WorkspaceSection>
+        {canManageProfile ? (
+          <div id="cv-review" className="scroll-mt-20">
+            <CvReviewWorkspace
+              candidateId={candidateId}
+              onComplete={async () => {
+                await queryClient.invalidateQueries({ queryKey: userKeys.all() });
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
     );
   }
   if (candidateQuery.error) {
@@ -366,7 +378,6 @@ function CvReviewWorkspace({
   const [plan, setPlan] = useState<ResumeReviewPlan | null>(null);
   const [batch, setBatch] = useState<ResumeImportBatch | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [importIdempotencyKey] = useState(() => crypto.randomUUID());
   const resumesQuery = useQuery(managedResumesQueryOptions(candidateId));
   const persistedResume = resumesQuery.data?.items[0];
   const activeResumeId = resumeId ?? persistedResume?.id ?? null;
@@ -380,10 +391,44 @@ function CvReviewWorkspace({
     enabled: Boolean(activeResumeId) && statusQuery.data?.status === "needs_review",
     retry: false,
   });
+  const reviewQuery = useQuery({
+    queryKey: [...adminOperationsKeys.resumes(candidateId), activeResumeId, "review-session"],
+    queryFn: () => adapter.getResumeReview(candidateId, activeResumeId!),
+    enabled: Boolean(activeResumeId) && statusQuery.data?.status === "needs_review",
+    retry: false,
+  });
+  const importQuery = useQuery({
+    queryKey: [
+      ...adminOperationsKeys.resumes(candidateId),
+      activeResumeId,
+      review?.id,
+      "import-status",
+    ],
+    queryFn: () => adapter.getResumeImportStatus(candidateId, review!.id),
+    enabled: Boolean(review?.id) && review?.status === "imported",
+    retry: false,
+  });
 
   useEffect(() => {
     if (parsedQuery.data) setParsed(parsedQuery.data);
   }, [parsedQuery.data]);
+
+  useEffect(() => {
+    if (!reviewQuery.data || review) return;
+    setReview(reviewQuery.data);
+    setDrafts(
+      Object.fromEntries(
+        reviewQuery.data.items.map((item) => [
+          item.id,
+          JSON.stringify(item.editedPayload, null, 2),
+        ]),
+      ),
+    );
+  }, [review, reviewQuery.data]);
+
+  useEffect(() => {
+    if (importQuery.data) setBatch(importQuery.data);
+  }, [importQuery.data]);
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -394,6 +439,8 @@ function CvReviewWorkspace({
       setResumeId(receipt.resumeId);
       setParsed(null);
       setReview(null);
+      setPlan(null);
+      setBatch(null);
       await queryClient.invalidateQueries({ queryKey: adminOperationsKeys.resumes(candidateId) });
       toast.success("CV uploaded; parsing started");
     },
@@ -472,7 +519,7 @@ function CvReviewWorkspace({
   const commit = useMutation({
     mutationFn: async () => {
       if (!review || !plan?.ready) throw new Error("Validate the selected data first.");
-      return adapter.importReview(candidateId, review.id, review.version, importIdempotencyKey);
+      return adapter.importReview(candidateId, review.id, review.version, review.id);
     },
     onSuccess: async (result) => {
       setBatch(result);
@@ -486,7 +533,7 @@ function CvReviewWorkspace({
   return (
     <WorkspaceSection
       title="CV import"
-      description="Upload, parse, review, edit, select, validate, then commit"
+      description="Review parser suggestions, then explicitly import selected drafts into Career"
     >
       <div className="flex flex-wrap items-end gap-2">
         <label className="min-w-64 flex-1 space-y-1 text-xs font-medium">
@@ -511,9 +558,9 @@ function CvReviewWorkspace({
         </ActionButton>
         <ActionButton
           onClick={() => createReview.mutate()}
-          disabled={!parsed || createReview.isPending}
+          disabled={!parsed || Boolean(review) || createReview.isPending}
         >
-          Open review
+          {review ? "Review loaded" : "Open review"}
         </ActionButton>
       </div>
 
@@ -542,8 +589,15 @@ function CvReviewWorkspace({
           <div className="font-medium">Parser status: {humanize(parsed.status)}</div>
           <div className="mt-1 text-muted-foreground">
             Schema {parsed.schemaVersion}; {parsed.warnings.length} warning(s). Parser output
-            remains a draft.
+            remains a draft and is not visible in Career until an Admin confirms the import.
           </div>
+          {parsed.warnings.length ? (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-amber-800">
+              {parsed.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -642,6 +696,16 @@ function CvReviewWorkspace({
                 Duplicate assessment: {humanize(item.duplicateStatus)}. A distinct Employment create
                 decision is explicitly confirmed when saved.
               </p>
+              {item.duplicateCandidates.length ? (
+                <details className="mt-2 text-[11px] text-muted-foreground">
+                  <summary className="cursor-pointer font-medium">
+                    {item.duplicateCandidates.length} possible existing match(es)
+                  </summary>
+                  <pre className="mt-1 max-h-36 overflow-auto rounded bg-muted p-2">
+                    {JSON.stringify(item.duplicateCandidates, null, 2)}
+                  </pre>
+                </details>
+              ) : null}
               {item.conflictWarnings.length ? (
                 <p className="mt-2 text-[11px] text-amber-700">{item.conflictWarnings.join(" ")}</p>
               ) : null}
@@ -672,7 +736,7 @@ function CvReviewWorkspace({
                 disabled={!plan?.ready || commit.isPending}
                 className="h-8 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
               >
-                {commit.isPending ? "Importing..." : "Commit selected data"}
+                {commit.isPending ? "Importing..." : "Import selected data into Career"}
               </button>
             </div>
           </div>
@@ -690,7 +754,7 @@ function CvReviewWorkspace({
             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
               Import {humanize(batch.status)}: {batch.importedCount} imported, {batch.linkedCount}{" "}
               linked, {batch.blockedCount} blocked. Imported values remain CV-derived, not source
-              verified.
+              verified, and this action does not publish, share, or verify them.
             </div>
           ) : null}
         </div>

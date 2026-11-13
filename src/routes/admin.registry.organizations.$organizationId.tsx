@@ -23,6 +23,7 @@ import {
   AddClientPersonDialog,
   CandidateActivationAction,
   ClientJobRolesPanel,
+  ClientPersonEmploymentAction,
   ClientPeopleImportsPanel,
   ClientTeamInvitationsPanel,
 } from "@/features/admin/components/client-operations-panels";
@@ -330,6 +331,7 @@ function Company360Page() {
           }}
           canCreatePerson={canCreatePerson}
           canActivatePerson={canActivatePerson}
+          canManageEmployment={canManageClients}
           onPage={setPeoplePage}
           onPageSize={(value) => {
             setPeoplePageSize(value);
@@ -510,6 +512,7 @@ function PeopleTab({
   onOpenRequests,
   canCreatePerson,
   canActivatePerson,
+  canManageEmployment,
   onPage,
   onPageSize,
 }: {
@@ -522,6 +525,7 @@ function PeopleTab({
   onOpenRequests: (name: string) => void;
   canCreatePerson: boolean;
   canActivatePerson: boolean;
+  canManageEmployment: boolean;
   onPage: (page: number) => void;
   onPageSize: (size: number) => void;
 }) {
@@ -574,6 +578,11 @@ function PeopleTab({
                 <div className="text-[11px] text-muted-foreground">
                   {person.emailMasked ?? person.id}
                 </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {person.roleName ?? "No role"}
+                  {person.department ? ` · ${person.department}` : ""}
+                  {person.division ? ` · ${person.division}` : ""}
+                </div>
               </div>,
               formatLabel(person.relationship),
               person.verificationRequestCount,
@@ -603,6 +612,11 @@ function PeopleTab({
                   organizationId={organizationId}
                   person={person}
                   allowed={canActivatePerson}
+                />
+                <ClientPersonEmploymentAction
+                  organizationId={organizationId}
+                  person={person}
+                  allowed={canManageEmployment}
                 />
                 <button
                   type="button"

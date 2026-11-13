@@ -157,6 +157,20 @@ export interface AdminUserActionCapabilities {
   restore: boolean;
   revokeSessions: boolean;
   sendPasswordReset: boolean;
+  editProfile?: boolean;
+}
+
+export interface AdminUserProfileUpdate {
+  fullName?: string;
+  headline?: string | null;
+  currentRole?: string | null;
+  industry?: string | null;
+  yearsOfExperience?: number | null;
+  location?: string | null;
+  locationCity?: string | null;
+  locationRegion?: string | null;
+  locationCountry?: string | null;
+  bio?: string | null;
 }
 
 export interface AdminUserDetail {
@@ -171,7 +185,13 @@ export interface AdminUserDetail {
   maskedPhone?: string | null;
   headline?: string | null;
   currentRole?: string | null;
+  industry?: string | null;
+  yearsOfExperience?: number | null;
   location?: string | null;
+  locationCity?: string | null;
+  locationRegion?: string | null;
+  locationCountry?: string | null;
+  bio?: string | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string | null;
@@ -238,7 +258,13 @@ interface BackendUserDetailRecord {
   masked_phone?: string | null;
   headline?: string | null;
   current_role?: string | null;
+  industry?: string | null;
+  years_of_experience?: number | null;
   location?: string | null;
+  location_city?: string | null;
+  location_region?: string | null;
+  location_country?: string | null;
+  bio?: string | null;
   created_at: string;
   updated_at: string;
   last_login_at?: string | null;
@@ -322,6 +348,7 @@ interface BackendUserDetailRecord {
     restore?: boolean;
     revoke_sessions?: boolean;
     send_password_reset?: boolean;
+    edit_profile?: boolean;
   };
   activity?: Array<{
     public_id: string;
@@ -347,6 +374,7 @@ interface AdminUsersDataAdapter {
   revokeSession: (id: string, sessionId: string) => Promise<AdminUserDetail>;
   revokeAllSessions: (id: string) => Promise<AdminUserDetail>;
   sendPasswordReset: (id: string) => Promise<AdminUserDetail>;
+  updateProfile: (id: string, input: AdminUserProfileUpdate) => Promise<AdminUserDetail>;
 }
 
 export interface CreateAdminUsersAdapterOptions {
@@ -438,6 +466,13 @@ export function createAdminUsersAdapter(
           status: 409,
         });
       },
+      updateProfile: async () => {
+        throw new ApiError({
+          code: "conflict",
+          message: "Demo Mode does not persist Candidate profile changes.",
+          status: 409,
+        });
+      },
     };
   }
 
@@ -514,6 +549,28 @@ export function createAdminUsersAdapter(
         `/api/v1/admin/users/${id}/password-reset`,
         { method: "POST" },
       );
+      return mapBackendDetail(data);
+    },
+    async updateProfile(id, input) {
+      const data = await api.request<BackendUserDetailRecord>(`/api/v1/admin/users/${id}/profile`, {
+        method: "PATCH",
+        body: {
+          ...(input.fullName !== undefined ? { full_name: input.fullName } : {}),
+          ...(input.headline !== undefined ? { headline: input.headline } : {}),
+          ...(input.currentRole !== undefined ? { current_role: input.currentRole } : {}),
+          ...(input.industry !== undefined ? { industry: input.industry } : {}),
+          ...(input.yearsOfExperience !== undefined
+            ? { years_of_experience: input.yearsOfExperience }
+            : {}),
+          ...(input.location !== undefined ? { location: input.location } : {}),
+          ...(input.locationCity !== undefined ? { location_city: input.locationCity } : {}),
+          ...(input.locationRegion !== undefined ? { location_region: input.locationRegion } : {}),
+          ...(input.locationCountry !== undefined
+            ? { location_country: input.locationCountry }
+            : {}),
+          ...(input.bio !== undefined ? { bio: input.bio } : {}),
+        },
+      });
       return mapBackendDetail(data);
     },
   };
@@ -610,7 +667,13 @@ function mapBackendDetail(record: BackendUserDetailRecord): AdminUserDetail {
     maskedPhone: record.masked_phone ?? null,
     headline: record.headline ?? null,
     currentRole: record.current_role ?? null,
+    industry: record.industry ?? null,
+    yearsOfExperience: record.years_of_experience ?? null,
     location: record.location ?? null,
+    locationCity: record.location_city ?? null,
+    locationRegion: record.location_region ?? null,
+    locationCountry: record.location_country ?? null,
+    bio: record.bio ?? null,
     createdAt: record.created_at,
     updatedAt: record.updated_at,
     lastLoginAt: record.last_login_at ?? null,
@@ -694,6 +757,7 @@ function mapBackendDetail(record: BackendUserDetailRecord): AdminUserDetail {
       restore: Boolean(record.capabilities?.restore),
       revokeSessions: Boolean(record.capabilities?.revoke_sessions),
       sendPasswordReset: Boolean(record.capabilities?.send_password_reset),
+      editProfile: Boolean(record.capabilities?.edit_profile),
     },
     activity: (record.activity ?? []).map((event) => ({
       id: event.public_id,

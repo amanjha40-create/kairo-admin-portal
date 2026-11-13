@@ -10,6 +10,10 @@ import {
   type SessionStorageBag,
 } from "@/features/admin/auth/session-storage";
 import type { StoredAuthTokens } from "@/features/admin/auth/types";
+import {
+  coordinateAdminTokenRefresh,
+  recoverRotatedAdminTokens,
+} from "@/features/admin/auth/refresh-coordinator";
 
 interface BackendTokenResponse {
   access_token: string;
@@ -44,27 +48,31 @@ export function createAdminAuthenticatedApi(
   });
 
   async function refreshTokens(currentTokens: StoredAuthTokens): Promise<StoredAuthTokens | null> {
-    const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
-      method: "POST",
-      body: {
-        refresh_token: currentTokens.refreshToken,
-      },
+    return coordinateAdminTokenRefresh(currentTokens, async () => {
+      const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
+        method: "POST",
+        body: {
+          refresh_token: currentTokens.refreshToken,
+        },
+      });
+
+      if (!result.ok || !result.data) {
+        return recoverRotatedAdminTokens(storage, currentTokens.refreshToken);
+      }
+
+      const issuedAt = now();
+      const refreshedTokens: StoredAuthTokens = {
+        accessToken: result.data.access_token,
+        refreshToken: result.data.refresh_token,
+        tokenType: result.data.token_type,
+        expiresAt: new Date(issuedAt.getTime() + result.data.expires_in * 1000).toISOString(),
+        signedInAt: currentTokens.signedInAt,
+        remember: currentTokens.remember,
+      };
+
+      writeStoredAuthTokens(storage, refreshedTokens);
+      return refreshedTokens;
     });
-
-    if (!result.ok || !result.data) return null;
-
-    const issuedAt = now();
-    const refreshedTokens: StoredAuthTokens = {
-      accessToken: result.data.access_token,
-      refreshToken: result.data.refresh_token,
-      tokenType: result.data.token_type,
-      expiresAt: new Date(issuedAt.getTime() + result.data.expires_in * 1000).toISOString(),
-      signedInAt: currentTokens.signedInAt,
-      remember: currentTokens.remember,
-    };
-
-    writeStoredAuthTokens(storage, refreshedTokens);
-    return refreshedTokens;
   }
 
   async function authenticatedRequest<T>(

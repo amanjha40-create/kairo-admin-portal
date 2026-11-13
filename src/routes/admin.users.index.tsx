@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertTriangle, UserPlus, Users as UsersIcon } from "lucide-react";
@@ -44,6 +44,7 @@ const SORT_OPTIONS: Array<{ value: AdminUserSortBy; label: string }> = [
 function UsersDirectoryPage() {
   const access = useAdminAccess();
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query.trim());
   const [status, setStatus] = useState<"all" | AdminUserAccountStatus>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -58,7 +59,7 @@ function UsersDirectoryPage() {
 
   const listQuery = useQuery(
     userListQueryOptions({
-      query,
+      query: deferredQuery,
       status,
       page,
       pageSize,

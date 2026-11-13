@@ -9,6 +9,7 @@ import {
   writeStoredAuthTokens,
   type SessionStorageBag,
 } from "./session-storage";
+import { coordinateAdminTokenRefresh, recoverRotatedAdminTokens } from "./refresh-coordinator";
 import type {
   AdminAccount,
   AdminAuthActionResult,
@@ -171,22 +172,26 @@ export function createProductionAuthAdapter(
   }
 
   async function refreshTokens(currentTokens: StoredAuthTokens): Promise<StoredAuthTokens | null> {
-    const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
-      method: "POST",
-      body: {
-        refresh_token: currentTokens.refreshToken,
-      },
-    });
+    return coordinateAdminTokenRefresh(currentTokens, async () => {
+      const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
+        method: "POST",
+        body: {
+          refresh_token: currentTokens.refreshToken,
+        },
+      });
 
-    if (!result.ok || !result.data) return null;
+      if (!result.ok || !result.data) {
+        return recoverRotatedAdminTokens(storage, currentTokens.refreshToken);
+      }
 
-    const refreshedTokens = toStoredAuthTokens(result.data, {
-      remember: currentTokens.remember,
-      now,
-      signedInAt: currentTokens.signedInAt,
+      const refreshedTokens = toStoredAuthTokens(result.data, {
+        remember: currentTokens.remember,
+        now,
+        signedInAt: currentTokens.signedInAt,
+      });
+      writeStoredAuthTokens(storage, refreshedTokens);
+      return refreshedTokens;
     });
-    writeStoredAuthTokens(storage, refreshedTokens);
-    return refreshedTokens;
   }
 
   async function revokeRefreshToken(refreshToken: string | null | undefined): Promise<void> {

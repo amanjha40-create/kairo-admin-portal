@@ -292,6 +292,15 @@ export interface EvidenceReceipt {
   verificationStatus: string;
 }
 
+export interface VerificationEvidenceReceipt {
+  evidenceId: string;
+  documentId: string;
+  requestId: string;
+  status: string;
+  evidenceType: string;
+  fieldKey: string;
+}
+
 export interface CourtCheckInput {
   status: CourtCheckStatus;
   searchedAt?: string;
@@ -563,6 +572,27 @@ interface BackendReviewSession {
   updated_at: string;
 }
 
+interface BackendImportBatch {
+  id: string;
+  review_session_id: string;
+  status: string;
+  total_count: number;
+  imported_count: number;
+  linked_count: number;
+  skipped_count: number;
+  failed_count: number;
+  blocked_count: number;
+  incomplete_count: number;
+  results: Array<{
+    review_item_id: string;
+    outcome: string;
+    record_type: string | null;
+    record_id: string | null;
+    sanitized_error_code: string | null;
+    warnings: string[];
+  }>;
+}
+
 interface BackendCourtCheck {
   public_id: string;
   organization_public_id: string;
@@ -782,6 +812,7 @@ export interface AdminOperationsAdapter {
   listResumes: (candidateId: string) => Promise<AdminOperationsPage<ManagedResume>>;
   getResumeStatus: (candidateId: string, resumeId: string) => Promise<ResumeProcessReceipt>;
   getParsedResume: (candidateId: string, resumeId: string) => Promise<ResumeParsedResult>;
+  getResumeReview: (candidateId: string, resumeId: string) => Promise<ResumeReviewSession>;
   createResumeReview: (candidateId: string, resumeId: string) => Promise<ResumeReviewSession>;
   updateReviewItem: (
     candidateId: string,
@@ -807,6 +838,7 @@ export interface AdminOperationsAdapter {
     version: number,
     idempotencyKey: string,
   ) => Promise<ResumeImportBatch>;
+  getResumeImportStatus: (candidateId: string, reviewId: string) => Promise<ResumeImportBatch>;
   createOrganization: (input: {
     name: string;
     organizationType: string;
@@ -829,6 +861,11 @@ export interface AdminOperationsAdapter {
   ) => Promise<FirstHrInvitation>;
   getOrganizationProvisioning: (organizationId: string) => Promise<OrganizationProvisioningStatus>;
   uploadEvidence: (candidateId: string, file: File) => Promise<EvidenceReceipt>;
+  uploadVerificationEvidence: (
+    candidateId: string,
+    requestId: string,
+    file: File,
+  ) => Promise<VerificationEvidenceReceipt>;
   listCourtChecks: (
     organizationId: string,
     personId: string,
@@ -1184,6 +1221,13 @@ export function createAdminOperationsAdapter(
         warnings: response.warnings,
       };
     },
+    async getResumeReview(candidateId, resumeId) {
+      return mapReviewSession(
+        await api.request<BackendReviewSession>(
+          `${candidatePath(candidateId)}/resumes/${encodeURIComponent(resumeId)}/review-session`,
+        ),
+      );
+    },
     async createResumeReview(candidateId, resumeId) {
       return mapReviewSession(
         await api.request<BackendReviewSession>(
@@ -1252,49 +1296,21 @@ export function createAdminOperationsAdapter(
       };
     },
     async importReview(candidateId, reviewId, version, idempotencyKey) {
-      const response = await api.request<{
-        id: string;
-        review_session_id: string;
-        status: string;
-        total_count: number;
-        imported_count: number;
-        linked_count: number;
-        skipped_count: number;
-        failed_count: number;
-        blocked_count: number;
-        incomplete_count: number;
-        results: Array<{
-          review_item_id: string;
-          outcome: string;
-          record_type: string | null;
-          record_id: string | null;
-          sanitized_error_code: string | null;
-          warnings: string[];
-        }>;
-      }>(`${candidatePath(candidateId)}/resume-reviews/${encodeURIComponent(reviewId)}/import`, {
-        method: "POST",
-        body: { expected_version: version, idempotency_key: idempotencyKey, confirmed: true },
-      });
-      return {
-        id: response.id,
-        reviewSessionId: response.review_session_id,
-        status: response.status,
-        totalCount: response.total_count,
-        importedCount: response.imported_count,
-        linkedCount: response.linked_count,
-        skippedCount: response.skipped_count,
-        failedCount: response.failed_count,
-        blockedCount: response.blocked_count,
-        incompleteCount: response.incomplete_count,
-        results: response.results.map((item) => ({
-          reviewItemId: item.review_item_id,
-          outcome: item.outcome,
-          recordType: item.record_type ?? undefined,
-          recordId: item.record_id ?? undefined,
-          sanitizedErrorCode: item.sanitized_error_code ?? undefined,
-          warnings: item.warnings,
-        })),
-      };
+      const response = await api.request<BackendImportBatch>(
+        `${candidatePath(candidateId)}/resume-reviews/${encodeURIComponent(reviewId)}/import`,
+        {
+          method: "POST",
+          body: { expected_version: version, idempotency_key: idempotencyKey, confirmed: true },
+        },
+      );
+      return mapImportBatch(response);
+    },
+    async getResumeImportStatus(candidateId, reviewId) {
+      return mapImportBatch(
+        await api.request<BackendImportBatch>(
+          `${candidatePath(candidateId)}/resume-reviews/${encodeURIComponent(reviewId)}/import-status`,
+        ),
+      );
     },
     async createOrganization(input) {
       const response = await api.request<{
@@ -1395,6 +1411,47 @@ export function createAdminOperationsAdapter(
         contentType: response.content_type,
         byteSize: response.byte_size,
         verificationStatus: response.verification_status,
+      };
+    },
+    async uploadVerificationEvidence(candidateId, requestId, file) {
+      const intent = await api.request<{
+        document_id: string;
+        upload_url: string;
+        headers_required: Record<string, string>;
+      }>(
+        `${candidatePath(candidateId)}/verification-requests/${encodeURIComponent(requestId)}/evidence/upload-intent`,
+        {
+          method: "POST",
+          body: {
+            document_type: "other",
+            original_filename: file.name,
+            content_type: file.type,
+            byte_size: file.size,
+          },
+        },
+      );
+      await putPresigned(uploadFetch, intent.upload_url, file, intent.headers_required);
+      const checksum = await sha256(file);
+      const response = await api.request<{
+        public_id: string;
+        document_id: string | null;
+        evidence_type: string;
+        field_key: string;
+        status: string;
+      }>(
+        `${candidatePath(candidateId)}/verification-requests/${encodeURIComponent(requestId)}/evidence/${encodeURIComponent(intent.document_id)}/complete-upload`,
+        {
+          method: "POST",
+          body: { checksum_sha256: checksum },
+        },
+      );
+      return {
+        evidenceId: response.public_id,
+        documentId: response.document_id ?? intent.document_id,
+        requestId,
+        status: response.status,
+        evidenceType: response.evidence_type,
+        fieldKey: response.field_key,
       };
     },
     async listCourtChecks(organizationId, personId, page = 1, pageSize = 100) {
@@ -1792,6 +1849,29 @@ function mapReviewSession(response: BackendReviewSession): ResumeReviewSession {
     items: response.items.map(mapReviewItem),
     createdAt: response.created_at,
     updatedAt: response.updated_at,
+  };
+}
+
+function mapImportBatch(response: BackendImportBatch): ResumeImportBatch {
+  return {
+    id: response.id,
+    reviewSessionId: response.review_session_id,
+    status: response.status,
+    totalCount: response.total_count,
+    importedCount: response.imported_count,
+    linkedCount: response.linked_count,
+    skippedCount: response.skipped_count,
+    failedCount: response.failed_count,
+    blockedCount: response.blocked_count,
+    incompleteCount: response.incomplete_count,
+    results: response.results.map((item) => ({
+      reviewItemId: item.review_item_id,
+      outcome: item.outcome,
+      recordType: item.record_type ?? undefined,
+      recordId: item.record_id ?? undefined,
+      sanitizedErrorCode: item.sanitized_error_code ?? undefined,
+      warnings: item.warnings,
+    })),
   };
 }
 

@@ -289,6 +289,59 @@ export function createAdminClientOperationsAdapter() {
       );
       return mapRole(row);
     },
+    async updateRole(
+      organizationId: string,
+      roleId: string,
+      input: {
+        name?: string;
+        description?: string;
+        department?: string | null;
+        location?: string | null;
+        workMode?: string | null;
+      },
+    ) {
+      const row = await api().request<BackendJobRole>(
+        `/api/v1/admin/organizations/${organizationId}/job-roles/${roleId}`,
+        {
+          method: "PATCH",
+          body: {
+            name: input.name,
+            description: input.description,
+            department: input.department,
+            location: input.location,
+            work_mode: input.workMode,
+          },
+        },
+      );
+      return mapRole(row);
+    },
+    async assignPerson(
+      organizationId: string,
+      personId: string,
+      input: {
+        roleId?: string | null;
+        department?: string | null;
+        division?: string | null;
+        joiningDate?: string | null;
+      },
+    ) {
+      return api().request<{
+        person_public_id: string;
+        role_id: string | null;
+        role: string | null;
+        department: string | null;
+        division: string | null;
+        joining_date: string | null;
+      }>(`/api/v1/admin/organizations/${organizationId}/people/${personId}/employment-profile`, {
+        method: "PATCH",
+        body: {
+          role_id: input.roleId,
+          department: input.department,
+          division: input.division,
+          joining_date: input.joiningDate,
+        },
+      });
+    },
     async deactivateRole(organizationId: string, roleId: string) {
       const row = await api().request<BackendJobRole>(
         `/api/v1/admin/organizations/${organizationId}/job-roles/${roleId}`,

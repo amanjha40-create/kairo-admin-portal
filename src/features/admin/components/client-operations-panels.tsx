@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, MailPlus, Plus, Upload } from "lucide-react";
+import { Download, MailPlus, Pencil, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -16,6 +16,7 @@ import {
   clientJobRoleQueryOptions,
   clientPeopleImportQueryOptions,
   createAdminClientOperationsAdapter,
+  type ClientJobRole,
   type ClientPeopleImportPreview,
 } from "@/features/admin/data/admin-client-operations";
 import { company360Keys, type CompanyPersonItem } from "@/features/admin/data/organizations";
@@ -147,6 +148,128 @@ export function CandidateActivationAction({
           ? "Retry Candidate invitation"
           : "Invite as Candidate"}
     </button>
+  );
+}
+
+export function ClientPersonEmploymentAction({
+  organizationId,
+  person,
+  allowed,
+}: {
+  organizationId: string;
+  person: CompanyPersonItem;
+  allowed: boolean;
+}) {
+  const adapter = useMemo(() => createAdminClientOperationsAdapter(), []);
+  const queryClient = useQueryClient();
+  const roles = useQuery(clientJobRoleQueryOptions(organizationId));
+  const [open, setOpen] = useState(false);
+  const [roleId, setRoleId] = useState(person.roleId ?? "unassigned");
+  const [department, setDepartment] = useState(person.department ?? "");
+  const [division, setDivision] = useState(person.division ?? "");
+  const [joiningDate, setJoiningDate] = useState(person.joiningDate ?? "");
+  const mutation = useMutation({
+    mutationFn: () =>
+      adapter.assignPerson(organizationId, person.id, {
+        roleId: roleId === "unassigned" ? null : roleId,
+        department: department.trim() || null,
+        division: division.trim() || null,
+        joiningDate: joiningDate || null,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: company360Keys.all() });
+      setOpen(false);
+      toast.success("Employment assignment updated");
+    },
+    onError: (error) =>
+      toast.error(getOperationError(error, "Employment assignment could not be updated.")),
+  });
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!allowed}
+        onClick={() => {
+          setRoleId(person.roleId ?? "unassigned");
+          setDepartment(person.department ?? "");
+          setDivision(person.division ?? "");
+          setJoiningDate(person.joiningDate ?? "");
+          setOpen(true);
+        }}
+        className="font-medium text-foreground hover:underline disabled:text-muted-foreground"
+      >
+        Employment
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Employment assignment</DialogTitle>
+            <DialogDescription>
+              Update {person.displayName}&apos;s Client-specific role, department, division and
+              joining date. This does not overwrite their global Candidate profile.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs font-medium">
+              Job role
+              <select
+                value={roleId}
+                onChange={(event) => setRoleId(event.target.value)}
+                className={inputClass}
+              >
+                <option value="unassigned">Unassigned</option>
+                {(roles.data ?? [])
+                  .filter((role) => role.active || role.id === person.roleId)
+                  .map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-xs font-medium">
+              Department
+              <input
+                value={department}
+                onChange={(event) => setDepartment(event.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="space-y-1 text-xs font-medium">
+              Division
+              <input
+                value={division}
+                onChange={(event) => setDivision(event.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="space-y-1 text-xs font-medium">
+              Joining date
+              <input
+                type="date"
+                value={joiningDate}
+                onChange={(event) => setJoiningDate(event.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <button type="button" onClick={() => setOpen(false)} className={secondaryButtonClass}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate()}
+              className={buttonClass}
+            >
+              {mutation.isPending ? "Saving..." : "Save assignment"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -295,6 +418,7 @@ export function ClientJobRolesPanel({
   const [department, setDepartment] = useState("");
   const [location, setLocation] = useState("");
   const [workMode, setWorkMode] = useState("");
+  const [editingRole, setEditingRole] = useState<ClientJobRole | null>(null);
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: adminClientOperationKeys.roles(organizationId) });
   const createMutation = useMutation({
@@ -313,6 +437,28 @@ export function ClientJobRolesPanel({
     },
     onError: (error) => toast.error(getOperationError(error, "Job role could not be created.")),
   });
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!editingRole) throw new Error("Choose a role to edit.");
+      return adapter.updateRole(organizationId, editingRole.id, {
+        name: name.trim(),
+        department: department.trim() || null,
+        location: location.trim() || null,
+        workMode: workMode || null,
+      });
+    },
+    onSuccess: async () => {
+      await refresh();
+      setShowForm(false);
+      setEditingRole(null);
+      setName("");
+      setDepartment("");
+      setLocation("");
+      setWorkMode("");
+      toast.success("Client job role updated");
+    },
+    onError: (error) => toast.error(getOperationError(error, "Job role could not be updated.")),
+  });
   const deactivateMutation = useMutation({
     mutationFn: (roleId: string) => adapter.deactivateRole(organizationId, roleId),
     onSuccess: refresh,
@@ -326,7 +472,14 @@ export function ClientJobRolesPanel({
         <button
           type="button"
           disabled={!canManage}
-          onClick={() => setShowForm((value) => !value)}
+          onClick={() => {
+            setEditingRole(null);
+            setName("");
+            setDepartment("");
+            setLocation("");
+            setWorkMode("");
+            setShowForm((value) => !value);
+          }}
           className={buttonClass}
         >
           <Plus className="size-3.5" /> Add role
@@ -338,7 +491,8 @@ export function ClientJobRolesPanel({
           className="mb-4 grid gap-2 rounded-lg border border-border bg-muted/20 p-3 md:grid-cols-5"
           onSubmit={(event) => {
             event.preventDefault();
-            createMutation.mutate();
+            if (editingRole) updateMutation.mutate();
+            else createMutation.mutate();
           }}
         >
           <input
@@ -370,8 +524,12 @@ export function ClientJobRolesPanel({
             <option value="hybrid">Hybrid</option>
             <option value="remote">Remote</option>
           </select>
-          <button type="submit" disabled={createMutation.isPending} className={buttonClass}>
-            Create role
+          <button
+            type="submit"
+            disabled={createMutation.isPending || updateMutation.isPending}
+            className={buttonClass}
+          >
+            {editingRole ? "Save role" : "Create role"}
           </button>
         </form>
       ) : null}
@@ -384,15 +542,31 @@ export function ClientJobRolesPanel({
           String(role.assignedPeopleCount),
           role.status,
           role.active ? (
-            <button
-              key="archive"
-              type="button"
-              disabled={!canManage || deactivateMutation.isPending}
-              onClick={() => deactivateMutation.mutate(role.id)}
-              className="font-medium text-destructive disabled:text-muted-foreground"
-            >
-              Archive
-            </button>
+            <div key="actions" className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={!canManage}
+                onClick={() => {
+                  setEditingRole(role);
+                  setName(role.name);
+                  setDepartment(role.department ?? "");
+                  setLocation(role.location ?? "");
+                  setWorkMode(role.workMode ?? "");
+                  setShowForm(true);
+                }}
+                className="inline-flex items-center gap-1 font-medium text-foreground disabled:text-muted-foreground"
+              >
+                <Pencil className="size-3" /> Edit
+              </button>
+              <button
+                type="button"
+                disabled={!canManage || deactivateMutation.isPending}
+                onClick={() => deactivateMutation.mutate(role.id)}
+                className="font-medium text-destructive disabled:text-muted-foreground"
+              >
+                Archive
+              </button>
+            </div>
           ) : (
             "—"
           ),

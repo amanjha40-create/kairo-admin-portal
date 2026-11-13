@@ -449,6 +449,7 @@ describe("Admin Operations V1.1 adapter", () => {
     const processReceipt = await adapter.uploadResume(CANDIDATE_ID, cv);
     const parsed = await adapter.getParsedResume(CANDIDATE_ID, processReceipt.resumeId);
     const review = await adapter.createResumeReview(CANDIDATE_ID, processReceipt.resumeId);
+    const rehydratedReview = await adapter.getResumeReview(CANDIDATE_ID, processReceipt.resumeId);
     const plan = await adapter.validateReview(CANDIDATE_ID, review.id, review.version);
     const batch = await adapter.importReview(
       CANDIDATE_ID,
@@ -456,10 +457,13 @@ describe("Admin Operations V1.1 adapter", () => {
       plan.version,
       "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     );
+    const rehydratedBatch = await adapter.getResumeImportStatus(CANDIDATE_ID, review.id);
 
     expect(parsed.status).toBe("completed");
+    expect(rehydratedReview.id).toBe(review.id);
     expect(plan.ready).toBe(true);
     expect(batch.importedCount).toBe(1);
+    expect(rehydratedBatch.id).toBe(batch.id);
     expect(apiPaths.findIndex((path) => path.endsWith("/import"))).toBeGreaterThan(
       apiPaths.findIndex((path) => path.endsWith("/validate")),
     );
@@ -839,5 +843,40 @@ describe("Admin Operations V1.1 adapter", () => {
     });
     Object.defineProperty(oversized, "size", { value: 50 * 1024 * 1024 + 1 });
     expect(validateEvidenceFile(oversized)).toBe("Evidence cannot exceed 50 MiB.");
+  });
+
+  it("attaches Admin evidence to one explicit verification request", async () => {
+    const requestId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const documentId = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff";
+    const paths: string[] = [];
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(String(input));
+      if (url.hostname === "uploads.example.test") return new Response(null, { status: 200 });
+      paths.push(url.pathname);
+      if (url.pathname.endsWith("/upload-intent")) {
+        return response({
+          document_id: documentId,
+          upload_url: "https://uploads.example.test/evidence",
+          headers_required: {},
+        });
+      }
+      return response({
+        public_id: "cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa",
+        evidence_type: "admin_supplied_document",
+        field_key: "admin_supporting_evidence",
+        document_id: documentId,
+        status: "submitted",
+      });
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+    const file = new File(["safe evidence"], "evidence.pdf", { type: "application/pdf" });
+
+    const receipt = await adapter.uploadVerificationEvidence(CANDIDATE_ID, requestId, file);
+
+    expect(receipt).toMatchObject({ requestId, documentId, status: "submitted" });
+    expect(paths).toEqual([
+      `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/verification-requests/${requestId}/evidence/upload-intent`,
+      `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/verification-requests/${requestId}/evidence/${documentId}/complete-upload`,
+    ]);
   });
 });

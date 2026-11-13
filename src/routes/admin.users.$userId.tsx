@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Mail, Phone, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileUp, Mail, Phone, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -17,7 +17,11 @@ import { CandidateDetailActionBar } from "@/features/admin/components/candidate-
 import { CandidateVerificationOperations } from "@/features/admin/components/candidate-verification-operations";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
-import { managedCandidateQueryOptions } from "@/features/admin/data/admin-operations";
+import {
+  createAdminOperationsAdapter,
+  managedCandidateQueryOptions,
+  type VerificationEvidenceReceipt,
+} from "@/features/admin/data/admin-operations";
 import { companyDetailQueryOptions } from "@/features/admin/data/organizations";
 import {
   ADMIN_USER_ACCOUNT_STATUS_LABEL,
@@ -25,7 +29,10 @@ import {
   userDetailQueryOptions,
   userKeys,
   type AdminUserAccountStatus,
+  type AdminUserDetail,
+  type AdminUserProfileUpdate,
   type AdminUserSession,
+  type AdminUserVerificationItem,
   type AdminUserVerificationBreakdown,
 } from "@/features/admin/data/users";
 import { formatRelativeTime } from "@/features/admin/lib/format";
@@ -316,6 +323,8 @@ function UserDetailPage() {
               </div>
             </WorkspaceSection>
 
+            <CandidateDetailsEditor user={user} onComplete={refreshDetail} />
+
             <AssistedCandidateWorkspace
               candidateId={userId}
               initialProfile={{
@@ -438,6 +447,13 @@ function UserDetailPage() {
                 </div>
               )}
             </WorkspaceSection>
+
+            <CandidateEvidenceUpload
+              candidateId={userId}
+              requests={user.verifications}
+              canUpload={hasPermission(permissions, "verification.review_address")}
+              onComplete={refreshDetail}
+            />
 
             <WorkspaceSection
               title="Security & sessions"
@@ -652,6 +668,269 @@ function UserDetailPage() {
         }}
       />
     </>
+  );
+}
+
+const TERMINAL_EVIDENCE_STATUSES = new Set([
+  "verified",
+  "rejected",
+  "unable_to_verify",
+  "cancelled",
+  "withdrawn_by_candidate",
+  "expired",
+]);
+
+function CandidateEvidenceUpload({
+  candidateId,
+  requests,
+  canUpload,
+  onComplete,
+}: {
+  candidateId: string;
+  requests: AdminUserVerificationItem[];
+  canUpload: boolean;
+  onComplete: () => Promise<void>;
+}) {
+  const adapter = useMemo(() => createAdminOperationsAdapter(), []);
+  const eligible = requests.filter(
+    (request) => !TERMINAL_EVIDENCE_STATUSES.has(request.status.toLowerCase()),
+  );
+  const [requestId, setRequestId] = useState(eligible[0]?.id ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [receipt, setReceipt] = useState<VerificationEvidenceReceipt | null>(null);
+  const upload = useMutation({
+    mutationFn: async () => {
+      if (!requestId) throw new Error("Choose a verification request.");
+      if (!file) throw new Error("Choose an evidence file.");
+      return adapter.uploadVerificationEvidence(candidateId, requestId, file);
+    },
+    onSuccess: async (result) => {
+      setReceipt(result);
+      setFile(null);
+      toast.success("Evidence attached to the selected verification request");
+      await onComplete();
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error ? error.message : "The evidence file could not be uploaded.",
+      ),
+  });
+
+  return (
+    <WorkspaceSection
+      title="Supporting evidence"
+      description="Upload on behalf of this Candidate into one specific verification request"
+    >
+      {!canUpload ? (
+        <p className="text-xs text-muted-foreground">
+          Verification review permission is required to attach evidence.
+        </p>
+      ) : eligible.length === 0 ? (
+        <EmptyState
+          title="No editable verification request"
+          description="Evidence cannot be added when every request is terminal."
+        />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+          <label className="space-y-1 text-xs font-medium">
+            Verification request
+            <select
+              value={requestId}
+              onChange={(event) => {
+                setRequestId(event.target.value);
+                setReceipt(null);
+              }}
+              className="h-9 w-full rounded-md border border-border bg-background px-2"
+            >
+              {eligible.map((request) => (
+                <option key={request.id} value={request.id}>
+                  {request.linkedRecordLabel} · {humanize(request.requestType)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">
+            Evidence file
+            <input
+              type="file"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="block h-9 w-full rounded-md border border-border bg-background px-2 py-1 text-xs file:border-0 file:bg-transparent"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!file || upload.isPending}
+            onClick={() => upload.mutate()}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#0B2545] px-3 text-xs font-medium text-white disabled:opacity-50"
+          >
+            <FileUp className="size-3.5" /> {upload.isPending ? "Uploading..." : "Attach evidence"}
+          </button>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        The canonical upload pipeline validates file metadata, size, checksum, ownership and access.
+        Admin-supplied evidence is recorded with Admin attribution; it is not automatically
+        verified, shared with a verifier, or added to the Candidate&apos;s public profile.
+      </p>
+      {receipt ? (
+        <p className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+          Evidence {receipt.status}. Audit ID: {receipt.evidenceId}
+        </p>
+      ) : null}
+    </WorkspaceSection>
+  );
+}
+
+function CandidateDetailsEditor({
+  user,
+  onComplete,
+}: {
+  user: AdminUserDetail;
+  onComplete: () => Promise<void>;
+}) {
+  const adapter = useMemo(() => createAdminUsersAdapter(), []);
+  const [fullName, setFullName] = useState(user.displayName);
+  const [headline, setHeadline] = useState(user.headline ?? "");
+  const [currentRole, setCurrentRole] = useState(user.currentRole ?? "");
+  const [industry, setIndustry] = useState(user.industry ?? "");
+  const [yearsOfExperience, setYearsOfExperience] = useState(
+    user.yearsOfExperience == null ? "" : String(user.yearsOfExperience),
+  );
+  const [location, setLocation] = useState(user.location ?? "");
+  const [locationCity, setLocationCity] = useState(user.locationCity ?? "");
+  const [locationRegion, setLocationRegion] = useState(user.locationRegion ?? "");
+  const [locationCountry, setLocationCountry] = useState(user.locationCountry ?? "");
+  const [bio, setBio] = useState(user.bio ?? "");
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const input: AdminUserProfileUpdate = {};
+      if (fullName.trim() !== user.displayName) input.fullName = fullName.trim();
+      if (headline.trim() !== (user.headline ?? "")) input.headline = headline.trim() || null;
+      if (currentRole.trim() !== (user.currentRole ?? "")) {
+        input.currentRole = currentRole.trim() || null;
+      }
+      if (industry.trim() !== (user.industry ?? "")) input.industry = industry.trim() || null;
+      const experience = yearsOfExperience.trim() ? Number(yearsOfExperience) : null;
+      if (experience !== (user.yearsOfExperience ?? null)) input.yearsOfExperience = experience;
+      if (location.trim() !== (user.location ?? "")) input.location = location.trim() || null;
+      if (locationCity.trim() !== (user.locationCity ?? "")) {
+        input.locationCity = locationCity.trim() || null;
+      }
+      if (locationRegion.trim() !== (user.locationRegion ?? "")) {
+        input.locationRegion = locationRegion.trim() || null;
+      }
+      if (locationCountry.trim() !== (user.locationCountry ?? "")) {
+        input.locationCountry = locationCountry.trim() || null;
+      }
+      if (bio.trim() !== (user.bio ?? "")) input.bio = bio.trim() || null;
+      if (Object.keys(input).length === 0) throw new Error("No profile changes to save.");
+      return adapter.updateProfile(user.id, input);
+    },
+    onSuccess: async () => {
+      toast.success("Candidate details saved with Admin-entered provenance");
+      await onComplete();
+    },
+    onError: (error) =>
+      toast.error(resolveActionErrorMessage(error, "Candidate details could not be saved.")),
+  });
+
+  if (!user.capabilities.editProfile) {
+    return (
+      <WorkspaceSection title="User details" description="Safe Candidate profile fields">
+        <p className="text-xs text-muted-foreground">
+          Profile editing requires user-management permission. Email, phone, and authentication
+          identities are never editable here.
+        </p>
+      </WorkspaceSection>
+    );
+  }
+
+  return (
+    <WorkspaceSection
+      title="Edit User Details"
+      description="Admin-entered profile facts remain unverified until confirmed through their canonical workflow"
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          mutation.mutate();
+        }}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <ProfileField label="Full name" value={fullName} onChange={setFullName} required />
+          <ProfileField label="Headline" value={headline} onChange={setHeadline} />
+          <ProfileField label="Current role" value={currentRole} onChange={setCurrentRole} />
+          <ProfileField label="Industry" value={industry} onChange={setIndustry} />
+          <ProfileField
+            label="Years of experience"
+            value={yearsOfExperience}
+            onChange={setYearsOfExperience}
+            type="number"
+          />
+          <ProfileField label="Location" value={location} onChange={setLocation} />
+          <ProfileField label="City" value={locationCity} onChange={setLocationCity} />
+          <ProfileField
+            label="Region / state"
+            value={locationRegion}
+            onChange={setLocationRegion}
+          />
+          <ProfileField label="Country" value={locationCountry} onChange={setLocationCountry} />
+        </div>
+        <label className="block space-y-1 text-xs font-medium text-foreground">
+          Bio
+          <textarea
+            value={bio}
+            maxLength={500}
+            onChange={(event) => setBio(event.target.value)}
+            className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <span>
+            Email and phone are security-sensitive identities and remain read-only. Source-verified
+            profile fields cannot be overwritten.
+          </span>
+          <button
+            type="submit"
+            disabled={mutation.isPending || !fullName.trim()}
+            className="h-8 rounded-md bg-[#0B2545] px-3 font-medium text-white disabled:opacity-50"
+          >
+            {mutation.isPending ? "Saving..." : "Save User Details"}
+          </button>
+        </div>
+      </form>
+    </WorkspaceSection>
+  );
+}
+
+function ProfileField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="space-y-1 text-xs font-medium text-foreground">
+      {label}
+      <input
+        className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+        type={type}
+        min={type === "number" ? 0 : undefined}
+        max={type === "number" ? 80 : undefined}
+        required={required}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 

@@ -159,7 +159,7 @@ describe("admin users data adapter", () => {
     });
 
     const result = await adapter.listUsers({
-      query: "candidate",
+      query: "  candidate  ",
       status: "suspended",
       page: 2,
       pageSize: 1,

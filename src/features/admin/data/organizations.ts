@@ -84,6 +84,11 @@ export interface CompanyPersonItem {
   relationship: string;
   lifecycleStatus: string;
   invitationStatus: string;
+  roleId?: string;
+  roleName?: string;
+  department?: string;
+  division?: string;
+  joiningDate?: string;
   verificationRequestCount: number;
   verifiedCount: number;
   pendingCount: number;
@@ -228,6 +233,11 @@ interface BackendCompanyPerson {
   relationship: string;
   lifecycle_status: string;
   invitation_status: string;
+  role_id: string | null;
+  role_name: string | null;
+  department: string | null;
+  division: string | null;
+  joining_date: string | null;
   verification_request_count: number;
   verified_count: number;
   pending_count: number;
@@ -716,6 +726,11 @@ function mapPerson(item: BackendCompanyPerson): CompanyPersonItem {
     relationship: item.relationship,
     lifecycleStatus: item.lifecycle_status,
     invitationStatus: item.invitation_status,
+    roleId: item.role_id ?? undefined,
+    roleName: item.role_name ?? undefined,
+    department: item.department ?? undefined,
+    division: item.division ?? undefined,
+    joiningDate: item.joining_date ?? undefined,
     verificationRequestCount: item.verification_request_count,
     verifiedCount: item.verified_count,
     pendingCount: item.pending_count,
