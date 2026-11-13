@@ -53,6 +53,7 @@ import {
 } from "@/features/admin/lib/overview-operational-sections";
 import { cn } from "@/lib/utils";
 import { hasPermission } from "@/features/admin/workflow/permissions";
+import { canFindCandidatesFromOverview } from "@/features/admin/workflow/overview-quick-actions";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -75,6 +76,7 @@ function OverviewPage() {
   const permissions = access.admin?.permissions ?? [];
   const canCreateCandidate = hasPermission(permissions, "create_person");
   const canCreateOrganization = hasPermission(permissions, "create_organization");
+  const canFindCandidate = canFindCandidatesFromOverview(permissions);
   const overviewQuery = useQuery({
     ...overviewDashboardQueryOptions(),
     enabled: shouldEnableAdminProtectedQuery(access.state),
@@ -172,12 +174,21 @@ function OverviewPage() {
             onClick={canCreateOrganization ? () => setCreateOrganizationOpen(true) : undefined}
             unavailableCopy="create_organization permission required"
           />
-          <QuickActionLink
-            title="Find Candidate"
-            description="Search People and open assisted Candidate operations."
-            icon={<ArrowRight className="size-4" />}
-            href="/admin/users"
-          />
+          {canFindCandidate ? (
+            <QuickActionLink
+              title="Find Candidate"
+              description="Search People and open assisted Candidate operations."
+              icon={<ArrowRight className="size-4" />}
+              href="/admin/users"
+            />
+          ) : (
+            <QuickAction
+              title="Find Candidate"
+              description="Search People and open assisted Candidate operations."
+              icon={<ArrowRight className="size-4" />}
+              unavailableCopy="Candidate directory access is not available for this role."
+            />
+          )}
           <QuickActionLink
             title="Verification Operations"
             description="Open canonical verification queues and case workspaces."
