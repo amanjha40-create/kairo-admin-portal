@@ -323,7 +323,9 @@ function UserDetailPage() {
               </div>
             </WorkspaceSection>
 
-            <CandidateDetailsEditor user={user} onComplete={refreshDetail} />
+            <div id="user-details" className="scroll-mt-20">
+              <CandidateDetailsEditor user={user} onComplete={refreshDetail} />
+            </div>
 
             <AssistedCandidateWorkspace
               candidateId={userId}

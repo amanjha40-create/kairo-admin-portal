@@ -16,7 +16,10 @@ export function isImportableResumeClaimType(claimType: string) {
   return IMPORTABLE_CLAIM_TYPES.has(claimType);
 }
 
-export function getResumeReviewUpdateInput(item: ResumeReviewItem, draft: string) {
+export function getResumeReviewUpdateInput(
+  item: ResumeReviewItem,
+  draft: string | Record<string, unknown>,
+) {
   if (!isImportableResumeClaimType(item.claimType)) {
     return {
       expectedVersion: item.version,
@@ -28,7 +31,8 @@ export function getResumeReviewUpdateInput(item: ResumeReviewItem, draft: string
   return {
     expectedVersion: item.version,
     selected: item.selected,
-    editedPayload: JSON.parse(draft) as Record<string, unknown>,
+    editedPayload:
+      typeof draft === "string" ? (JSON.parse(draft) as Record<string, unknown>) : draft,
     importAction: item.importAction,
     targetRecordId: item.targetRecordId,
     confirmDistinctRole:

@@ -38,10 +38,16 @@ export function getCandidateDetailCapabilities({
   accountCapabilities: AdminUserActionCapabilities;
   activeSessionCount: number;
 }): CandidateDetailCapabilities {
-  const profile = assistedCapability(
-    managedCandidateState,
-    permissions.includes("manage_assisted_profile"),
-    "manage_assisted_profile",
+  const profile = permissionCapability(
+    (managedCandidateState === "managed" || managedCandidateState === "candidate_managed") &&
+      permissions.includes("manage_assisted_profile") &&
+      Boolean(accountCapabilities.editProfile),
+    "Profile editing requires manage_assisted_profile and backend user-edit eligibility.",
+  );
+  const cvReview = permissionCapability(
+    (managedCandidateState === "managed" || managedCandidateState === "candidate_managed") &&
+      permissions.includes("manage_assisted_profile"),
+    "Candidate eligibility and the manage_assisted_profile permission are required.",
   );
   const activation = assistedCapability(
     managedCandidateState,
@@ -51,7 +57,7 @@ export function getCandidateDetailCapabilities({
 
   return {
     assistedProfile: profile,
-    cvReview: profile,
+    cvReview,
     activation,
     verificationOperations: enabled(),
     createInvestigation: permissionCapability(

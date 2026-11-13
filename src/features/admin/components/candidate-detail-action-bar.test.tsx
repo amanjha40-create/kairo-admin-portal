@@ -50,7 +50,7 @@ describe("Candidate detail action bar", () => {
   it("renders real anchors only for eligible assisted operations", () => {
     renderActions(capabilities());
     expect(screen.getByRole("link", { name: "Edit Profile" }).getAttribute("href")).toBe(
-      "#assisted-profile",
+      "#user-details",
     );
     expect(screen.getByRole("link", { name: "Upload / Review CV" }).getAttribute("href")).toBe(
       "#cv-review",

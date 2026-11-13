@@ -92,4 +92,26 @@ describe("assisted career editor contract", () => {
       "Skill name is required.",
     );
   });
+
+  it("rehydrates standard Career records for direct editing", () => {
+    const draft = careerRecordToDraft("employment", {
+      candidateId: "candidate-id",
+      claimType: "employment",
+      recordId: "employment-id",
+      verificationStatus: "draft",
+      payload: {
+        company_name: "Example Employer",
+        role_title: "Engineer",
+        start_date: "2024-01-01",
+        is_current: true,
+      },
+    });
+
+    expect(draft).toMatchObject({
+      company_name: "Example Employer",
+      role_title: "Engineer",
+      start_date: "2024-01-01",
+      is_current: true,
+    });
+  });
 });

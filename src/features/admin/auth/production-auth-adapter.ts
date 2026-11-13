@@ -172,26 +172,35 @@ export function createProductionAuthAdapter(
   }
 
   async function refreshTokens(currentTokens: StoredAuthTokens): Promise<StoredAuthTokens | null> {
-    return coordinateAdminTokenRefresh(currentTokens, async () => {
-      const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
-        method: "POST",
-        body: {
-          refresh_token: currentTokens.refreshToken,
-        },
-      });
+    return coordinateAdminTokenRefresh(
+      currentTokens,
+      async () => {
+        const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
+          method: "POST",
+          body: {
+            refresh_token: currentTokens.refreshToken,
+          },
+        });
 
-      if (!result.ok || !result.data) {
-        return recoverRotatedAdminTokens(storage, currentTokens.refreshToken);
-      }
+        if (!result.ok || !result.data) {
+          if (result.status !== 401 && result.status !== 403) {
+            throw (
+              result.error ?? new Error("The session refresh service is temporarily unavailable.")
+            );
+          }
+          return recoverRotatedAdminTokens(storage, currentTokens.refreshToken);
+        }
 
-      const refreshedTokens = toStoredAuthTokens(result.data, {
-        remember: currentTokens.remember,
-        now,
-        signedInAt: currentTokens.signedInAt,
-      });
-      writeStoredAuthTokens(storage, refreshedTokens);
-      return refreshedTokens;
-    });
+        const refreshedTokens = toStoredAuthTokens(result.data, {
+          remember: currentTokens.remember,
+          now,
+          signedInAt: currentTokens.signedInAt,
+        });
+        writeStoredAuthTokens(storage, refreshedTokens);
+        return refreshedTokens;
+      },
+      storage,
+    );
   }
 
   async function revokeRefreshToken(refreshToken: string | null | undefined): Promise<void> {

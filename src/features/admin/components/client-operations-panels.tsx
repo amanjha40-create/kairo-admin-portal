@@ -40,10 +40,15 @@ export function AddClientPersonDialog({
 }) {
   const queryClient = useQueryClient();
   const adapter = useMemo(() => createAdminClientOperationsAdapter(), []);
+  const roles = useQuery(clientJobRoleQueryOptions(organizationId));
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [relationship, setRelationship] = useState("employee");
+  const [roleId, setRoleId] = useState("unassigned");
+  const [department, setDepartment] = useState("");
+  const [division, setDivision] = useState("");
+  const [joiningDate, setJoiningDate] = useState("");
   const mutation = useMutation({
     mutationFn: () =>
       adapter.createPerson(organizationId, {
@@ -51,6 +56,10 @@ export function AddClientPersonDialog({
         email: email.trim(),
         phone: phone.trim() || undefined,
         relationship,
+        roleId: roleId === "unassigned" ? undefined : roleId,
+        department: department.trim() || undefined,
+        division: division.trim() || undefined,
+        joiningDate: joiningDate || undefined,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: company360Keys.all() });
@@ -59,6 +68,11 @@ export function AddClientPersonDialog({
       setFullName("");
       setEmail("");
       setPhone("");
+      setRelationship("employee");
+      setRoleId("unassigned");
+      setDepartment("");
+      setDivision("");
+      setJoiningDate("");
     },
     onError: (error) => toast.error(getOperationError(error, "The Person could not be created.")),
   });
@@ -96,10 +110,49 @@ export function AddClientPersonDialog({
               <option value="candidate">Candidate</option>
             </select>
           </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs font-medium">
+              Job role (optional)
+              <select
+                value={roleId}
+                onChange={(event) => setRoleId(event.target.value)}
+                className={inputClass}
+              >
+                <option value="unassigned">Unassigned</option>
+                {(roles.data ?? [])
+                  .filter((role) => role.active)
+                  .map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <Field label="Department (optional)" value={department} onChange={setDepartment} />
+            <Field label="Division (optional)" value={division} onChange={setDivision} />
+            <Field
+              label={
+                relationship === "future_employee" ? "Joining date" : "Joining date (optional)"
+              }
+              value={joiningDate}
+              onChange={setJoiningDate}
+              type="date"
+              required={relationship === "future_employee"}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            This creates a Client People record only. Employment fields can be edited later without
+            creating an account or sending an invitation.
+          </p>
           <DialogFooter>
             <button
               type="submit"
-              disabled={mutation.isPending || !fullName.trim() || !email.trim()}
+              disabled={
+                mutation.isPending ||
+                !fullName.trim() ||
+                !email.trim() ||
+                (relationship === "future_employee" && !joiningDate)
+              }
               className={buttonClass}
             >
               {mutation.isPending ? "Adding..." : "Add Person"}

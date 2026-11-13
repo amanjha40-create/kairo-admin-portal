@@ -9,6 +9,10 @@ export interface ClientPerson {
   fullName: string;
   emailMasked: string;
   relationship: string;
+  roleId?: string;
+  department?: string;
+  division?: string;
+  joiningDate?: string;
   invitationStatus: string;
   createdAt: string;
 }
@@ -64,6 +68,10 @@ interface BackendClientPerson {
   full_name: string;
   email_masked: string;
   relationship: string;
+  role_id: string | null;
+  department: string | null;
+  division: string | null;
+  joining_date: string | null;
   invitation_status: string;
   created_at: string;
 }
@@ -126,6 +134,10 @@ const mapPerson = (row: BackendClientPerson): ClientPerson => ({
   fullName: row.full_name,
   emailMasked: row.email_masked,
   relationship: row.relationship,
+  roleId: row.role_id ?? undefined,
+  department: row.department ?? undefined,
+  division: row.division ?? undefined,
+  joiningDate: row.joining_date ?? undefined,
   invitationStatus: row.invitation_status,
   createdAt: row.created_at,
 });
@@ -187,6 +199,9 @@ export function createAdminClientOperationsAdapter() {
         email: string;
         phone?: string;
         relationship: string;
+        roleId?: string;
+        department?: string;
+        division?: string;
         joiningDate?: string;
       },
     ) {
@@ -199,6 +214,9 @@ export function createAdminClientOperationsAdapter() {
             email: input.email,
             phone: input.phone,
             relationship: input.relationship,
+            role_id: input.roleId,
+            department: input.department,
+            division: input.division,
             joining_date: input.joiningDate,
           },
         },

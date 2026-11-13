@@ -31,12 +31,17 @@ export function CandidateDetailActionBar({
       <div className="flex flex-wrap items-center gap-2">
         <ActionAnchor
           label="Edit Profile"
-          href="#assisted-profile"
+          href="#user-details"
           capability={capabilities.assistedProfile}
         />
         <ActionAnchor
           label="Upload / Review CV"
           href="#cv-review"
+          capability={capabilities.cvReview}
+        />
+        <ActionAnchor
+          label="Documents"
+          href="#candidate-documents"
           capability={capabilities.cvReview}
         />
         <ActionAnchor

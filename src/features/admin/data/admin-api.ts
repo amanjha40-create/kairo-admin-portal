@@ -48,31 +48,40 @@ export function createAdminAuthenticatedApi(
   });
 
   async function refreshTokens(currentTokens: StoredAuthTokens): Promise<StoredAuthTokens | null> {
-    return coordinateAdminTokenRefresh(currentTokens, async () => {
-      const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
-        method: "POST",
-        body: {
-          refresh_token: currentTokens.refreshToken,
-        },
-      });
+    return coordinateAdminTokenRefresh(
+      currentTokens,
+      async () => {
+        const result = await apiClient.request<BackendTokenResponse>("/api/v1/auth/refresh", {
+          method: "POST",
+          body: {
+            refresh_token: currentTokens.refreshToken,
+          },
+        });
 
-      if (!result.ok || !result.data) {
-        return recoverRotatedAdminTokens(storage, currentTokens.refreshToken);
-      }
+        if (!result.ok || !result.data) {
+          if (result.status !== 401 && result.status !== 403) {
+            throw (
+              result.error ?? new Error("The session refresh service is temporarily unavailable.")
+            );
+          }
+          return recoverRotatedAdminTokens(storage, currentTokens.refreshToken);
+        }
 
-      const issuedAt = now();
-      const refreshedTokens: StoredAuthTokens = {
-        accessToken: result.data.access_token,
-        refreshToken: result.data.refresh_token,
-        tokenType: result.data.token_type,
-        expiresAt: new Date(issuedAt.getTime() + result.data.expires_in * 1000).toISOString(),
-        signedInAt: currentTokens.signedInAt,
-        remember: currentTokens.remember,
-      };
+        const issuedAt = now();
+        const refreshedTokens: StoredAuthTokens = {
+          accessToken: result.data.access_token,
+          refreshToken: result.data.refresh_token,
+          tokenType: result.data.token_type,
+          expiresAt: new Date(issuedAt.getTime() + result.data.expires_in * 1000).toISOString(),
+          signedInAt: currentTokens.signedInAt,
+          remember: currentTokens.remember,
+        };
 
-      writeStoredAuthTokens(storage, refreshedTokens);
-      return refreshedTokens;
-    });
+        writeStoredAuthTokens(storage, refreshedTokens);
+        return refreshedTokens;
+      },
+      storage,
+    );
   }
 
   async function authenticatedRequest<T>(

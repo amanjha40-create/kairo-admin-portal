@@ -45,24 +45,37 @@ describe("Candidate detail capability model", () => {
     }
   });
 
-  it("blocks all assisted controls for a Candidate-managed account", () => {
-    const result = capabilities("candidate_managed", [
-      "manage_assisted_profile",
-      "send_candidate_activation",
-    ]);
-    expect(result.assistedProfile.enabled).toBe(false);
-    expect(result.cvReview.enabled).toBe(false);
+  it("allows permission-backed profile and CV review for a Candidate-managed account", () => {
+    const result = capabilities(
+      "candidate_managed",
+      ["manage_assisted_profile", "send_candidate_activation"],
+      { ...noAccountActions, editProfile: true },
+    );
+    expect(result.assistedProfile.enabled).toBe(true);
+    expect(result.cvReview.enabled).toBe(true);
     expect(result.activation.enabled).toBe(false);
-    expect(result.assistedProfile.reason).toContain("Admin assisted onboarding");
+  });
+
+  it("fails closed when Candidate-managed profile eligibility is denied by the backend", () => {
+    const result = capabilities("candidate_managed", ["manage_assisted_profile"]);
+    expect(result.assistedProfile.enabled).toBe(false);
+    expect(result.cvReview.enabled).toBe(true);
+    expect(result.assistedProfile.reason).toContain("backend user-edit eligibility");
   });
 
   it("enables only permission-backed assisted actions for an Admin-managed account", () => {
-    const profileOnly = capabilities("managed", ["manage_assisted_profile"]);
+    const profileOnly = capabilities("managed", ["manage_assisted_profile"], {
+      ...noAccountActions,
+      editProfile: true,
+    });
     expect(profileOnly.assistedProfile.enabled).toBe(true);
     expect(profileOnly.cvReview.enabled).toBe(true);
     expect(profileOnly.activation.enabled).toBe(false);
 
-    const all = capabilities("managed", ["manage_assisted_profile", "send_candidate_activation"]);
+    const all = capabilities("managed", ["manage_assisted_profile", "send_candidate_activation"], {
+      ...noAccountActions,
+      editProfile: true,
+    });
     expect(all.assistedProfile.enabled).toBe(true);
     expect(all.cvReview.enabled).toBe(true);
     expect(all.activation.enabled).toBe(true);

@@ -87,38 +87,7 @@ function UsersDirectoryPage() {
     setPage(1);
   };
 
-  if (listQuery.isPending) {
-    return (
-      <div className="mx-auto max-w-[1400px]">
-        <LoadingSkeleton rows={8} />
-      </div>
-    );
-  }
-
-  if (listQuery.error) {
-    const copy = getUsersListErrorCopy(listQuery.error);
-    return (
-      <div className="mx-auto max-w-2xl">
-        <ErrorState
-          title={copy.title}
-          description={copy.description}
-          action={
-            <button
-              type="button"
-              onClick={() => void listQuery.refetch()}
-              className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
-            >
-              Try again
-            </button>
-          }
-        />
-      </div>
-    );
-  }
-
   const result = listQuery.data;
-  if (!result) return null;
-
   const hasFilters = query.trim().length > 0 || status !== "all";
 
   return (
@@ -229,7 +198,11 @@ function UsersDirectoryPage() {
 
       <WorkspaceSection
         title="Directory"
-        description={`${result.total} total candidate account${result.total === 1 ? "" : "s"}${hasFilters ? `, ${result.items.length} on this page.` : "."}`}
+        description={
+          result
+            ? `${result.total} total candidate account${result.total === 1 ? "" : "s"}${hasFilters ? `, ${result.items.length} on this page.` : "."}`
+            : "Search and filter canonical Candidate accounts."
+        }
         action={
           <div className="w-64">
             <AdminSearchField
@@ -276,7 +249,23 @@ function UsersDirectoryPage() {
           </label>
         </div>
 
-        {result.total === 0 ? (
+        {listQuery.isPending && !result ? (
+          <LoadingSkeleton rows={8} />
+        ) : listQuery.error ? (
+          <ErrorState
+            title={getUsersListErrorCopy(listQuery.error).title}
+            description={getUsersListErrorCopy(listQuery.error).description}
+            action={
+              <button
+                type="button"
+                onClick={() => void listQuery.refetch()}
+                className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90"
+              >
+                Try again
+              </button>
+            }
+          />
+        ) : !result ? null : result.total === 0 ? (
           <EmptyState
             title={hasFilters ? "No users match" : "No candidate accounts yet"}
             description={
@@ -359,7 +348,7 @@ function UsersDirectoryPage() {
                             View
                           </a>
                           <a
-                            href={`/admin/users/${user.id}#assisted-profile`}
+                            href={`/admin/users/${user.id}#user-details`}
                             className="rounded border border-border px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent"
                           >
                             Edit Profile

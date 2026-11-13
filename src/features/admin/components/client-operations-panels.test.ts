@@ -33,6 +33,10 @@ describe("Admin Operations Hub client workflows", () => {
     expect(panels).toContain("Employment assignment");
     expect(panels).toContain("does not overwrite their global Candidate profile");
     expect(panels).toContain("Client job role updated");
+    expect(panels).toContain("Job role (optional)");
+    expect(panels).toContain("Department (optional)");
+    expect(panels).toContain("Division (optional)");
+    expect(panels).toContain("creates a Client People record only");
     expect(company).toContain("/admin/verifications/permanent-address/$candidateId");
     expect(company).toContain("Client People records");
   });

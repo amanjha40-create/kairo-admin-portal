@@ -90,7 +90,7 @@ export interface CareerMutationResult {
 
 export interface AssistedCareerRecord {
   candidateId: string;
-  claimType: ExtendedCareerClaimType;
+  claimType: CareerClaimType;
   recordId: string;
   verificationStatus: string;
   payload: Record<string, unknown>;
@@ -100,7 +100,7 @@ export interface AssistedCareerRecord {
 
 export interface CareerDeleteResult {
   candidateId: string;
-  claimType: ExtendedCareerClaimType;
+  claimType: CareerClaimType;
   recordId: string;
   deleted: true;
 }
@@ -119,6 +119,23 @@ export interface ManagedResume {
   uploadStatus: string;
   processingStatus: string;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface CandidateDocument {
+  id: string;
+  documentType: string;
+  originalFilename: string;
+  contentType: string;
+  byteSize: number;
+  verificationStatus: string;
+  createdAt: string;
+}
+
+export interface CareerDocument extends CandidateDocument {
+  claimType: "employment" | "education";
+  careerRecordId: string;
+  evidenceRole?: "primary" | "supporting";
   updatedAt: string;
 }
 
@@ -624,7 +641,7 @@ interface BackendPage<T> {
 
 interface BackendCareerRecord {
   candidate_id: string;
-  claim_type: ExtendedCareerClaimType;
+  claim_type: CareerClaimType;
   record: Record<string, unknown> & {
     id: string;
     verification_status: string;
@@ -794,18 +811,18 @@ export interface AdminOperationsAdapter {
   ) => Promise<CareerMutationResult>;
   listCareerRecords: (
     candidateId: string,
-    claimType: ExtendedCareerClaimType,
+    claimType: CareerClaimType,
     page?: number,
     pageSize?: number,
   ) => Promise<AdminOperationsPage<AssistedCareerRecord>>;
   getCareerRecord: (
     candidateId: string,
-    claimType: ExtendedCareerClaimType,
+    claimType: CareerClaimType,
     recordId: string,
   ) => Promise<AssistedCareerRecord>;
   deleteCareerRecord: (
     candidateId: string,
-    claimType: ExtendedCareerClaimType,
+    claimType: CareerClaimType,
     recordId: string,
   ) => Promise<CareerDeleteResult>;
   uploadResume: (candidateId: string, file: File) => Promise<ResumeProcessReceipt>;
@@ -839,6 +856,34 @@ export interface AdminOperationsAdapter {
     idempotencyKey: string,
   ) => Promise<ResumeImportBatch>;
   getResumeImportStatus: (candidateId: string, reviewId: string) => Promise<ResumeImportBatch>;
+  listDocuments: (candidateId: string) => Promise<AdminOperationsPage<CandidateDocument>>;
+  uploadDocument: (
+    candidateId: string,
+    documentType: string,
+    file: File,
+  ) => Promise<CandidateDocument>;
+  viewDocument: (candidateId: string, documentId: string) => Promise<Blob>;
+  listCareerDocuments: (
+    candidateId: string,
+    claimType: "employment" | "education",
+    careerRecordId: string,
+  ) => Promise<AdminOperationsPage<CareerDocument>>;
+  uploadCareerDocument: (
+    candidateId: string,
+    input: {
+      claimType: "employment" | "education";
+      careerRecordId: string;
+      documentType: string;
+      evidenceRole?: "primary" | "supporting";
+      file: File;
+    },
+  ) => Promise<CareerDocument>;
+  viewCareerDocument: (
+    candidateId: string,
+    claimType: "employment" | "education",
+    careerRecordId: string,
+    documentId: string,
+  ) => Promise<Blob>;
   createOrganization: (input: {
     name: string;
     organizationType: string;
@@ -923,9 +968,16 @@ export const adminOperationsKeys = {
     [...adminOperationsKeys.all(), "candidate", candidateId] as const,
   resumes: (candidateId: string) =>
     [...adminOperationsKeys.all(), "candidate", candidateId, "resumes"] as const,
+  documents: (candidateId: string) =>
+    [...adminOperationsKeys.all(), "candidate", candidateId, "documents"] as const,
+  careerDocuments: (
+    candidateId: string,
+    claimType: "employment" | "education",
+    careerRecordId: string,
+  ) => [...adminOperationsKeys.documents(candidateId), claimType, careerRecordId] as const,
   resumeStatus: (candidateId: string, resumeId: string) =>
     [...adminOperationsKeys.resumes(candidateId), resumeId, "status"] as const,
-  careerList: (candidateId: string, claimType: ExtendedCareerClaimType, page = 1, pageSize = 100) =>
+  careerList: (candidateId: string, claimType: CareerClaimType, page = 1, pageSize = 100) =>
     [
       ...adminOperationsKeys.all(),
       "candidate",
@@ -936,7 +988,7 @@ export const adminOperationsKeys = {
       page,
       pageSize,
     ] as const,
-  careerDetail: (candidateId: string, claimType: ExtendedCareerClaimType, recordId: string) =>
+  careerDetail: (candidateId: string, claimType: CareerClaimType, recordId: string) =>
     [
       ...adminOperationsKeys.all(),
       "candidate",
@@ -1119,7 +1171,7 @@ export function createAdminOperationsAdapter(
     async deleteCareerRecord(candidateId, claimType, recordId) {
       const response = await api.request<{
         candidate_id: string;
-        claim_type: ExtendedCareerClaimType;
+        claim_type: CareerClaimType;
         record_id: string;
         deleted: true;
       }>(
@@ -1310,6 +1362,122 @@ export function createAdminOperationsAdapter(
         await api.request<BackendImportBatch>(
           `${candidatePath(candidateId)}/resume-reviews/${encodeURIComponent(reviewId)}/import-status`,
         ),
+      );
+    },
+    async listDocuments(candidateId) {
+      const response = await api.request<
+        BackendPage<{
+          id: string;
+          document_type: string;
+          original_filename: string;
+          content_type: string;
+          byte_size: number;
+          verification_status: string;
+          created_at: string;
+        }>
+      >(`${candidatePath(candidateId)}/documents?page=1&page_size=100`);
+      return mapOperationsPage(response, mapCandidateDocument);
+    },
+    async uploadDocument(candidateId, documentType, file) {
+      const intent = await api.request<{
+        document_id: string;
+        upload_url: string;
+        headers_required: Record<string, string>;
+      }>(`${candidatePath(candidateId)}/documents/upload-intent`, {
+        method: "POST",
+        body: {
+          document_type: documentType,
+          original_filename: file.name,
+          content_type: file.type,
+          byte_size: file.size,
+        },
+      });
+      await putPresigned(uploadFetch, intent.upload_url, file, intent.headers_required);
+      const response = await api.request<{
+        id: string;
+        document_type: string;
+        original_filename: string;
+        content_type: string;
+        byte_size: number;
+        verification_status: string;
+        created_at: string;
+      }>(
+        `${candidatePath(candidateId)}/documents/${encodeURIComponent(intent.document_id)}/complete-upload`,
+        { method: "POST", body: { checksum_sha256: await sha256(file) } },
+      );
+      return mapCandidateDocument(response);
+    },
+    async viewDocument(candidateId, documentId) {
+      return api.requestBlob(
+        `${candidatePath(candidateId)}/documents/${encodeURIComponent(documentId)}/content`,
+      );
+    },
+    async listCareerDocuments(candidateId, claimType, careerRecordId) {
+      const response = await api.request<
+        BackendPage<{
+          id: string;
+          claim_type: "employment" | "education";
+          career_record_id: string;
+          document_type: string;
+          original_filename: string;
+          content_type: string;
+          byte_size: number;
+          verification_status: string;
+          evidence_role: "primary" | "supporting" | null;
+          created_at: string;
+          updated_at: string;
+        }>
+      >(
+        `${candidatePath(candidateId)}/career-documents/${claimType}/${encodeURIComponent(careerRecordId)}?page=1&page_size=100`,
+      );
+      return mapOperationsPage(response, mapCareerDocument);
+    },
+    async uploadCareerDocument(candidateId, input) {
+      const intent = await api.request<{
+        document_id: string;
+        upload_url: string;
+        headers_required: Record<string, string>;
+      }>(`${candidatePath(candidateId)}/career-documents/upload-intent`, {
+        method: "POST",
+        body: {
+          claim_type: input.claimType,
+          career_record_id: input.careerRecordId,
+          document_type: input.documentType,
+          evidence_role: input.evidenceRole,
+          original_filename: input.file.name,
+          content_type: input.file.type,
+          byte_size: input.file.size,
+        },
+      });
+      await putPresigned(uploadFetch, intent.upload_url, input.file, intent.headers_required);
+      const response = await api.request<{
+        id: string;
+        claim_type: "employment" | "education";
+        career_record_id: string;
+        document_type: string;
+        original_filename: string;
+        content_type: string;
+        byte_size: number;
+        verification_status: string;
+        evidence_role: "primary" | "supporting" | null;
+        created_at: string;
+        updated_at: string;
+      }>(
+        `${candidatePath(candidateId)}/career-documents/${encodeURIComponent(intent.document_id)}/complete-upload`,
+        {
+          method: "POST",
+          body: {
+            claim_type: input.claimType,
+            career_record_id: input.careerRecordId,
+            checksum_sha256: await sha256(input.file),
+          },
+        },
+      );
+      return mapCareerDocument(response);
+    },
+    async viewCareerDocument(candidateId, claimType, careerRecordId, documentId) {
+      return api.requestBlob(
+        `${candidatePath(candidateId)}/career-documents/${claimType}/${encodeURIComponent(careerRecordId)}/${encodeURIComponent(documentId)}/content`,
       );
     },
     async createOrganization(input) {
@@ -1591,9 +1759,41 @@ export function managedResumeStatusQueryOptions(
   });
 }
 
+export function candidateDocumentsQueryOptions(
+  candidateId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.documents(candidateId),
+    queryFn: () => createAdminOperationsAdapter(config, options).listDocuments(candidateId),
+    retry: false,
+  });
+}
+
+export function candidateCareerDocumentsQueryOptions(
+  candidateId: string,
+  claimType: "employment" | "education",
+  careerRecordId: string,
+  config: AppEnvConfig = appEnv,
+  options: ProductionAdminApiOptions = {},
+) {
+  return queryOptions({
+    queryKey: adminOperationsKeys.careerDocuments(candidateId, claimType, careerRecordId),
+    queryFn: () =>
+      createAdminOperationsAdapter(config, options).listCareerDocuments(
+        candidateId,
+        claimType,
+        careerRecordId,
+      ),
+    enabled: Boolean(careerRecordId),
+    retry: false,
+  });
+}
+
 export function assistedCareerRecordsQueryOptions(
   candidateId: string,
-  claimType: ExtendedCareerClaimType,
+  claimType: CareerClaimType,
   page = 1,
   pageSize = 100,
   config: AppEnvConfig = appEnv,
@@ -1614,7 +1814,7 @@ export function assistedCareerRecordsQueryOptions(
 
 export function assistedCareerRecordQueryOptions(
   candidateId: string,
-  claimType: ExtendedCareerClaimType,
+  claimType: CareerClaimType,
   recordId: string,
   config: AppEnvConfig = appEnv,
   options: ProductionAdminApiOptions = {},
@@ -1793,6 +1993,48 @@ function mapActivation(response: BackendActivation): CandidateActivation {
     lastSentAt: response.last_sent_at,
     resendAvailableAt: response.resend_available_at,
     deliveryState: response.delivery_state,
+  };
+}
+
+function mapCandidateDocument(response: {
+  id: string;
+  document_type: string;
+  original_filename: string;
+  content_type: string;
+  byte_size: number;
+  verification_status: string;
+  created_at: string;
+}): CandidateDocument {
+  return {
+    id: response.id,
+    documentType: response.document_type,
+    originalFilename: response.original_filename,
+    contentType: response.content_type,
+    byteSize: response.byte_size,
+    verificationStatus: response.verification_status,
+    createdAt: response.created_at,
+  };
+}
+
+function mapCareerDocument(response: {
+  id: string;
+  claim_type: "employment" | "education";
+  career_record_id: string;
+  document_type: string;
+  original_filename: string;
+  content_type: string;
+  byte_size: number;
+  verification_status: string;
+  evidence_role: "primary" | "supporting" | null;
+  created_at: string;
+  updated_at: string;
+}): CareerDocument {
+  return {
+    ...mapCandidateDocument(response),
+    claimType: response.claim_type,
+    careerRecordId: response.career_record_id,
+    evidenceRole: response.evidence_role ?? undefined,
+    updatedAt: response.updated_at,
   };
 }
 

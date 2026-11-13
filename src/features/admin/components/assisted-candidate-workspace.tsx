@@ -1,19 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, FileText, LockKeyhole, RefreshCw, Send } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileText, LockKeyhole, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useAdminAccess } from "@/features/admin/auth/admin-access";
-import { AssistedCareerEditor } from "@/features/admin/components/assisted-career-editor";
+import {
+  AssistedCareerEditor,
+  CAREER_CLAIM_DEFINITIONS,
+  type CareerFieldDefinition,
+} from "@/features/admin/components/assisted-career-editor";
 import { EmptyState } from "@/features/admin/components/states";
 import { WorkspaceSection } from "@/features/admin/components/workspace-section";
 import {
   adminOperationsKeys,
+  assistedCareerRecordsQueryOptions,
+  candidateCareerDocumentsQueryOptions,
+  candidateDocumentsQueryOptions,
   createAdminOperationsAdapter,
   managedResumesQueryOptions,
   managedResumeStatusQueryOptions,
   managedCandidateQueryOptions,
   type ProfileMutationResult,
   type ProfileMutationInput,
+  type CareerClaimType,
   type ResumeImportBatch,
   type ResumeImportAction,
   type ResumeParsedResult,
@@ -86,18 +94,29 @@ export function AssistedCandidateWorkspace({
         >
           <EmptyState
             title="Candidate-managed profile"
-            description="Activation and direct Career mutation remain unavailable. Authorized CV review can still import Candidate-provided drafts without publishing or verifying them."
+            description="Account activation remains Candidate-controlled. Authorized profile, Career, document, and CV review actions preserve Candidate confirmation and verified-field protections."
           />
         </WorkspaceSection>
         {canManageProfile ? (
-          <div id="cv-review" className="scroll-mt-20">
-            <CvReviewWorkspace
-              candidateId={candidateId}
-              onComplete={async () => {
-                await queryClient.invalidateQueries({ queryKey: userKeys.all() });
-              }}
-            />
-          </div>
+          <>
+            <div id="assisted-profile" className="scroll-mt-20">
+              <AssistedCareerEditor
+                candidateId={candidateId}
+                onComplete={async () => {
+                  await queryClient.invalidateQueries({ queryKey: userKeys.all() });
+                }}
+              />
+            </div>
+            <CandidateDocumentsWorkspace candidateId={candidateId} />
+            <div id="cv-review" className="scroll-mt-20">
+              <CvReviewWorkspace
+                candidateId={candidateId}
+                onComplete={async () => {
+                  await queryClient.invalidateQueries({ queryKey: userKeys.all() });
+                }}
+              />
+            </div>
+          </>
         ) : null}
       </div>
     );
@@ -174,6 +193,7 @@ export function AssistedCandidateWorkspace({
             />
             <AssistedCareerEditor candidateId={candidateId} onComplete={refresh} />
           </div>
+          <CandidateDocumentsWorkspace candidateId={candidateId} />
           <div id="cv-review" className="scroll-mt-20">
             <CvReviewWorkspace candidateId={candidateId} onComplete={refresh} />
           </div>
@@ -368,6 +388,308 @@ function ProfileEditor({
   );
 }
 
+const CANDIDATE_DOCUMENT_TYPES = [
+  ["other", "Other document"],
+  ["address_proof", "Address proof"],
+  ["government_id", "Government ID"],
+  ["passport", "Passport"],
+  ["driving_license", "Driving licence"],
+  ["voter_id", "Voter ID"],
+  ["birth_certificate", "Birth certificate"],
+] as const;
+
+const EMPLOYMENT_DOCUMENT_TYPES = [
+  ["pay_stub", "Pay stub"],
+  ["offer_letter", "Offer letter"],
+  ["appointment_letter", "Appointment letter"],
+  ["experience_letter", "Experience letter"],
+  ["relieving_letter", "Relieving letter"],
+  ["payslip", "Payslip"],
+  ["employment_id_card", "Employment ID card"],
+  ["contract", "Contract"],
+  ["employment_contract", "Employment contract"],
+  ["hr_letter", "HR letter"],
+  ["bank_statement", "Bank statement"],
+  ["form_w2", "Form W-2"],
+  ["form_1099", "Form 1099"],
+  ["other", "Other employment document"],
+] as const;
+
+const EDUCATION_DOCUMENT_TYPES = [
+  ["degree_certificate", "Degree certificate"],
+  ["passing_certificate", "Passing certificate"],
+  ["provisional_certificate", "Provisional certificate"],
+  ["transcript", "Transcript"],
+  ["marksheet", "Marksheet"],
+  ["migration_certificate", "Migration certificate"],
+  ["admission_letter", "Admission letter"],
+  ["enrollment_proof", "Enrollment proof"],
+  ["other", "Other education document"],
+] as const;
+
+type CandidateDocumentScope = "identity" | "employment" | "education";
+
+export function CandidateDocumentsWorkspace({ candidateId }: { candidateId: string }) {
+  const adapter = useMemo(() => createAdminOperationsAdapter(), []);
+  const queryClient = useQueryClient();
+  const identityDocuments = useQuery(candidateDocumentsQueryOptions(candidateId));
+  const employmentRecords = useQuery(assistedCareerRecordsQueryOptions(candidateId, "employment"));
+  const educationRecords = useQuery(assistedCareerRecordsQueryOptions(candidateId, "education"));
+  const [scope, setScope] = useState<CandidateDocumentScope>("identity");
+  const [careerRecordId, setCareerRecordId] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState("other");
+  const [evidenceRole, setEvidenceRole] = useState<"primary" | "supporting">("supporting");
+  const careerClaimType = scope === "education" ? "education" : "employment";
+  const careerRecords =
+    scope === "education"
+      ? (educationRecords.data?.items ?? [])
+      : (employmentRecords.data?.items ?? []);
+  const effectiveCareerRecordId =
+    scope === "identity" ? "" : careerRecordId || careerRecords[0]?.recordId || "";
+  const careerDocuments = useQuery(
+    candidateCareerDocumentsQueryOptions(candidateId, careerClaimType, effectiveCareerRecordId),
+  );
+  const documentTypes =
+    scope === "employment"
+      ? EMPLOYMENT_DOCUMENT_TYPES
+      : scope === "education"
+        ? EDUCATION_DOCUMENT_TYPES
+        : CANDIDATE_DOCUMENT_TYPES;
+  const displayedDocuments =
+    scope === "identity"
+      ? (identityDocuments.data?.items ?? [])
+      : (careerDocuments.data?.items ?? []);
+  const documentsPending =
+    scope === "identity" ? identityDocuments.isPending : careerDocuments.isPending;
+  const documentsError = scope === "identity" ? identityDocuments.error : careerDocuments.error;
+  const upload = useMutation({
+    mutationFn: async () => {
+      if (!file) throw new Error("Choose a document first.");
+      if (scope === "identity") {
+        return adapter.uploadDocument(candidateId, documentType, file);
+      }
+      if (!effectiveCareerRecordId) {
+        throw new Error(`Add or choose an ${scope} record before uploading its document.`);
+      }
+      return adapter.uploadCareerDocument(candidateId, {
+        claimType: scope,
+        careerRecordId: effectiveCareerRecordId,
+        documentType,
+        evidenceRole: scope === "employment" ? evidenceRole : undefined,
+        file,
+      });
+    },
+    onSuccess: async () => {
+      setFile(null);
+      if (scope === "identity") {
+        await queryClient.invalidateQueries({
+          queryKey: adminOperationsKeys.documents(candidateId),
+        });
+      } else {
+        await queryClient.invalidateQueries({
+          queryKey: adminOperationsKeys.careerDocuments(
+            candidateId,
+            scope,
+            effectiveCareerRecordId,
+          ),
+        });
+      }
+      toast.success("Private Candidate document uploaded");
+    },
+    onError: (error) =>
+      toast.error(getOperationError(error, "The Candidate document could not be uploaded.")),
+  });
+  const view = useMutation({
+    mutationFn: (input: {
+      documentId: string;
+      scope: CandidateDocumentScope;
+      careerRecordId?: string;
+    }) =>
+      input.scope === "identity"
+        ? adapter.viewDocument(candidateId, input.documentId)
+        : adapter.viewCareerDocument(
+            candidateId,
+            input.scope,
+            input.careerRecordId ?? "",
+            input.documentId,
+          ),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    },
+    onError: (error) =>
+      toast.error(getOperationError(error, "The private document could not be opened.")),
+  });
+
+  return (
+    <div id="candidate-documents" className="scroll-mt-20">
+      <WorkspaceSection
+        title="Documents"
+        description="Private Candidate files, optionally attached to an existing Career record without creating a verification case"
+      >
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[170px_minmax(200px,1fr)_200px_minmax(220px,1fr)_auto] xl:items-end">
+          <label className="space-y-1 text-xs font-medium">
+            Association
+            <select
+              value={scope}
+              onChange={(event) => {
+                const next = event.target.value as CandidateDocumentScope;
+                setScope(next);
+                setCareerRecordId("");
+                setDocumentType(
+                  next === "employment"
+                    ? EMPLOYMENT_DOCUMENT_TYPES[0][0]
+                    : next === "education"
+                      ? EDUCATION_DOCUMENT_TYPES[0][0]
+                      : CANDIDATE_DOCUMENT_TYPES[0][0],
+                );
+              }}
+              className="h-9 w-full rounded-md border border-border bg-background px-2"
+            >
+              <option value="identity">Candidate profile</option>
+              <option value="employment">Employment record</option>
+              <option value="education">Education record</option>
+            </select>
+          </label>
+          {scope !== "identity" ? (
+            <label className="space-y-1 text-xs font-medium">
+              Career record
+              <select
+                value={effectiveCareerRecordId}
+                onChange={(event) => setCareerRecordId(event.target.value)}
+                className="h-9 w-full rounded-md border border-border bg-background px-2"
+              >
+                {careerRecords.length === 0 ? (
+                  <option value="">No {scope} record available</option>
+                ) : (
+                  careerRecords.map((record) => (
+                    <option key={record.recordId} value={record.recordId}>
+                      {careerDocumentRecordLabel(record.claimType, record.payload)}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+          ) : (
+            <div className="hidden xl:block" />
+          )}
+          <label className="space-y-1 text-xs font-medium">
+            Document type
+            <select
+              value={documentType}
+              onChange={(event) => setDocumentType(event.target.value)}
+              className="h-9 w-full rounded-md border border-border bg-background px-2"
+            >
+              {documentTypes.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {scope === "employment" ? (
+            <label className="space-y-1 text-xs font-medium xl:col-start-3">
+              Evidence role
+              <select
+                value={evidenceRole}
+                onChange={(event) =>
+                  setEvidenceRole(event.target.value as "primary" | "supporting")
+                }
+                className="h-9 w-full rounded-md border border-border bg-background px-2"
+              >
+                <option value="supporting">Supporting</option>
+                <option value="primary">Primary</option>
+              </select>
+            </label>
+          ) : null}
+          <label className="space-y-1 text-xs font-medium">
+            File
+            <input
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="block h-9 w-full rounded-md border border-border bg-background px-2 py-1 text-xs file:border-0 file:bg-transparent"
+            />
+          </label>
+          <ActionButton
+            onClick={() => upload.mutate()}
+            disabled={
+              !file || upload.isPending || (scope !== "identity" && !effectiveCareerRecordId)
+            }
+          >
+            <FileText className="size-3.5" />{" "}
+            {upload.isPending ? "Uploading..." : "Upload document"}
+          </ActionButton>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Files remain private and unverified. Career association does not submit a verification,
+          share a file, or change the Career record&apos;s verification status. The canonical upload
+          pipeline validates declared type, size, stored object metadata, and checksum; no dedicated
+          malware-scanning service is currently configured.
+        </p>
+        {documentsPending ? (
+          <p className="mt-3 text-xs text-muted-foreground">Loading private documents...</p>
+        ) : documentsError ? (
+          <p className="mt-3 text-xs text-destructive">
+            {getOperationError(documentsError, "Private documents could not be loaded.")}
+          </p>
+        ) : displayedDocuments.length ? (
+          <div className="mt-3 divide-y divide-border rounded-md border border-border">
+            {displayedDocuments.map((document) => (
+              <div
+                key={document.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{document.originalFilename}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {humanize(document.documentType)} · {formatBytes(document.byteSize)} ·{" "}
+                    {humanize(document.verificationStatus)}
+                    {"evidenceRole" in document && document.evidenceRole
+                      ? ` · ${humanize(String(document.evidenceRole))}`
+                      : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    view.mutate({
+                      documentId: document.id,
+                      scope,
+                      careerRecordId: effectiveCareerRecordId || undefined,
+                    })
+                  }
+                  disabled={view.isPending}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 font-medium hover:bg-accent disabled:opacity-50"
+                >
+                  <ExternalLink className="size-3" /> Open
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {scope === "identity"
+              ? "No private Candidate profile documents yet."
+              : effectiveCareerRecordId
+                ? `No private documents are attached to this ${scope} record.`
+                : `Add an ${scope} Career record before attaching a document.`}
+          </p>
+        )}
+      </WorkspaceSection>
+    </div>
+  );
+}
+
+function careerDocumentRecordLabel(claimType: CareerClaimType, payload: Record<string, unknown>) {
+  if (claimType === "employment") {
+    return [payload.role_title, payload.company_name].filter(Boolean).join(" at ") || "Employment";
+  }
+  return [payload.degree, payload.institution_name].filter(Boolean).join(" at ") || "Education";
+}
+
 function CvReviewWorkspace({
   candidateId,
   onComplete,
@@ -383,7 +705,8 @@ function CvReviewWorkspace({
   const [review, setReview] = useState<ResumeReviewSession | null>(null);
   const [plan, setPlan] = useState<ResumeReviewPlan | null>(null);
   const [batch, setBatch] = useState<ResumeImportBatch | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [uploadPhase, setUploadPhase] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>({});
   const resumesQuery = useQuery(managedResumesQueryOptions(candidateId));
   const persistedResume = resumesQuery.data?.items[0];
   const activeResumeId = resumeId ?? persistedResume?.id ?? null;
@@ -424,10 +747,7 @@ function CvReviewWorkspace({
     setReview(reviewQuery.data);
     setDrafts(
       Object.fromEntries(
-        reviewQuery.data.items.map((item) => [
-          item.id,
-          JSON.stringify(item.editedPayload, null, 2),
-        ]),
+        reviewQuery.data.items.map((item) => [item.id, { ...item.editedPayload }]),
       ),
     );
   }, [review, reviewQuery.data]);
@@ -439,6 +759,7 @@ function CvReviewWorkspace({
   const upload = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Choose a CV first.");
+      setUploadPhase("Uploading CV to private storage");
       return adapter.uploadResume(candidateId, file);
     },
     onSuccess: async (receipt) => {
@@ -447,10 +768,14 @@ function CvReviewWorkspace({
       setReview(null);
       setPlan(null);
       setBatch(null);
+      setUploadPhase("Upload complete; parser job queued");
       await queryClient.invalidateQueries({ queryKey: adminOperationsKeys.resumes(candidateId) });
       toast.success("CV uploaded; parsing started");
     },
-    onError: (error) => toast.error(getOperationError(error, "The CV could not be processed.")),
+    onError: (error) => {
+      setUploadPhase("Upload failed");
+      toast.error(getOperationError(error, "The CV could not be processed."));
+    },
   });
   const loadParsed = useMutation({
     mutationFn: async () => {
@@ -469,9 +794,7 @@ function CvReviewWorkspace({
     onSuccess: (session) => {
       setReview(session);
       setDrafts(
-        Object.fromEntries(
-          session.items.map((item) => [item.id, JSON.stringify(item.editedPayload, null, 2)]),
-        ),
+        Object.fromEntries(session.items.map((item) => [item.id, { ...item.editedPayload }])),
       );
     },
     onError: (error) => toast.error(getOperationError(error, "The CV review could not be opened.")),
@@ -484,7 +807,7 @@ function CvReviewWorkspace({
         candidateId,
         review.id,
         item.id,
-        getResumeReviewUpdateInput(item, drafts[item.id] ?? "{}"),
+        getResumeReviewUpdateInput(item, drafts[item.id] ?? {}),
       );
     },
     onSuccess: (item) => {
@@ -566,6 +889,18 @@ function CvReviewWorkspace({
           {review ? "Review loaded" : "Open review"}
         </ActionButton>
       </div>
+
+      {uploadPhase ? (
+        <div
+          className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"
+          role="status"
+        >
+          {upload.isPending ? (
+            <span className="size-2 animate-pulse rounded-full bg-[#0FA8A5]" />
+          ) : null}
+          {uploadPhase}
+        </div>
+      ) : null}
 
       {activeResumeId ? (
         <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
@@ -690,13 +1025,17 @@ function CvReviewWorkspace({
                       : "This parsed claim type is not supported for Career import. Its source payload remains visible for an honest review, but it must be excluded."}
                   </div>
                 ) : null}
-                <textarea
-                  value={drafts[item.id] ?? "{}"}
-                  onChange={(event) =>
-                    setDrafts((current) => ({ ...current, [item.id]: event.target.value }))
-                  }
-                  className="mt-2 min-h-28 w-full rounded-md border border-border bg-muted/20 px-3 py-2 font-mono text-[11px]"
-                />
+                {importable ? (
+                  <ResumeClaimEditor
+                    claimType={item.claimType}
+                    payload={drafts[item.id] ?? item.editedPayload}
+                    onChange={(payload) =>
+                      setDrafts((current) => ({ ...current, [item.id]: payload }))
+                    }
+                  />
+                ) : (
+                  <ReadablePayload payload={item.editedPayload} />
+                )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <label className="space-y-1 text-[11px] font-medium">
                     Import decision
@@ -764,9 +1103,15 @@ function CvReviewWorkspace({
                     <summary className="cursor-pointer font-medium">
                       {item.duplicateCandidates.length} possible existing match(es)
                     </summary>
-                    <pre className="mt-1 max-h-36 overflow-auto rounded bg-muted p-2">
-                      {JSON.stringify(item.duplicateCandidates, null, 2)}
-                    </pre>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {item.duplicateCandidates.map((candidate, index) => (
+                        <ReadablePayload
+                          key={String(candidate.id ?? index)}
+                          payload={candidate}
+                          compact
+                        />
+                      ))}
+                    </div>
                   </details>
                 ) : null}
                 {item.conflictWarnings.length ? (
@@ -781,14 +1126,40 @@ function CvReviewWorkspace({
                     ))}
                   </ul>
                 ) : null}
-                <div className="mt-2 flex justify-end">
+                <div className="mt-2 flex flex-wrap justify-end gap-2">
+                  {importable ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                items: current.items.map((entry) =>
+                                  entry.id === item.id
+                                    ? {
+                                        ...entry,
+                                        selected: !entry.selected,
+                                        importAction: entry.selected ? "skip" : "create_new",
+                                      }
+                                    : entry,
+                                ),
+                              }
+                            : current,
+                        )
+                      }
+                      className="h-7 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent"
+                    >
+                      {item.selected && item.importAction !== "skip" ? "Exclude" : "Restore"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => saveItem.mutate(item.id)}
                     disabled={saveItem.isPending}
                     className="h-7 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent"
                   >
-                    {importable ? "Save selection and edits" : "Confirm exclusion"}
+                    {importable ? "Save and confirm" : "Confirm unsupported exclusion"}
                   </button>
                 </div>
               </div>
@@ -850,6 +1221,151 @@ function ProvenanceLegend() {
         ),
       )}
     </div>
+  );
+}
+
+function ResumeClaimEditor({
+  claimType,
+  payload,
+  onChange,
+}: {
+  claimType: string;
+  payload: Record<string, unknown>;
+  onChange: (payload: Record<string, unknown>) => void;
+}) {
+  const definition = CAREER_CLAIM_DEFINITIONS[claimType as CareerClaimType];
+  if (!definition) return <ReadablePayload payload={payload} />;
+  const known = new Set(definition.fields.map((field) => field.key));
+  const additional = Object.fromEntries(
+    Object.entries(payload).filter(([key]) => key !== "claim_type" && !known.has(key)),
+  );
+  const update = (field: CareerFieldDefinition, value: string | boolean) => {
+    const next = { ...payload };
+    if (field.type === "checkbox") next[field.key] = Boolean(value);
+    else if (field.type === "tags") {
+      next[field.key] = String(value)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    } else next[field.key] = value === "" && field.nullable ? null : value;
+    onChange(next);
+  };
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {definition.fields.map((field) => (
+          <ResumeClaimField
+            key={field.key}
+            field={field}
+            value={payload[field.key]}
+            onChange={(value) => update(field, value)}
+          />
+        ))}
+      </div>
+      {Object.keys(additional).length ? (
+        <details className="text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer font-medium">Additional extracted details</summary>
+          <ReadablePayload payload={additional} compact />
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function ResumeClaimField({
+  field,
+  value,
+  onChange,
+}: {
+  field: CareerFieldDefinition;
+  value: unknown;
+  onChange: (value: string | boolean) => void;
+}) {
+  const className = `space-y-1 text-[11px] font-medium ${field.wide ? "sm:col-span-2" : ""}`;
+  if (field.type === "checkbox") {
+    return (
+      <label
+        className={`flex items-center gap-2 rounded-md border border-border px-3 py-2 ${field.wide ? "sm:col-span-2" : ""}`}
+      >
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        {field.label}
+      </label>
+    );
+  }
+  if (field.type === "select") {
+    return (
+      <label className={className}>
+        {field.label}
+        <select
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-9 w-full rounded-md border border-border bg-background px-2"
+        >
+          {field.options?.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  const textValue = Array.isArray(value)
+    ? value.join(", ")
+    : value === null || value === undefined
+      ? ""
+      : String(value);
+  return (
+    <label className={className}>
+      {field.label}
+      {field.required ? " *" : ""}
+      {field.type === "textarea" ? (
+        <textarea
+          value={textValue}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        />
+      ) : (
+        <input
+          type={field.type === "url" ? "url" : "text"}
+          inputMode={field.type === "date" ? "numeric" : undefined}
+          placeholder={field.type === "date" ? "YYYY, YYYY-MM, or YYYY-MM-DD" : undefined}
+          value={textValue}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+        />
+      )}
+    </label>
+  );
+}
+
+function ReadablePayload({
+  payload,
+  compact = false,
+}: {
+  payload: Record<string, unknown>;
+  compact?: boolean;
+}) {
+  const entries = Object.entries(payload).filter(
+    ([key, value]) => key !== "claim_type" && value !== null && value !== "",
+  );
+  return (
+    <dl className={`grid gap-2 ${compact ? "mt-2" : "mt-3 sm:grid-cols-2"}`}>
+      {entries.map(([key, value]) => (
+        <div key={key} className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {humanize(key)}
+          </dt>
+          <dd className="mt-0.5 break-words text-[11px] text-foreground">
+            {typeof value === "object" ? JSON.stringify(value) : String(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -936,4 +1452,10 @@ function humanize(value: string) {
 function formatDateTime(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }

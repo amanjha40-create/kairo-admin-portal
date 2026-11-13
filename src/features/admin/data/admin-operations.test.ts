@@ -361,6 +361,209 @@ describe("Admin Operations V1.1 adapter", () => {
     ]);
   });
 
+  it("lists, uploads, and privately views Candidate documents through canonical storage", async () => {
+    const documentId = "44444444-4444-4444-8444-555555555555";
+    const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.hostname === "uploads.example.test") {
+        expect(init?.method).toBe("PUT");
+        expect(new Headers(init?.headers).get("content-type")).toBe("application/pdf");
+        return new Response(null, { status: 200 });
+      }
+      const method = init?.method ?? "GET";
+      requests.push({
+        method,
+        path: url.pathname,
+        ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+      });
+      if (url.pathname.endsWith("/upload-intent")) {
+        return response(
+          {
+            document_id: documentId,
+            upload_url: "https://uploads.example.test/private-document",
+            headers_required: { "Content-Type": "application/pdf" },
+          },
+          201,
+        );
+      }
+      if (url.pathname.endsWith("/complete-upload")) {
+        return response({
+          id: documentId,
+          document_type: "other",
+          original_filename: "supporting-document.pdf",
+          content_type: "application/pdf",
+          byte_size: 9,
+          verification_status: "pending",
+          created_at: "2026-11-14T00:00:00Z",
+        });
+      }
+      if (url.pathname.endsWith("/content")) {
+        return new Response(new TextEncoder().encode("%PDF-safe"), {
+          headers: { "content-type": "application/pdf", "cache-control": "no-store" },
+        });
+      }
+      return response({
+        items: [
+          {
+            id: documentId,
+            document_type: "other",
+            original_filename: "supporting-document.pdf",
+            content_type: "application/pdf",
+            byte_size: 9,
+            verification_status: "pending",
+            created_at: "2026-11-14T00:00:00Z",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        total_pages: 1,
+      });
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+
+    const listed = await adapter.listDocuments(CANDIDATE_ID);
+    const file = new File([new TextEncoder().encode("%PDF-safe")], "supporting-document.pdf", {
+      type: "application/pdf",
+    });
+    const uploaded = await adapter.uploadDocument(CANDIDATE_ID, "other", file);
+    const viewed = await adapter.viewDocument(CANDIDATE_ID, documentId);
+
+    expect(listed.items[0]).toMatchObject({
+      id: documentId,
+      documentType: "other",
+      verificationStatus: "pending",
+    });
+    expect(uploaded.id).toBe(documentId);
+    expect(viewed.type).toBe("application/pdf");
+    expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual([
+      `GET /api/v1/admin/operations/candidates/${CANDIDATE_ID}/documents`,
+      `POST /api/v1/admin/operations/candidates/${CANDIDATE_ID}/documents/upload-intent`,
+      `POST /api/v1/admin/operations/candidates/${CANDIDATE_ID}/documents/${documentId}/complete-upload`,
+      `GET /api/v1/admin/operations/candidates/${CANDIDATE_ID}/documents/${documentId}/content`,
+    ]);
+    expect(JSON.stringify(requests)).not.toMatch(/object_key|upload_url|activation_token/i);
+  });
+
+  it("lists, uploads, and privately views documents associated with a Career record", async () => {
+    const careerRecordId = "44444444-4444-4444-8444-444444444444";
+    const documentId = "55555555-5555-4555-8555-555555555555";
+    const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+    const documentBody = {
+      id: documentId,
+      claim_type: "employment",
+      career_record_id: careerRecordId,
+      document_type: "form_w2",
+      original_filename: "employment-evidence.pdf",
+      content_type: "application/pdf",
+      byte_size: 9,
+      verification_status: "pending_review",
+      evidence_role: "supporting",
+      created_at: "2026-11-14T00:00:00Z",
+      updated_at: "2026-11-14T00:00:00Z",
+    };
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.hostname === "uploads.example.test") {
+        expect(init?.method).toBe("PUT");
+        return new Response(null, { status: 200 });
+      }
+      const method = init?.method ?? "GET";
+      requests.push({
+        method,
+        path: url.pathname,
+        ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+      });
+      if (url.pathname.endsWith("/upload-intent")) {
+        return response(
+          {
+            document_id: documentId,
+            upload_url: "https://uploads.example.test/career-document",
+            headers_required: { "Content-Type": "application/pdf" },
+          },
+          201,
+        );
+      }
+      if (url.pathname.endsWith("/complete-upload")) return response(documentBody);
+      if (url.pathname.endsWith("/content")) {
+        return new Response(new TextEncoder().encode("%PDF-safe"), {
+          headers: { "content-type": "application/pdf", "cache-control": "no-store" },
+        });
+      }
+      return response({
+        items: [documentBody],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        total_pages: 1,
+      });
+    });
+    const adapter = createAdminOperationsAdapter(config(), options(fetchImpl));
+    const file = new File([new TextEncoder().encode("%PDF-safe")], "employment-evidence.pdf", {
+      type: "application/pdf",
+    });
+
+    const listed = await adapter.listCareerDocuments(CANDIDATE_ID, "employment", careerRecordId);
+    const uploaded = await adapter.uploadCareerDocument(CANDIDATE_ID, {
+      claimType: "employment",
+      careerRecordId,
+      documentType: "form_w2",
+      evidenceRole: "supporting",
+      file,
+    });
+    const viewed = await adapter.viewCareerDocument(
+      CANDIDATE_ID,
+      "employment",
+      careerRecordId,
+      documentId,
+    );
+
+    expect(listed.items[0]).toMatchObject({
+      id: documentId,
+      claimType: "employment",
+      careerRecordId,
+      documentType: "form_w2",
+      evidenceRole: "supporting",
+      verificationStatus: "pending_review",
+    });
+    expect(uploaded.id).toBe(documentId);
+    expect(viewed.type).toBe("application/pdf");
+    expect(requests).toEqual([
+      {
+        method: "GET",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career-documents/employment/${careerRecordId}`,
+      },
+      {
+        method: "POST",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career-documents/upload-intent`,
+        body: {
+          claim_type: "employment",
+          career_record_id: careerRecordId,
+          document_type: "form_w2",
+          evidence_role: "supporting",
+          original_filename: "employment-evidence.pdf",
+          content_type: "application/pdf",
+          byte_size: 9,
+        },
+      },
+      {
+        method: "POST",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career-documents/${documentId}/complete-upload`,
+        body: {
+          claim_type: "employment",
+          career_record_id: careerRecordId,
+          checksum_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+      },
+      {
+        method: "GET",
+        path: `/api/v1/admin/operations/candidates/${CANDIDATE_ID}/career-documents/employment/${careerRecordId}/${documentId}/content`,
+      },
+    ]);
+    expect(JSON.stringify(requests)).not.toMatch(/object_key|upload_url|activation_token/i);
+  });
+
   it("runs the existing CV parser/review/import contract without auto-import", async () => {
     const apiPaths: string[] = [];
     const requestBodies: Array<Record<string, unknown>> = [];

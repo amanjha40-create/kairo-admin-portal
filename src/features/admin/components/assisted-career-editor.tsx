@@ -10,7 +10,6 @@ import {
   createAdminOperationsAdapter,
   type AssistedCareerRecord,
   type CareerClaimType,
-  type ExtendedCareerClaimType,
 } from "@/features/admin/data/admin-operations";
 import { userKeys } from "@/features/admin/data/users";
 import { getOperationError } from "@/features/admin/lib/operation-error";
@@ -18,7 +17,7 @@ import { getOperationError } from "@/features/admin/lib/operation-error";
 type DraftValue = string | boolean;
 export type CareerDraft = Record<string, DraftValue>;
 
-interface FieldDefinition {
+export interface CareerFieldDefinition {
   key: string;
   label: string;
   type?: "text" | "date" | "url" | "textarea" | "checkbox" | "select" | "tags";
@@ -28,10 +27,10 @@ interface FieldDefinition {
   wide?: boolean;
 }
 
-interface ClaimDefinition {
+export interface CareerClaimDefinition {
   label: string;
   description: string;
-  fields: FieldDefinition[];
+  fields: CareerFieldDefinition[];
 }
 
 export const CAREER_TYPES: CareerClaimType[] = [
@@ -46,7 +45,7 @@ export const CAREER_TYPES: CareerClaimType[] = [
   "gig_platform",
 ];
 
-const CLAIMS: Record<CareerClaimType, ClaimDefinition> = {
+export const CAREER_CLAIM_DEFINITIONS: Record<CareerClaimType, CareerClaimDefinition> = {
   employment: {
     label: "Employment",
     description: "Add an employer, role, working arrangement, dates, and role summary.",
@@ -180,13 +179,9 @@ const CLAIMS: Record<CareerClaimType, ClaimDefinition> = {
   },
 };
 
-export function isExtendedCareerType(value: CareerClaimType): value is ExtendedCareerClaimType {
-  return ["portfolio", "project", "skill", "gig_platform"].includes(value);
-}
-
 export function createCareerDraft(claimType: CareerClaimType): CareerDraft {
   return Object.fromEntries(
-    CLAIMS[claimType].fields.map((field) => [
+    CAREER_CLAIM_DEFINITIONS[claimType].fields.map((field) => [
       field.key,
       field.type === "checkbox" ? field.key === "is_active" : "",
     ]),
@@ -194,11 +189,11 @@ export function createCareerDraft(claimType: CareerClaimType): CareerDraft {
 }
 
 export function careerRecordToDraft(
-  claimType: ExtendedCareerClaimType,
+  claimType: CareerClaimType,
   record: AssistedCareerRecord,
 ): CareerDraft {
   const draft = createCareerDraft(claimType);
-  for (const field of CLAIMS[claimType].fields) {
+  for (const field of CAREER_CLAIM_DEFINITIONS[claimType].fields) {
     const value = record.payload[field.key];
     if (field.type === "checkbox") draft[field.key] = Boolean(value);
     else if (field.type === "tags" && Array.isArray(value)) draft[field.key] = value.join(", ");
@@ -213,7 +208,7 @@ export function buildCareerPayload(
   original?: CareerDraft,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
-  for (const field of CLAIMS[claimType].fields) {
+  for (const field of CAREER_CLAIM_DEFINITIONS[claimType].fields) {
     const value = draft[field.key];
     if (original && value === original[field.key]) continue;
     if (field.type === "checkbox") {
@@ -249,7 +244,7 @@ export function buildCareerPayload(
 }
 
 export function validateCareerDraft(claimType: CareerClaimType, draft: CareerDraft): string | null {
-  for (const field of CLAIMS[claimType].fields) {
+  for (const field of CAREER_CLAIM_DEFINITIONS[claimType].fields) {
     if (field.required && !String(draft[field.key] ?? "").trim())
       return `${field.label} is required.`;
   }
@@ -269,29 +264,19 @@ export function AssistedCareerEditor({
   const [draft, setDraft] = useState<CareerDraft>(() => createCareerDraft("employment"));
   const [editing, setEditing] = useState<AssistedCareerRecord | null>(null);
   const [original, setOriginal] = useState<CareerDraft | undefined>();
-  const [legacyRecordId, setLegacyRecordId] = useState("");
-  const queryType: ExtendedCareerClaimType = isExtendedCareerType(claimType)
-    ? claimType
-    : "portfolio";
-  const recordsQuery = useQuery({
-    ...assistedCareerRecordsQueryOptions(candidateId, queryType),
-    enabled: isExtendedCareerType(claimType),
-  });
-  const definition = CLAIMS[claimType];
+  const recordsQuery = useQuery(assistedCareerRecordsQueryOptions(candidateId, claimType));
+  const definition = CAREER_CLAIM_DEFINITIONS[claimType];
 
   const reset = (nextType: CareerClaimType = claimType) => {
     setDraft(createCareerDraft(nextType));
     setEditing(null);
     setOriginal(undefined);
-    setLegacyRecordId("");
   };
 
   const refresh = async () => {
-    if (isExtendedCareerType(claimType)) {
-      await queryClient.invalidateQueries({
-        queryKey: adminOperationsKeys.careerList(candidateId, claimType),
-      });
-    }
+    await queryClient.invalidateQueries({
+      queryKey: adminOperationsKeys.careerList(candidateId, claimType),
+    });
     await queryClient.invalidateQueries({ queryKey: userKeys.all() });
     await onComplete();
   };
@@ -306,7 +291,7 @@ export function AssistedCareerEditor({
       return adapter.mutateCareer(
         candidateId,
         { claimType, payload, source: "admin_entered" },
-        editing?.recordId || legacyRecordId.trim() || undefined,
+        editing?.recordId,
       );
     },
     onSuccess: async (result) => {
@@ -365,10 +350,8 @@ export function AssistedCareerEditor({
               }}
               className={`flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-xs font-medium ${claimType === type ? "border-[#087F7C] bg-[#EAF8F6] text-[#064E4B]" : "border-border bg-background text-foreground hover:bg-accent"}`}
             >
-              {CLAIMS[type].label}
-              {isExtendedCareerType(type) ? (
-                <span className="text-[10px] text-muted-foreground">History</span>
-              ) : null}
+              {CAREER_CLAIM_DEFINITIONS[type].label}
+              <span className="text-[10px] text-muted-foreground">History</span>
             </button>
           ))}
         </div>
@@ -383,18 +366,6 @@ export function AssistedCareerEditor({
               Provenance: Admin entered
             </span>
           </div>
-
-          {!isExtendedCareerType(claimType) ? (
-            <label className="block max-w-md space-y-1 text-xs font-medium text-foreground">
-              Existing record ID (only when editing)
-              <input
-                value={legacyRecordId}
-                onChange={(event) => setLegacyRecordId(event.target.value)}
-                placeholder="Leave blank to create a new record"
-                className="h-9 w-full rounded-md border border-border bg-background px-3 font-mono text-xs"
-              />
-            </label>
-          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             {definition.fields.map((field) => (
@@ -435,88 +406,84 @@ export function AssistedCareerEditor({
                 {editing ? <Pencil className="size-3.5" /> : <Plus className="size-3.5" />}
                 {save.isPending
                   ? "Saving..."
-                  : editing || legacyRecordId.trim()
+                  : editing
                     ? "Save changes"
                     : `Add ${definition.label}`}
               </button>
             </div>
           </div>
 
-          {isExtendedCareerType(claimType) ? (
-            <div className="rounded-lg border border-border bg-muted/15 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-xs font-semibold text-foreground">
-                    Persisted {definition.label} records
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Loaded from API42 and retained after refresh.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void recordsQuery.refetch()}
-                  disabled={recordsQuery.isFetching}
-                  className="h-8 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent disabled:opacity-50"
-                >
-                  Refresh
-                </button>
+          <div className="rounded-lg border border-border bg-muted/15 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-semibold text-foreground">
+                  Persisted {definition.label} records
+                </h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Loaded from API42 and retained after refresh.
+                </p>
               </div>
-              {recordsQuery.isPending ? (
-                <p className="mt-3 text-xs text-muted-foreground">Loading canonical records...</p>
-              ) : recordsQuery.error ? (
-                <p className="mt-3 text-xs text-destructive">
-                  {getOperationError(recordsQuery.error, "Records could not be loaded.")}
-                </p>
-              ) : recordsQuery.data?.items.length ? (
-                <div className="mt-3 space-y-2">
-                  {recordsQuery.data.items.map((record) => (
-                    <div
-                      key={record.recordId}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-foreground">
-                          {recordTitle(record)}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {humanize(record.verificationStatus)} · {record.recordId}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => beginEdit(record)}
-                          className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent"
-                        >
-                          <Pencil className="size-3" /> Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Remove this ${definition.label.toLowerCase()} record?`,
-                              )
-                            )
-                              remove.mutate(record);
-                          }}
-                          disabled={remove.isPending}
-                          className="inline-flex h-8 items-center gap-1 rounded-md border border-red-200 px-2 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          <Trash2 className="size-3" /> Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  No {definition.label.toLowerCase()} records yet.
-                </p>
-              )}
+              <button
+                type="button"
+                onClick={() => void recordsQuery.refetch()}
+                disabled={recordsQuery.isFetching}
+                className="h-8 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent disabled:opacity-50"
+              >
+                Refresh
+              </button>
             </div>
-          ) : null}
+            {recordsQuery.isPending ? (
+              <p className="mt-3 text-xs text-muted-foreground">Loading canonical records...</p>
+            ) : recordsQuery.error ? (
+              <p className="mt-3 text-xs text-destructive">
+                {getOperationError(recordsQuery.error, "Records could not be loaded.")}
+              </p>
+            ) : recordsQuery.data?.items.length ? (
+              <div className="mt-3 space-y-2">
+                {recordsQuery.data.items.map((record) => (
+                  <div
+                    key={record.recordId}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {recordTitle(record)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {humanize(record.verificationStatus)} · {record.recordId}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(record)}
+                        className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium hover:bg-accent"
+                      >
+                        <Pencil className="size-3" /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(`Remove this ${definition.label.toLowerCase()} record?`)
+                          )
+                            remove.mutate(record);
+                        }}
+                        disabled={remove.isPending}
+                        className="inline-flex h-8 items-center gap-1 rounded-md border border-red-200 px-2 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 className="size-3" /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No {definition.label.toLowerCase()} records yet.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </WorkspaceSection>
@@ -529,7 +496,7 @@ function CareerField({
   disabled,
   onChange,
 }: {
-  field: FieldDefinition;
+  field: CareerFieldDefinition;
   value: DraftValue;
   disabled?: boolean;
   onChange: (value: DraftValue) => void;

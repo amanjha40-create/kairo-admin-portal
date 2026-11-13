@@ -62,6 +62,23 @@ describe("Resume review presentation", () => {
     });
   });
 
+  it("accepts typed form payloads without requiring raw JSON editing", () => {
+    const education = item("education", "education", true, "create_new");
+    expect(
+      getResumeReviewUpdateInput(education, {
+        claim_type: "education",
+        institution_name: "Example University",
+        start_date: "2022",
+      }),
+    ).toMatchObject({
+      editedPayload: {
+        claim_type: "education",
+        institution_name: "Example University",
+        start_date: "2022",
+      },
+    });
+  });
+
   it("counts mixed, excluded, unsupported, and blocked items without double-importing", () => {
     const items = [
       item("a", "freelance", true, "create_new"),

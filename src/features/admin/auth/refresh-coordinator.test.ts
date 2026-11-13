@@ -52,4 +52,26 @@ describe("Admin refresh coordination", () => {
     });
     expect(storage.local.getItem(AUTH_TOKEN_KEY)).toContain("family-new");
   });
+
+  it("reuses a token family rotated while waiting for the cross-tab lock", async () => {
+    const storage = memoryStorage();
+    const current = tokens("family-old");
+    const rotated = tokens("family-new");
+    writeStoredAuthTokens(storage, current);
+    const originalLocks = navigator.locks;
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: {
+        request: async (_name: string, callback: () => Promise<StoredAuthTokens | null>) => {
+          writeStoredAuthTokens(storage, rotated);
+          return callback();
+        },
+      },
+    });
+    const refresh = vi.fn(async () => rotated);
+
+    await expect(coordinateAdminTokenRefresh(current, refresh, storage)).resolves.toEqual(rotated);
+    expect(refresh).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, "locks", { configurable: true, value: originalLocks });
+  });
 });
